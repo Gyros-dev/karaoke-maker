@@ -414,7 +414,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   margin-bottom: 0.8rem;
   overflow: hidden;
 }
-.edit-stage .stage-line { font-size: 1rem; }
+.edit-stage { --st-size: 1rem; }
 .editor-controls {
   display: flex;
   align-items: center;
@@ -486,11 +486,22 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 /* --- Шаг 4: караоке --- */
 .player { text-align: center; }
 .lyrics-stage {
+  /* Настраиваемое оформление текста (панель «Оформление») */
+  --st-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  --st-size: 1.15rem;
+  --st-weight: 600;
+  --st-inactive: #9a9ab0;
+  --st-active: #f2f2f7;
+  --st-effect: #f97316;
+  --st-outline-c: #000000;
+  --st-outline: 0px;
+  --st-ls: 0px;
+  --st-gap: 0.35rem;
   min-height: 340px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.35rem;
+  gap: var(--st-gap);
   /* Боковые отступы — «безопасная зона», чтобы текст не прилипал к краям */
   padding: 2rem clamp(1.5rem, 8%, 4rem);
   background: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.12), transparent 70%), var(--bg-card);
@@ -505,9 +516,12 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .lyrics-stage.has-bg .stage-line:not(.current) { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
 .stage-line {
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: var(--text-dim);
+  font-family: var(--st-font);
+  font-size: var(--st-size);
+  font-weight: var(--st-weight);
+  letter-spacing: var(--st-ls);
+  -webkit-text-stroke: var(--st-outline) var(--st-outline-c);
+  color: var(--st-inactive);
   opacity: 0.45;
   transition: opacity 0.3s, color 0.3s;
   min-height: 1.6em;
@@ -519,14 +533,25 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.stage-line.current {
-  opacity: 1;
-  background: linear-gradient(90deg, #f97316 var(--fill, 0%), var(--text) var(--fill, 0%));
+.stage-line.current { opacity: 1; }
+/* Эффект «заливка» — классическое караоке */
+[data-effect="fill"] .stage-line.current {
+  background: linear-gradient(90deg, var(--st-effect) var(--fill, 0%), var(--st-active) var(--fill, 0%));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
-.stage-line.near { opacity: 0.75; color: var(--text); }
+/* Эффект «подсветка» — вся строка цветом */
+[data-effect="highlight"] .stage-line.current { color: var(--st-effect); }
+/* Без эффекта — просто активный цвет */
+[data-effect="none"] .stage-line.current { color: var(--st-active); }
+.stage-line.near { opacity: 0.75; color: var(--st-active); }
+
+/* Появление строк */
+[data-anim="fade"] .stage-line { animation: lineFade 0.35s ease; }
+[data-anim="slide"] .stage-line { animation: lineSlide 0.35s ease; }
+@keyframes lineFade { from { opacity: 0; } }
+@keyframes lineSlide { from { opacity: 0; transform: translateY(16px); } }
 .stage-empty { color: var(--text-dim); font-size: 1.1rem; }
 
 .player-bar { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
@@ -621,6 +646,58 @@ input[type="range"]::-moz-range-thumb {
   margin-top: 0.4rem;
 }
 .eq-hint { color: var(--text-dim); font-size: 0.78rem; }
+
+/* --- Панель «Оформление» --- */
+.style-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.7rem;
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+.style-row > label:first-child, .style-label { min-width: 120px; }
+.style-row select {
+  flex: 1;
+  min-width: 140px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.7rem;
+}
+.style-row input[type="color"] {
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  cursor: pointer;
+}
+.style-row .mini-label { color: var(--text-dim); font-size: 0.8rem; }
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.seg button {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+.seg button.active {
+  background: rgba(16, 185, 129, 0.18);
+  color: var(--text);
+}
+.inst-status { color: #34d399; font-size: 0.85rem; font-weight: 600; }
 
 /* --- Строка-проигрыш --- */
 .stage-line.break-line {

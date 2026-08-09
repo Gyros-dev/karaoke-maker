@@ -13,7 +13,43 @@ const state = {
   vocalMix: 0,              // 0..1 — громкость вокала в караоке
   bgImage: null,            // dataURL картинки-фона для караоке
   eq: { low: 0, mid: 0, high: 0 }, // эквалайзер, дБ (−12…+12)
+  customInst: false,        // минусовка загружена файлом, а не посчитана
+  instName: null,
+  style: null,              // оформление текста, задаётся в defaultStyle()
   maxStep: 1,
+};
+
+function defaultStyle() {
+  return {
+    font: 'system',
+    size: 100,          // проценты от базового размера
+    weight: 600,
+    effect: 'fill',     // fill | highlight | none
+    inactive: '#9a9ab0',
+    active: '#f2f2f7',
+    accent: '#f97316',
+    outlineColor: '#000000',
+    outline: 0,         // px
+    bgMode: 'default',  // default | color
+    bgColor: '#16161f',
+    letter: 0,          // px
+    line: 13,           // ×0.1 — межстрочный интервал
+    lines: 7,           // сколько строк видно
+    anim: 'fade',       // fade | slide | none
+    valign: 'center',   // flex-start | center | flex-end
+  };
+}
+state.style = defaultStyle();
+
+/* Шрифты: только системные, чтобы сайт остался автономным */
+const FONTS = {
+  system: { label: 'Системный', css: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif' },
+  impact: { label: 'Плакатный (Impact)', css: 'Impact, "Haettenschweiler", "Arial Narrow Bold", sans-serif' },
+  arial: { label: 'Гротеск (Arial)', css: 'Arial, "Helvetica Neue", Helvetica, sans-serif' },
+  verdana: { label: 'Широкий (Verdana)', css: 'Verdana, Geneva, sans-serif' },
+  trebuchet: { label: 'Мягкий (Trebuchet)', css: '"Trebuchet MS", "Lucida Grande", sans-serif' },
+  georgia: { label: 'Книжный (Georgia)', css: 'Georgia, "Times New Roman", serif' },
+  courier: { label: 'Печатная машинка', css: '"Courier New", Courier, monospace' },
 };
 
 /* ---------- Аудио-движок ---------- */
@@ -305,6 +341,7 @@ function saveProject() {
       : (keepPrev && prev.times) || [],
     bg: state.bgImage,
     eq: { ...state.eq },
+    style: { ...state.style },
   };
   try {
     localStorage.setItem('karaoke-project', JSON.stringify(data));
@@ -379,6 +416,10 @@ async function handleFile(file) {
 
     $('processing-text').textContent = 'Приглушаем вокал…';
     const instrumental = await makeInstrumental(buffer);
+    state.customInst = false;
+    state.instName = null;
+    $('inst-input').value = '';
+    updateInstUI();
 
     audio.stop();
     state.fileName = file.name;
@@ -402,6 +443,11 @@ async function handleFile(file) {
         state.eq = { low: +saved.eq.low || 0, mid: +saved.eq.mid || 0, high: +saved.eq.high || 0 };
         updateEqUI();
       }
+      if (saved.style) {
+        state.style = { ...defaultStyle(), ...saved.style };
+        updateStyleUI();
+        applyStyle();
+      }
     }
   } catch (err) {
     $('processing').classList.add('hidden');
@@ -409,6 +455,62 @@ async function handleFile(file) {
     alert('Не удалось прочитать этот файл как аудио. Попробуй другой формат (MP3, WAV, OGG).');
   }
 }
+
+/* ---------- Своя минусовка (например, из UVR5) ----------
+   Готовый файл без вокала звучит куда лучше вычитания центра,
+   поэтому если он загружен — используем его. */
+function updateInstUI() {
+  const custom = state.customInst;
+  $('inst-status').classList.toggle('hidden', !custom);
+  $('inst-status').textContent = custom ? `✓ ${state.instName}` : '';
+  $('btn-inst-remove').classList.toggle('hidden', !custom);
+  $('btn-inst-add').textContent = custom ? 'Заменить' : 'Выбрать';
+}
+
+async function handleInstFile(file) {
+  if (!state.originalBuffer) {
+    alert('Сначала загрузи саму песню.');
+    return;
+  }
+  try {
+    const data = await file.arrayBuffer();
+    const buffer = await audio.ensureCtx().decodeAudioData(data);
+    const diff = Math.abs(buffer.duration - state.originalBuffer.duration);
+    if (diff > 1.5) {
+      const ok = confirm(
+        `Длительность минусовки (${fmtTime(buffer.duration)}) отличается от песни ` +
+        `(${fmtTime(state.originalBuffer.duration)}) на ${diff.toFixed(1)} с. ` +
+        'Текст может разъехаться. Всё равно использовать?');
+      if (!ok) return;
+    }
+    audio.stop();
+    state.instrumentalBuffer = buffer;
+    state.customInst = true;
+    state.instName = file.name;
+    $('mono-warning').classList.add('hidden');
+    updateInstUI();
+  } catch (e) {
+    alert('Не удалось прочитать этот файл как аудио. Попробуй MP3, WAV или OGG.');
+  }
+}
+
+$('btn-inst-add').addEventListener('click', () => $('inst-input').click());
+$('inst-input').addEventListener('change', () => {
+  const file = $('inst-input').files[0];
+  if (file) handleInstFile(file);
+});
+$('btn-inst-remove').addEventListener('click', async () => {
+  $('inst-input').value = '';
+  state.customInst = false;
+  state.instName = null;
+  audio.stop();
+  // Возвращаемся к встроенному приглушению вокала
+  state.instrumentalBuffer = state.originalBuffer
+    ? await makeInstrumental(state.originalBuffer)
+    : null;
+  $('mono-warning').classList.toggle('hidden', !!state.instrumentalBuffer);
+  updateInstUI();
+});
 
 /* ---------- Картинка-фон для караоке ---------- */
 
@@ -439,8 +541,10 @@ function setBgImage(dataUrl) {
   const preview = $('bg-preview');
   if (dataUrl) {
     stage.classList.add('has-bg');
-    stage.style.backgroundImage =
-      `linear-gradient(rgba(10, 10, 15, 0.68), rgba(10, 10, 15, 0.68)), url("${dataUrl}")`;
+    if (state.style.bgMode !== 'color') {
+      stage.style.backgroundImage =
+        `linear-gradient(rgba(10, 10, 15, 0.68), rgba(10, 10, 15, 0.68)), url("${dataUrl}")`;
+    }
     preview.src = dataUrl;
     preview.classList.remove('hidden');
     $('btn-bg-remove').classList.remove('hidden');
@@ -774,9 +878,11 @@ function renderStage() {
 
   if (ph.mode === 'break' && cur === -1) stage.appendChild(makeBreakLine());
 
-  // Окно: 2 строки до текущей и 4 после
-  const from = Math.max(0, cur - 2);
-  const to = Math.min(lines.length, Math.max(from + 7, cur + 5));
+  // Окно строк вокруг текущей: сколько показывать — из настроек
+  const total = state.style.lines;
+  const before = Math.min(2, Math.floor((total - 1) / 2));
+  const from = Math.max(0, cur - before);
+  const to = Math.min(lines.length, from + total);
   for (let i = from; i < to; i++) {
     const div = document.createElement('div');
     div.className = 'stage-line';
@@ -874,6 +980,115 @@ $('vocal-mix').addEventListener('input', () => {
   state.vocalMix = $('vocal-mix').value / 100;
   $('vocal-mix-value').textContent = `${$('vocal-mix').value}%`;
   audio.applyMix();
+});
+
+/* ---------- Оформление текста ---------- */
+
+/* Раскладываем настройки в CSS-переменные обеих сцен */
+function applyStyle() {
+  const s = state.style;
+  const stages = [$('lyrics-stage'), $('edit-stage')];
+  stages.forEach((stage, i) => {
+    if (!stage) return;
+    const baseRem = i === 0 ? 1.15 : 1.0; // редакторская сцена меньше
+    stage.style.setProperty('--st-font', (FONTS[s.font] || FONTS.system).css);
+    stage.style.setProperty('--st-size', `${baseRem * s.size / 100}rem`);
+    stage.style.setProperty('--st-weight', s.weight);
+    stage.style.setProperty('--st-inactive', s.inactive);
+    stage.style.setProperty('--st-active', s.active);
+    stage.style.setProperty('--st-effect', s.accent);
+    stage.style.setProperty('--st-outline-c', s.outlineColor);
+    stage.style.setProperty('--st-outline', `${s.outline}px`);
+    stage.style.setProperty('--st-ls', `${s.letter}px`);
+    stage.style.setProperty('--st-gap', `${(s.line / 10 - 1).toFixed(2)}em`);
+    stage.style.justifyContent = s.valign;
+    stage.dataset.effect = s.effect;
+    stage.dataset.anim = s.anim;
+  });
+
+  // Фон сцены плеера: либо картинка/градиент как раньше, либо сплошной цвет
+  const stage = $('lyrics-stage');
+  if (s.bgMode === 'color') {
+    stage.style.backgroundColor = s.bgColor;
+    stage.style.backgroundImage = 'none';
+  } else {
+    stage.style.backgroundColor = '';
+    stage.style.backgroundImage = state.bgImage
+      ? `linear-gradient(rgba(10, 10, 15, 0.68), rgba(10, 10, 15, 0.68)), url("${state.bgImage}")`
+      : '';
+  }
+
+  renderStage();
+  renderEditStage();
+}
+
+function updateStyleUI() {
+  const s = state.style;
+  $('st-font').value = s.font;
+  $('st-size').value = s.size;
+  $('st-size-val').textContent = `${s.size}%`;
+  $('st-weight').value = s.weight;
+  $('st-weight-val').textContent = s.weight;
+  $('st-col-inactive').value = s.inactive;
+  $('st-col-active').value = s.active;
+  $('st-col-effect').value = s.accent;
+  $('st-col-outline').value = s.outlineColor;
+  $('st-outline').value = s.outline;
+  $('st-outline-val').textContent = s.outline;
+  $('st-col-bg').value = s.bgColor;
+  $('st-letter').value = s.letter;
+  $('st-letter-val').textContent = s.letter;
+  $('st-line').value = s.line;
+  $('st-line-val').textContent = (s.line / 10).toFixed(1).replace('.', ',');
+  $('st-lines').value = s.lines;
+  $('st-lines-val').textContent = s.lines;
+  [['st-effect', s.effect], ['st-bg-mode', s.bgMode], ['st-anim', s.anim], ['st-valign', s.valign]]
+    .forEach(([id, val]) => {
+      $(id).querySelectorAll('button').forEach((b) => {
+        b.classList.toggle('active', b.dataset.v === val);
+      });
+    });
+}
+
+function setStyle(key, value) {
+  state.style[key] = value;
+  updateStyleUI();
+  applyStyle();
+  saveProject();
+}
+
+// Список шрифтов
+Object.entries(FONTS).forEach(([key, f]) => {
+  const opt = document.createElement('option');
+  opt.value = key;
+  opt.textContent = f.label;
+  opt.style.fontFamily = f.css;
+  $('st-font').appendChild(opt);
+});
+
+$('st-font').addEventListener('change', () => setStyle('font', $('st-font').value));
+[['st-size', 'size'], ['st-weight', 'weight'], ['st-outline', 'outline'],
+ ['st-letter', 'letter'], ['st-line', 'line'], ['st-lines', 'lines']]
+  .forEach(([id, key]) => {
+    $(id).addEventListener('input', () => setStyle(key, +$(id).value));
+  });
+[['st-col-inactive', 'inactive'], ['st-col-active', 'active'], ['st-col-effect', 'accent'],
+ ['st-col-outline', 'outlineColor'], ['st-col-bg', 'bgColor']]
+  .forEach(([id, key]) => {
+    $(id).addEventListener('input', () => setStyle(key, $(id).value));
+  });
+[['st-effect', 'effect'], ['st-bg-mode', 'bgMode'], ['st-anim', 'anim'], ['st-valign', 'valign']]
+  .forEach(([id, key]) => {
+    $(id).addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-v]');
+      if (btn) setStyle(key, btn.dataset.v);
+    });
+  });
+$('st-reset').addEventListener('click', () => {
+  state.style = defaultStyle();
+  updateStyleUI();
+  applyStyle();
+  saveProject();
 });
 
 /* --- Эквалайзер --- */
@@ -1316,8 +1531,12 @@ function followPlayhead() {
 const videoExport = { active: false, cancelled: false };
 
 function drawVideoFrame(g2d, W, H, bgImg, pos) {
+  const st = state.style;
+
   // Фон
-  if (bgImg) {
+  if (st.bgMode === 'color') {
+    g2d.fillStyle = st.bgColor;
+  } else if (bgImg) {
     const scale = Math.max(W / bgImg.width, H / bgImg.height);
     const w = bgImg.width * scale, h = bgImg.height * scale;
     g2d.drawImage(bgImg, (W - w) / 2, (H - h) / 2, w, h);
@@ -1339,61 +1558,85 @@ function drawVideoFrame(g2d, W, H, bgImg, pos) {
   g2d.textAlign = 'center';
   g2d.textBaseline = 'middle';
 
-  const font = (size, bold) =>
-    `${bold ? '700' : '600'} ${size}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+  const family = (FONTS[st.font] || FONTS.system).css;
+  const font = (size) => `${st.weight} ${size}px ${family}`;
 
   // Собираем блоки: строка до текущей, текущая (или ноты проигрыша) и следующие.
   // Без переносов: длинная строка ужимается по ширине безопасной зоны.
-  const baseSize = 40; // единый размер: активная строка выделяется только цветом
+  const baseSize = Math.round(40 * st.size / 100);
   const blocks = [];
-  const pushText = (text, isCur, isBreak) => {
-    g2d.font = font(baseSize, isCur);
+  const pushText = (text, isCur) => {
+    g2d.font = font(baseSize);
     const w = g2d.measureText(text).width;
-    const size = w > maxWidth ? Math.max(16, baseSize * maxWidth / w) : baseSize;
-    blocks.push({ text, size, isCur, isBreak });
+    const size = w > maxWidth ? Math.max(14, baseSize * maxWidth / w) : baseSize;
+    blocks.push({ text, size, isCur });
   };
+  const total = st.lines;
+  const before = Math.min(2, Math.floor((total - 1) / 2));
   if (ph.mode === 'break') {
-    if (cur >= 0) pushText(lines[cur].text, false);
-    pushText('♪   ♪   ♪', true, true);
-    for (let i = cur + 1; i < Math.min(lines.length, cur + 3); i++) pushText(lines[i].text, false);
+    for (let i = Math.max(0, cur - before + 1); i <= cur; i++) pushText(lines[i].text, false);
+    pushText('♪   ♪   ♪', true);
+    for (let i = cur + 1; i < Math.min(lines.length, cur + total - before); i++) {
+      pushText(lines[i].text, false);
+    }
   } else {
-    const first = cur === -1 ? 0 : Math.max(0, cur - 1);
-    for (let i = first; i < Math.min(lines.length, (cur === -1 ? 0 : cur) + 3); i++) {
+    const anchor = cur === -1 ? 0 : cur;
+    const first = Math.max(0, anchor - before);
+    for (let i = first; i < Math.min(lines.length, first + total); i++) {
       pushText(lines[i].text, i === cur);
     }
   }
 
-  const lineGap = 1.35;
-  const blockGap = 26;
+  const lineGap = st.line / 10;
+  const blockGap = Math.round(baseSize * 0.35);
   const totalH = blocks.reduce((sum, b) => sum + b.size * lineGap + blockGap, -blockGap);
-  let y = H / 2 - totalH / 2;
+  const pad = 40;
+  let y = st.valign === 'flex-start' ? pad
+    : st.valign === 'flex-end' ? H - pad - totalH
+    : H / 2 - totalH / 2;
+
+  const strokeIfNeeded = (text, x, cy) => {
+    if (st.outline > 0) {
+      g2d.lineWidth = st.outline * 2;
+      g2d.strokeStyle = st.outlineColor;
+      g2d.lineJoin = 'round';
+      g2d.strokeText(text, x, cy);
+    }
+  };
 
   for (const b of blocks) {
-    g2d.font = font(b.size, b.isCur);
+    g2d.font = font(b.size);
+    g2d.letterSpacing = `${st.letter}px`;
     const rowH = b.size * lineGap;
     const cy = y + rowH / 2;
+    strokeIfNeeded(b.text, W / 2, cy);
     if (b.isCur) {
       const start = ph.start;
       const end = ph.mode === 'break' ? ph.until : ph.end;
       const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
-      // Базовый белый текст
-      g2d.fillStyle = '#f2f2f7';
-      g2d.fillText(b.text, W / 2, cy);
-      // Оранжевая «заливка» слева направо по мере пения
-      const textW = g2d.measureText(b.text).width;
-      g2d.save();
-      g2d.beginPath();
-      g2d.rect((W - textW) / 2, y - 4, textW * p, rowH + 8);
-      g2d.clip();
-      g2d.fillStyle = '#f97316';
-      g2d.fillText(b.text, W / 2, cy);
-      g2d.restore();
+      if (st.effect === 'fill') {
+        g2d.fillStyle = st.active;
+        g2d.fillText(b.text, W / 2, cy);
+        // Заливка цветом эффекта слева направо по мере пения
+        const textW = g2d.measureText(b.text).width;
+        g2d.save();
+        g2d.beginPath();
+        g2d.rect((W - textW) / 2, y - 4, textW * p, rowH + 8);
+        g2d.clip();
+        g2d.fillStyle = st.accent;
+        g2d.fillText(b.text, W / 2, cy);
+        g2d.restore();
+      } else {
+        g2d.fillStyle = st.effect === 'highlight' ? st.accent : st.active;
+        g2d.fillText(b.text, W / 2, cy);
+      }
     } else {
-      g2d.fillStyle = 'rgba(210, 210, 225, 0.55)';
+      g2d.fillStyle = st.inactive;
       g2d.fillText(b.text, W / 2, cy);
     }
     y += rowH + blockGap;
   }
+  g2d.letterSpacing = '0px';
 }
 
 async function exportVideo() {
@@ -1538,5 +1781,9 @@ $('lyrics-input').addEventListener('input', () => saveProject());
 (function init() {
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
+  if (saved && saved.style) state.style = { ...defaultStyle(), ...saved.style };
+  updateStyleUI();
+  applyStyle();
+  updateInstUI();
   tickPlayer(); // общий цикл обновления UI (лёгкий, обновляет только видимое)
 })();

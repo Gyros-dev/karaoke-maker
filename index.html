@@ -50,7 +50,7 @@
     <div class="card">
       <div class="card-icon">🎚️</div>
       <h3>Приглушение вокала</h3>
-      <p>Голос в центре стерео-картины подавляется, а басы и барабаны остаются. Громкость вокала можно регулировать прямо во время пения.</p>
+      <p>Голос в центре стерео-картины подавляется, а басы и барабаны остаются. Громкость вокала регулируется во время пения. Есть готовая минусовка из нейросети — просто загрузи её вторым файлом.</p>
     </div>
     <div class="card">
       <div class="card-icon">📝</div>
@@ -119,6 +119,16 @@
         <button class="btn btn-ghost btn-small hidden" id="btn-bg-remove">Убрать</button>
         <input type="file" id="bg-input" accept="image/*" hidden>
       </div>
+      <div class="bg-upload">
+        <div class="bg-upload-text">
+          <b>Своя минусовка</b>
+          <span>Необязательно: готовый файл без вокала (например, из UVR5) — звучит заметно лучше встроенного приглушения</span>
+        </div>
+        <span class="inst-status hidden" id="inst-status">✓ загружена</span>
+        <button class="btn btn-ghost btn-small" id="btn-inst-add">Выбрать</button>
+        <button class="btn btn-ghost btn-small hidden" id="btn-inst-remove">Убрать</button>
+        <input type="file" id="inst-input" accept="audio/*" hidden>
+      </div>
       <div class="panel-actions">
         <button class="btn btn-ghost" id="btn-change-track">Другой файл</button>
         <button class="btn btn-primary" id="btn-to-lyrics">К тексту →</button>
@@ -182,6 +192,89 @@
         <input type="range" id="vocal-mix" min="0" max="100" value="0">
         <span class="mixer-value" id="vocal-mix-value">0%</span>
       </div>
+      <details class="eq-panel" id="style-panel">
+        <summary>🎨 Оформление текста</summary>
+        <div class="style-row">
+          <label for="st-font">Шрифт</label>
+          <select id="st-font"></select>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Размер</span>
+          <input type="range" id="st-size" min="60" max="220" step="5" value="100">
+          <span class="eq-val" id="st-size-val">100%</span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Жирность</span>
+          <input type="range" id="st-weight" min="300" max="900" step="100" value="600">
+          <span class="eq-val" id="st-weight-val">600</span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Эффект</span>
+          <span class="seg" id="st-effect">
+            <button data-v="fill" class="active">Заливка</button>
+            <button data-v="highlight">Подсветка</button>
+            <button data-v="none">Нет</button>
+          </span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Цвета</span>
+          <input type="color" id="st-col-inactive" value="#9a9ab0" title="Неактивный текст">
+          <span class="mini-label">неактив.</span>
+          <input type="color" id="st-col-active" value="#f2f2f7" title="Активная строка">
+          <span class="mini-label">актив.</span>
+          <input type="color" id="st-col-effect" value="#f97316" title="Цвет эффекта">
+          <span class="mini-label">эффект</span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Обводка</span>
+          <input type="color" id="st-col-outline" value="#000000" title="Цвет обводки">
+          <input type="range" id="st-outline" min="0" max="6" step="0.5" value="0">
+          <span class="eq-val" id="st-outline-val">0</span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Фон сцены</span>
+          <input type="color" id="st-col-bg" value="#16161f">
+          <span class="seg" id="st-bg-mode">
+            <button data-v="default" class="active">Как было</button>
+            <button data-v="color">Цветом</button>
+          </span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Межбуквенный</span>
+          <input type="range" id="st-letter" min="0" max="12" step="1" value="0">
+          <span class="eq-val" id="st-letter-val">0</span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Межстрочный</span>
+          <input type="range" id="st-line" min="10" max="25" step="1" value="13">
+          <span class="eq-val" id="st-line-val">1,3</span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Строк видно</span>
+          <input type="range" id="st-lines" min="1" max="9" step="1" value="7">
+          <span class="eq-val" id="st-lines-val">7</span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Появление</span>
+          <span class="seg" id="st-anim">
+            <button data-v="fade" class="active">Плавно</button>
+            <button data-v="slide">Сдвиг</button>
+            <button data-v="none">Нет</button>
+          </span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Выравнивание</span>
+          <span class="seg" id="st-valign">
+            <button data-v="flex-start">Верх</button>
+            <button data-v="center" class="active">Центр</button>
+            <button data-v="flex-end">Низ</button>
+          </span>
+        </div>
+        <div class="eq-actions">
+          <button class="nudge-btn" id="st-reset">Сбросить</button>
+          <span class="eq-hint">Оформление попадает и в видео для YouTube</span>
+        </div>
+      </details>
       <details class="eq-panel">
         <summary>🎚 Эквалайзер — настроить звук</summary>
         <div class="eq-row">
@@ -263,7 +356,13 @@
   <h2>Частые вопросы</h2>
   <details>
     <summary>Почему вокал приглушается не полностью?</summary>
-    <p>Студия использует классический приём «вычитание центрального канала»: голос обычно записан одинаково в левом и правом канале, и его можно вычесть. Эхо, бэк-вокал и обработка остаются — для домашнего караоке этого обычно достаточно. Полное удаление возможно только нейросетями на сервере.</p>
+    <p>Студия использует классический приём «вычитание центрального канала»: голос обычно записан одинаково в левом и правом канале, и его можно вычесть. Эхо, бэк-вокал и обработка остаются — для домашнего караоке этого обычно достаточно. Полное удаление делают нейросети, а им нужен мощный компьютер или сервер.</p>
+  </details>
+  <details>
+    <summary>Как получить по-настоящему чистую минусовку?</summary>
+    <p>Прогони песню через нейросеть на своём компьютере и загрузи готовый результат в поле «Своя минусовка» на первом шаге — тогда студия будет использовать его вместо встроенного приглушения.</p>
+    <p>Самый простой бесплатный вариант — программа <b>Ultimate Vocal Remover (UVR5)</b>: она работает локально, ничего не отправляет в интернет. Установи её, выбери модель из семейства Demucs или MDX-Net, укажи песню и сохрани дорожку «Instrumental». Из платных сервисов похожее качество дают LALAL.AI и Moises.</p>
+    <p>Файл минусовки должен быть той же песней и той же длительности, что и оригинал — иначе текст разъедется.</p>
   </details>
   <details>
     <summary>Мои файлы куда-то загружаются?</summary>
