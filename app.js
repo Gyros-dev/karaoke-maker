@@ -35,6 +35,22 @@ const audio = {
     return this.ctx;
   },
 
+  /* Если через полсекунды после запуска контекст так и не заиграл —
+     браузер блокирует звук, говорим об этом прямо */
+  checkAudible() {
+    setTimeout(() => {
+      if (this.playing && this.ctx && this.ctx.state !== 'running' && !this._warnedBlocked) {
+        this._warnedBlocked = true;
+        alert('Браузер блокирует звук на этом сайте.\n\n' +
+          'Проверь:\n' +
+          '• не заглушена ли вкладка (правый клик по вкладке → «Включить звук»);\n' +
+          '• в Brave — нажми на значок льва и отключи Shields для этого сайта ' +
+          '(строгая защита от фингерпринтинга глушит Web Audio);\n' +
+          '• в Safari — Настройки → Веб-сайты → Автовоспроизведение: разреши для этого сайта.');
+      }
+    }, 600);
+  },
+
   get duration() {
     return state.originalBuffer ? state.originalBuffer.duration : 0;
   },
@@ -92,6 +108,7 @@ const audio = {
     this.sources.forEach((s) => s.start(t, this.offset));
     this.startedAt = t - this.offset;
     this.playing = true;
+    this.checkAudible();
 
     orig.onended = () => {
       if (!this.playing) return;
@@ -1476,6 +1493,12 @@ async function exportVideo() {
 
 $('btn-export-video').addEventListener('click', exportVideo);
 $('btn-export-cancel').addEventListener('click', () => { videoExport.cancelled = true; });
+
+/* Политика автовоспроизведения: некоторые браузеры «замораживают»
+   аудиоконтекст до жеста пользователя — размораживаем при любом клике */
+document.addEventListener('pointerdown', () => {
+  if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
+}, true);
 
 /* ---------- Клавиатура ---------- */
 document.addEventListener('keydown', (e) => {
