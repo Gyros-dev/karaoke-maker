@@ -118,6 +118,8 @@ const audio = {
     this.stopAt = null;
     const ctx = this.ensureCtx();
     this.offset = Math.max(0, Math.min(fromOffset ?? this.offset, this.duration));
+    // Позиция у самого конца — начинаем сначала, иначе тишина
+    if (this.offset >= this.duration - 0.05) this.offset = 0;
 
     this.vocalGain = ctx.createGain();
     this.instGain = ctx.createGain();
@@ -1119,6 +1121,103 @@ $('eq-reset').addEventListener('click', () => {
 });
 
 $('btn-back-3').addEventListener('click', () => goToStep(4));
+
+/* ---------- Проверка звука ----------
+   Меряет реальный сигнал на выходе и в самих буферах: это отличает
+   «браузер глушит сайт» от «минусовка пустая» и от «звук идёт,
+   но не слышно» (заглушённая вкладка, громкость, наушники). */
+function bufferLevel(buffer, fromSec = 0, seconds = 1) {
+  if (!buffer) return null;
+  const rate = buffer.sampleRate;
+  const start = Math.min(Math.floor(fromSec * rate), Math.max(0, buffer.length - 1));
+  const end = Math.min(start + Math.floor(seconds * rate), buffer.length);
+  let peak = 0;
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const d = buffer.getChannelData(c);
+    for (let i = start; i < end; i++) {
+      const a = Math.abs(d[i]);
+      if (a > peak) peak = a;
+    }
+  }
+  return peak;
+}
+
+$('btn-sound-check').addEventListener('click', async () => {
+  if (!state.originalBuffer) { alert('Сначала загрузи песню.'); return; }
+  const btn = $('btn-sound-check');
+  const label = btn.textContent;
+  btn.textContent = 'Слушаем…';
+  btn.disabled = true;
+
+  const wasPlaying = audio.playing;
+  const at = Math.min(audio.position() || 0, Math.max(0, audio.duration - 2));
+  audio.pause();
+
+  const ctx = audio.ensureCtx();
+  audio.play(at);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 4096;
+  audio.eqChain.output.connect(analyser);
+
+  // Копим пик выходного сигнала примерно за секунду.
+  // Именно таймер, а не requestAnimationFrame: rAF замирает,
+  // если вкладка неактивна, и проверка никогда бы не закончилась.
+  let outPeak = 0;
+  const buf = new Float32Array(analyser.fftSize);
+  await new Promise((resolve) => {
+    const deadline = Date.now() + 1000;
+    const id = setInterval(() => {
+      analyser.getFloatTimeDomainData(buf);
+      for (const v of buf) { const a = Math.abs(v); if (a > outPeak) outPeak = a; }
+      // По часам, а не по числу тиков: в фоновой вкладке таймеры
+      // замедляются до секунды, и проверка не должна растягиваться
+      if (Date.now() >= deadline) { clearInterval(id); resolve(); }
+    }, 50);
+  });
+
+  audio.pause();
+  if (!wasPlaying) audio.offset = at;
+  updatePlayerUI();
+  btn.textContent = label;
+  btn.disabled = false;
+
+  const songPeak = bufferLevel(state.originalBuffer, at);
+  const instPeak = bufferLevel(state.instrumentalBuffer, at);
+  const hasInst = !!state.instrumentalBuffer;
+  const instShort = hasInst && state.instrumentalBuffer.duration < audio.duration - 0.5;
+  const src = hasInst
+    ? (state.customInst ? `своя минусовка (${state.instName})` : 'встроенное приглушение вокала')
+    : 'минусовки нет, играет оригинал';
+
+  const lines = [
+    `Позиция: ${fmtTime(at)} из ${fmtTime(audio.duration)}`,
+    `Источник: ${src}`,
+    `Громкость вокала: ${Math.round(state.vocalMix * 100)}%`,
+    '',
+    `Сигнал в песне: ${songPeak == null ? '—' : songPeak.toFixed(3)}`,
+    `Сигнал в минусовке: ${instPeak == null ? '—' : instPeak.toFixed(3)}`,
+    `Сигнал на выходе: ${outPeak.toFixed(3)}`,
+    `Состояние аудио: ${ctx.state}, частота ${Math.round(ctx.sampleRate)} Гц`,
+    '',
+  ];
+
+  if (hasInst && instPeak !== null && instPeak < 0.001) {
+    lines.push('❗ В минусовке на этом месте тишина. Возможно, файл не тот ' +
+      '(например, дорожка с одним вокалом) или он короче песни. ' +
+      'Попробуй убрать свою минусовку или подвинуть позицию.');
+  } else if (instShort) {
+    lines.push('❗ Минусовка короче песни — ближе к концу будет тишина.');
+  } else if (outPeak < 0.001) {
+    lines.push('❗ Данные звука есть, но на выходе тишина — звук глушит браузер.\n' +
+      'В Brave: значок льва → отключи Shields для сайта.\n' +
+      'В Safari: правый клик по вкладке → «Включить звук», и Настройки → ' +
+      'Веб-сайты → Автовоспроизведение → «Разрешить все».');
+  } else {
+    lines.push('✅ Звук идёт нормально. Если не слышно — проверь громкость системы, ' +
+      'выбранное устройство вывода и не заглушена ли вкладка.');
+  }
+  alert(lines.join('\n'));
+});
 
 /* ---------- Экспорт LRC ---------- */
 $('btn-export-lrc').addEventListener('click', () => {
