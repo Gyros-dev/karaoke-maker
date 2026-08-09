@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Бэнэнгская Рапсодия — создай караоке из любой песни</title>
+  <meta name="description" content="Бесплатная караоке-студия в браузере: загрузи песню, приглуши вокал, синхронизируй текст и пой. Без серверов и регистрации.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎤</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="logo" href="#top">
+    <span class="logo-icon">🎤</span>
+    <span class="logo-text">Бэнэнгская&nbsp;Рапсодия</span>
+  </a>
+  <nav class="site-nav">
+    <a href="#features">Возможности</a>
+    <a href="#how">Как это работает</a>
+    <a href="#faq">Вопросы</a>
+  </nav>
+  <a class="btn btn-primary btn-small" href="#studio">Открыть студию</a>
+</header>
+
+<!-- ===================== HERO ===================== -->
+<section class="hero" id="top">
+  <div class="hero-glow hero-glow-1"></div>
+  <div class="hero-glow hero-glow-2"></div>
+  <div class="hero-inner">
+    <div class="hero-badge">
+      <span class="dot"></span> Работает прямо в браузере · бесплатно
+    </div>
+    <h1>Преврати любую песню<br><span class="grad-text">в караоке</span></h1>
+    <p class="hero-sub">
+      Загрузи трек — студия приглушит вокал, поможет синхронизировать текст
+      по строкам и запустит караоке с подсветкой. Ничего не отправляется
+      на сервер: вся магия происходит на твоём устройстве.
+    </p>
+    <a class="btn btn-primary btn-big" href="#studio">Создать караоке →</a>
+    <div class="hero-note"><span class="pill">100% приватно</span> файлы не покидают твой компьютер</div>
+  </div>
+</section>
+
+<!-- ===================== FEATURES ===================== -->
+<section class="features" id="features">
+  <h2>Всё, что нужно для караоке-вечера</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">🎚️</div>
+      <h3>Приглушение вокала</h3>
+      <p>Голос в центре стерео-картины подавляется, а басы и барабаны остаются. Громкость вокала можно регулировать прямо во время пения.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📝</div>
+      <h3>Синхронизация текста</h3>
+      <p>Вставь текст песни и отбивай строки по клавише пробел под музыку — получится точная разметка, как в настоящем караоке.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎤</div>
+      <h3>Режим караоке</h3>
+      <p>Крупный текст, подсветка текущей строки, своя картинка фоном, перемотка и пауза. Экспортируй минусовку в WAV и текст в формате LRC.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== HOW ===================== -->
+<section class="how" id="how">
+  <h2>Как это работает</h2>
+  <ol class="how-steps">
+    <li><span class="how-num">1</span><div><b>Загрузи песню</b><p>Подойдёт MP3, WAV, OGG или M4A в стерео.</p></div></li>
+    <li><span class="how-num">2</span><div><b>Вставь текст</b><p>Каждая строка с новой строки — как будешь петь.</p></div></li>
+    <li><span class="how-num">3</span><div><b>Синхронизируй</b><p>Слушай песню и нажимай пробел в начале каждой строки.</p></div></li>
+    <li><span class="how-num">4</span><div><b>Подправь</b><p>Редактор с дорожкой: двигай строки и слушай построчно.</p></div></li>
+    <li><span class="how-num">5</span><div><b>Пой!</b><p>Убавь вокал и следи за подсветкой строк.</p></div></li>
+  </ol>
+</section>
+
+<!-- ===================== STUDIO ===================== -->
+<section class="studio" id="studio">
+  <h2>Студия</h2>
+  <div class="steps-nav">
+    <button class="step-tab active" data-step="1"><span>1</span> Песня</button>
+    <button class="step-tab" data-step="2" disabled><span>2</span> Текст</button>
+    <button class="step-tab" data-step="3" disabled><span>3</span> Синхронизация</button>
+    <button class="step-tab" data-step="4" disabled><span>4</span> Редактор</button>
+    <button class="step-tab" data-step="5" disabled><span>5</span> Караоке</button>
+  </div>
+
+  <!-- Шаг 1: загрузка -->
+  <div class="step-panel active" id="step-1">
+    <div class="dropzone" id="dropzone" tabindex="0">
+      <div class="dropzone-icon">🎵</div>
+      <p class="dropzone-title">Перетащи сюда аудиофайл<br>или нажми, чтобы выбрать</p>
+      <p class="dropzone-hint">MP3 · WAV · OGG · M4A</p>
+      <input type="file" id="file-input" accept="audio/*" hidden>
+    </div>
+    <div class="processing hidden" id="processing">
+      <div class="spinner"></div>
+      <p id="processing-text">Обрабатываем трек…</p>
+    </div>
+    <div class="track-info hidden" id="track-info">
+      <div class="track-row">
+        <div class="track-icon">💿</div>
+        <div>
+          <div class="track-name" id="track-name"></div>
+          <div class="track-meta" id="track-meta"></div>
+        </div>
+      </div>
+      <p class="mono-warning hidden" id="mono-warning">⚠️ Файл моно — приглушить вокал не получится, но синхронизация текста и караоке будут работать.</p>
+      <div class="bg-upload">
+        <img id="bg-preview" class="bg-preview hidden" alt="Фон караоке">
+        <div class="bg-upload-text">
+          <b>Фон для караоке</b>
+          <span>Необязательно: картинка будет под текстом во время пения</span>
+        </div>
+        <button class="btn btn-ghost btn-small" id="btn-bg-add">Выбрать</button>
+        <button class="btn btn-ghost btn-small hidden" id="btn-bg-remove">Убрать</button>
+        <input type="file" id="bg-input" accept="image/*" hidden>
+      </div>
+      <div class="panel-actions">
+        <button class="btn btn-ghost" id="btn-change-track">Другой файл</button>
+        <button class="btn btn-primary" id="btn-to-lyrics">К тексту →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Шаг 2: текст -->
+  <div class="step-panel" id="step-2">
+    <p class="panel-hint">Вставь текст песни. Одна строка текста — одна строка караоке. Пустые строки не считаются.</p>
+    <textarea id="lyrics-input" placeholder="Вставь сюда текст песни…&#10;&#10;Каждая строка —&#10;отдельная строка караоке"></textarea>
+    <div class="panel-actions">
+      <button class="btn btn-ghost" id="btn-back-1">← Назад</button>
+      <button class="btn btn-primary" id="btn-to-sync">К синхронизации →</button>
+    </div>
+  </div>
+
+  <!-- Шаг 3: синхронизация -->
+  <div class="step-panel" id="step-3">
+    <p class="panel-hint">
+      Нажми «Старт» — заиграет песня (с вокалом, чтобы было слышно слова).
+      В момент начала каждой строки нажимай <b>пробел</b> или большую кнопку.
+      Потом можно подвинуть начало любой строки кнопками ±1с и ±0,1с.
+    </p>
+    <div class="sync-controls">
+      <button class="btn btn-primary" id="btn-sync-start">▶ Старт</button>
+      <button class="btn btn-ghost hidden" id="btn-sync-stop">⏹ Заново</button>
+      <span class="sync-time" id="sync-time">0:00</span>
+    </div>
+    <button class="tap-button hidden" id="tap-button">
+      <span class="tap-label">Отметить строку</span>
+      <span class="tap-next" id="tap-next"></span>
+    </button>
+    <ul class="sync-list" id="sync-list"></ul>
+    <div class="shift-all hidden" id="shift-all">
+      <span>Сдвинуть всё:</span>
+      <button class="nudge-btn" data-shift="-1">−1с</button>
+      <button class="nudge-btn" data-shift="-0.1">−0,1с</button>
+      <button class="nudge-btn" data-shift="0.1">+0,1с</button>
+      <button class="nudge-btn" data-shift="1">+1с</button>
+    </div>
+    <div class="panel-actions">
+      <button class="btn btn-ghost" id="btn-back-2">← Назад</button>
+      <button class="btn btn-primary" id="btn-to-player" disabled>Готово, к редактору →</button>
+    </div>
+  </div>
+
+  <!-- Шаг 5: караоке -->
+  <div class="step-panel" id="step-5">
+    <div class="player">
+      <div class="lyrics-stage" id="lyrics-stage"></div>
+      <div class="player-bar">
+        <button class="play-btn" id="btn-play">▶</button>
+        <span class="time" id="time-current">0:00</span>
+        <input type="range" id="seek" min="0" max="1000" value="0">
+        <span class="time" id="time-total">0:00</span>
+      </div>
+      <div class="mixer">
+        <span class="mixer-icon">🎤</span>
+        <label for="vocal-mix">Вокал</label>
+        <input type="range" id="vocal-mix" min="0" max="100" value="0">
+        <span class="mixer-value" id="vocal-mix-value">0%</span>
+      </div>
+      <details class="eq-panel">
+        <summary>🎚 Эквалайзер — настроить звук</summary>
+        <div class="eq-row">
+          <span class="eq-label">Низкие <small>бас, бочка</small></span>
+          <input type="range" id="eq-low" min="-12" max="12" step="1" value="0">
+          <span class="eq-val" id="eq-low-val">0 дБ</span>
+        </div>
+        <div class="eq-row">
+          <span class="eq-label">Средние <small>гитары, голос</small></span>
+          <input type="range" id="eq-mid" min="-12" max="12" step="1" value="0">
+          <span class="eq-val" id="eq-mid-val">0 дБ</span>
+        </div>
+        <div class="eq-row">
+          <span class="eq-label">Высокие <small>тарелки, воздух</small></span>
+          <input type="range" id="eq-high" min="-12" max="12" step="1" value="0">
+          <span class="eq-val" id="eq-high-val">0 дБ</span>
+        </div>
+        <div class="eq-actions">
+          <button class="nudge-btn" id="eq-reset">Сбросить</button>
+          <span class="eq-hint">Работает в плеере и попадает в видео</span>
+        </div>
+      </details>
+      <div class="export-row">
+        <button class="btn btn-ghost" id="btn-back-3">← Редактор</button>
+        <button class="btn btn-ghost" id="btn-export-lrc">⬇ Текст .lrc</button>
+        <button class="btn btn-ghost" id="btn-export-wav">⬇ Минусовка .wav</button>
+        <button class="btn btn-primary" id="btn-export-video">🎬 Видео для YouTube</button>
+      </div>
+    </div>
+    <div class="export-overlay hidden" id="export-overlay">
+      <div class="export-box">
+        <p id="export-status">Записываем видео…</p>
+        <div class="export-bar"><div id="export-fill"></div></div>
+        <p class="export-hint">Запись идёт в реальном времени — займёт столько же, сколько длится песня. Не закрывай вкладку.</p>
+        <button class="btn btn-ghost" id="btn-export-cancel">Отменить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Шаг 4: редактор -->
+  <div class="step-panel" id="step-4">
+    <p class="panel-hint">
+      Слева — текст: его можно править прямо в списке, слушать построчно (▶) и двигать кнопками.
+      Справа — предпросмотр караоке. Внизу — звуковая дорожка: клик перематывает,
+      зелёный маркер строки можно тащить мышью.
+    </p>
+    <div class="editor-grid">
+      <ul class="edit-list" id="edit-list"></ul>
+      <div class="editor-side">
+        <div class="edit-stage" id="edit-stage"></div>
+        <div class="editor-controls">
+          <button class="play-btn small" id="btn-edit-play">▶</button>
+          <span class="time" id="edit-time">0:00</span>
+          <span>/</span>
+          <span class="time" id="edit-total">0:00</span>
+        </div>
+      </div>
+    </div>
+    <div class="timeline-wrap">
+      <div class="timeline-tools">
+        <span>Дорожка: клик — перемотка, маркер строки можно перетащить</span>
+        <span class="tools-right">
+          <button class="nudge-btn" id="tl-zoom-out" title="Отдалить">−</button>
+          <span>масштаб</span>
+          <button class="nudge-btn" id="tl-zoom-in" title="Приблизить">+</button>
+        </span>
+      </div>
+      <canvas id="timeline" height="150"></canvas>
+    </div>
+    <div class="panel-actions">
+      <button class="btn btn-ghost" id="btn-back-4">← Синхронизация</button>
+      <button class="btn btn-primary" id="btn-editor-next">Караоке →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FAQ ===================== -->
+<section class="faq" id="faq">
+  <h2>Частые вопросы</h2>
+  <details>
+    <summary>Почему вокал приглушается не полностью?</summary>
+    <p>Студия использует классический приём «вычитание центрального канала»: голос обычно записан одинаково в левом и правом канале, и его можно вычесть. Эхо, бэк-вокал и обработка остаются — для домашнего караоке этого обычно достаточно. Полное удаление возможно только нейросетями на сервере.</p>
+  </details>
+  <details>
+    <summary>Мои файлы куда-то загружаются?</summary>
+    <p>Нет. Всё происходит в твоём браузере через Web Audio API. Сайт вообще не имеет сервера — можно даже отключить интернет после загрузки страницы.</p>
+  </details>
+  <details>
+    <summary>Что такое файл .lrc?</summary>
+    <p>Это стандартный формат синхронизированного текста песен: каждая строка помечена временем. Такие файлы понимают многие плееры и караоке-программы.</p>
+  </details>
+  <details>
+    <summary>Как загрузить видео на YouTube?</summary>
+    <p>Кнопка «Видео для YouTube» записывает готовый ролик (1280×720) с фоном, текстом и минусовкой. Файл в формате WebM — YouTube принимает его напрямую, без конвертации. Запись идёт в реальном времени, поэтому займёт столько же, сколько длится песня.</p>
+  </details>
+  <details>
+    <summary>Сохранится ли мой проект?</summary>
+    <p>Текст и разметка сохраняются в браузере автоматически. Аудиофайл придётся выбрать заново при следующем визите — браузер не хранит большие файлы.</p>
+  </details>
+</section>
+
+<footer class="site-footer">
+  <span>🎤 Бэнэнгская Рапсодия</span>
+  <span>Сделано с любовью к музыке · работает без серверов</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

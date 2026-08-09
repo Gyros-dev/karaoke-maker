@@ -1,0 +1,1508 @@
+/* ============================================================
+   Караоке Студия — вся обработка звука происходит в браузере
+   ============================================================ */
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------- Состояние ---------- */
+const state = {
+  fileName: null,
+  originalBuffer: null,     // AudioBuffer исходной песни
+  instrumentalBuffer: null, // AudioBuffer с приглушённым вокалом (null для моно)
+  lines: [],                // [{ text, time|null }]
+  vocalMix: 0,              // 0..1 — громкость вокала в караоке
+  bgImage: null,            // dataURL картинки-фона для караоке
+  eq: { low: 0, mid: 0, high: 0 }, // эквалайзер, дБ (−12…+12)
+  maxStep: 1,
+};
+
+/* ---------- Аудио-движок ---------- */
+const audio = {
+  ctx: null,
+  sources: [],
+  vocalGain: null,
+  instGain: null,
+  startedAt: 0,
+  offset: 0,
+  playing: false,
+  forceVocal: false, // режим синхронизации: вокал всегда включён
+  stopAt: null,      // авто-пауза на этой секунде (прослушивание строки)
+  onEnded: null,
+
+  ensureCtx() {
+    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    return this.ctx;
+  },
+
+  get duration() {
+    return state.originalBuffer ? state.originalBuffer.duration : 0;
+  },
+
+  position() {
+    if (!this.playing) return this.offset;
+    return Math.min(this.ctx.currentTime - this.startedAt, this.duration);
+  },
+
+  /* Проиграть отрывок [from, to) с вокалом — чтобы услышать слова строки */
+  playSegment(from, to) {
+    this.forceVocal = true;
+    this.play(from);
+    this.stopAt = to;
+  },
+
+  endSegment() {
+    this.pause();
+    this.stopAt = null;
+    if (this.forceVocal && !sync.active) {
+      this.forceVocal = false;
+      this.applyMix();
+    }
+  },
+
+  play(fromOffset) {
+    this.stopSources();
+    this.stopAt = null;
+    const ctx = this.ensureCtx();
+    this.offset = Math.max(0, Math.min(fromOffset ?? this.offset, this.duration));
+
+    this.vocalGain = ctx.createGain();
+    this.instGain = ctx.createGain();
+    this.eqChain = buildEqChain(ctx);
+    const limiter = makeLimiter(ctx);
+    this.vocalGain.connect(this.eqChain.input);
+    this.instGain.connect(this.eqChain.input);
+    this.eqChain.output.connect(limiter);
+    limiter.connect(ctx.destination);
+    this.applyMix();
+
+    const orig = ctx.createBufferSource();
+    orig.buffer = state.originalBuffer;
+    orig.connect(this.vocalGain);
+    this.sources = [orig];
+
+    if (state.instrumentalBuffer) {
+      const inst = ctx.createBufferSource();
+      inst.buffer = state.instrumentalBuffer;
+      inst.connect(this.instGain);
+      this.sources.push(inst);
+    }
+
+    const t = ctx.currentTime + 0.03;
+    this.sources.forEach((s) => s.start(t, this.offset));
+    this.startedAt = t - this.offset;
+    this.playing = true;
+
+    orig.onended = () => {
+      if (!this.playing) return;
+      this.playing = false;
+      this.offset = 0;
+      if (this.onEnded) this.onEnded();
+    };
+  },
+
+  pause() {
+    if (!this.playing) return;
+    this.offset = this.position();
+    this.stopSources();
+    this.playing = false;
+  },
+
+  stop() {
+    this.stopSources();
+    this.playing = false;
+    this.offset = 0;
+  },
+
+  stopSources() {
+    this.sources.forEach((s) => {
+      s.onended = null;
+      try { s.stop(); } catch (e) { /* уже остановлен */ }
+      try { s.disconnect(); } catch (e) { /* не подключен */ }
+    });
+    this.sources = [];
+    // Отключаем старую цепочку от выхода, чтобы не копить узлы
+    [this.vocalGain, this.instGain].forEach((g) => {
+      if (g) { try { g.disconnect(); } catch (e) { /* ок */ } }
+    });
+  },
+
+  applyMix() {
+    if (!this.vocalGain) return;
+    const hasInst = !!state.instrumentalBuffer;
+    const v = this.forceVocal || !hasInst ? 1 : state.vocalMix;
+    this.vocalGain.gain.value = v;
+    this.instGain.gain.value = hasInst ? 1 - v : 0;
+  },
+};
+
+/* ---------- Приглушение вокала ----------
+   Классика жанра: голос обычно в центре стерео-картины,
+   поэтому разность каналов (L − R) почти не содержит вокала.
+   Чтобы не потерять бас и бочку (они тоже в центре),
+   добавляем обратно низкие частоты моно-сигнала. */
+async function makeInstrumental(buffer) {
+  if (buffer.numberOfChannels < 2) return null;
+
+  const ctx = new OfflineAudioContext(2, buffer.length, buffer.sampleRate);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+
+  const split = ctx.createChannelSplitter(2);
+  src.connect(split);
+
+  // Разность каналов: L·0.7 + R·(−0.7)
+  const side = ctx.createGain();
+  const l = ctx.createGain(); l.gain.value = 0.7;
+  const r = ctx.createGain(); r.gain.value = -0.7;
+  split.connect(l, 0); split.connect(r, 1);
+  l.connect(side); r.connect(side);
+
+  // Низ из моно-суммы, чтобы вернуть бас
+  const lowpass = ctx.createBiquadFilter();
+  lowpass.type = 'lowpass';
+  lowpass.frequency.value = 170;
+  const ml = ctx.createGain(); ml.gain.value = 0.5;
+  const mr = ctx.createGain(); mr.gain.value = 0.5;
+  split.connect(ml, 0); split.connect(mr, 1);
+  ml.connect(lowpass); mr.connect(lowpass);
+
+  const merge = ctx.createChannelMerger(2);
+  side.connect(merge, 0, 0); side.connect(merge, 0, 1);
+  lowpass.connect(merge, 0, 0); lowpass.connect(merge, 0, 1);
+  merge.connect(ctx.destination);
+
+  src.start();
+  const rendered = await ctx.startRendering();
+  return normalizeInstrumental(rendered, buffer);
+}
+
+/* Сумма «разность каналов + бас» может вылезать за 1.0 — на выходе это
+   слышно как хрип и треск. Подгоняем громкость минусовки под оригинал
+   и следим, чтобы пики не превышали 0.95. */
+function normalizeInstrumental(inst, original) {
+  const rmsOf = (buf) => {
+    let sum = 0, n = 0;
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < d.length; i += 97) { sum += d[i] * d[i]; n++; }
+    }
+    return Math.sqrt(sum / n) || 1e-6;
+  };
+  const peakOf = (buf) => {
+    let p = 0;
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < d.length; i++) {
+        const a = Math.abs(d[i]);
+        if (a > p) p = a;
+      }
+    }
+    return p || 1e-6;
+  };
+
+  let gain = Math.min(rmsOf(original) / rmsOf(inst), 4);
+  const peak = peakOf(inst);
+  if (peak * gain > 0.95) gain = 0.95 / peak;
+
+  if (Math.abs(gain - 1) > 0.01) {
+    for (let c = 0; c < inst.numberOfChannels; c++) {
+      const d = inst.getChannelData(c);
+      for (let i = 0; i < d.length; i++) d[i] *= gain;
+    }
+  }
+  return inst;
+}
+
+/* Трёхполосный эквалайзер: низкие/средние/высокие.
+   Возвращает вход, выход и функцию применения текущих настроек. */
+function buildEqChain(ctx) {
+  const low = ctx.createBiquadFilter();
+  low.type = 'lowshelf';
+  low.frequency.value = 200;
+  const mid = ctx.createBiquadFilter();
+  mid.type = 'peaking';
+  mid.frequency.value = 1000;
+  mid.Q.value = 0.8;
+  const high = ctx.createBiquadFilter();
+  high.type = 'highshelf';
+  high.frequency.value = 4000;
+  low.connect(mid);
+  mid.connect(high);
+  const apply = () => {
+    low.gain.value = state.eq.low;
+    mid.gain.value = state.eq.mid;
+    high.gain.value = state.eq.high;
+  };
+  apply();
+  return { input: low, output: high, apply };
+}
+
+/* Страховочный лимитер, чтобы смесь «оригинал + минус» не клиппила */
+function makeLimiter(ctx) {
+  const lim = ctx.createDynamicsCompressor();
+  lim.threshold.value = -3;
+  lim.knee.value = 3;
+  lim.ratio.value = 20;
+  lim.attack.value = 0.002;
+  lim.release.value = 0.15;
+  return lim;
+}
+
+/* ---------- Утилиты ---------- */
+function fmtTime(sec) {
+  sec = Math.max(0, sec);
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function fmtLrcTime(sec) {
+  const cs = Math.round(sec * 100); // сотые доли, без двойного округления
+  const m = Math.floor(cs / 6000);
+  const s = Math.floor((cs % 6000) / 100);
+  const f = cs % 100;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(f).padStart(2, '0')}`;
+}
+
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+/* ---------- Сохранение проекта (текст, разметка, фон) ---------- */
+function saveProject() {
+  // Пока строки ещё не разобраны (например, сразу после загрузки файла),
+  // не затираем уже сохранённую разметку этой же песни
+  const prev = loadProject();
+  const keepPrev = prev && prev.name === state.fileName;
+  const data = {
+    name: state.fileName,
+    lyrics: $('lyrics-input').value || (keepPrev && prev.lyrics) || '',
+    times: state.lines.length ? state.lines.map((l) => l.time)
+      : (keepPrev && prev.times) || [],
+    bg: state.bgImage,
+    eq: { ...state.eq },
+  };
+  try {
+    localStorage.setItem('karaoke-project', JSON.stringify(data));
+  } catch (e) {
+    // Скорее всего не влезла картинка — сохраняем хотя бы текст и разметку
+    try {
+      delete data.bg;
+      localStorage.setItem('karaoke-project', JSON.stringify(data));
+    } catch (e2) { /* localStorage недоступен */ }
+  }
+}
+
+function loadProject() {
+  try {
+    return JSON.parse(localStorage.getItem('karaoke-project'));
+  } catch (e) { return null; }
+}
+
+/* ---------- Навигация по шагам ---------- */
+function goToStep(n) {
+  // Караоке готово — редактор тоже становится доступен
+  state.maxStep = Math.max(state.maxStep, n === 4 ? 5 : n);
+  document.querySelectorAll('.step-tab').forEach((tab) => {
+    const step = +tab.dataset.step;
+    tab.classList.toggle('active', step === n);
+    tab.disabled = step > state.maxStep;
+  });
+  document.querySelectorAll('.step-panel').forEach((p) => p.classList.remove('active'));
+  $(`step-${n}`).classList.add('active');
+
+  stopSync();
+  if (n !== 4 && n !== 5) { audio.pause(); updatePlayerUI(); }
+  if (n === 4) openEditor();
+  if (n === 5) renderStage();
+}
+
+document.querySelectorAll('.step-tab').forEach((tab) => {
+  tab.addEventListener('click', () => goToStep(+tab.dataset.step));
+});
+
+/* ============================================================
+   Шаг 1 — загрузка файла
+   ============================================================ */
+const dropzone = $('dropzone');
+const fileInput = $('file-input');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('keydown', (e) => { if (e.key === 'Enter') fileInput.click(); });
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+
+async function handleFile(file) {
+  dropzone.classList.add('hidden');
+  $('track-info').classList.add('hidden');
+  $('processing').classList.remove('hidden');
+  $('processing-text').textContent = 'Читаем файл…';
+
+  try {
+    const data = await file.arrayBuffer();
+    $('processing-text').textContent = 'Декодируем аудио…';
+    const ctx = audio.ensureCtx();
+    const buffer = await ctx.decodeAudioData(data);
+
+    $('processing-text').textContent = 'Приглушаем вокал…';
+    const instrumental = await makeInstrumental(buffer);
+
+    audio.stop();
+    state.fileName = file.name;
+    state.originalBuffer = buffer;
+    state.instrumentalBuffer = instrumental;
+    editor.peaks = null; // волна пересчитается для нового трека
+
+    $('track-name').textContent = file.name.replace(/\.[^.]+$/, '');
+    $('track-meta').textContent =
+      `${fmtTime(buffer.duration)} · ${buffer.numberOfChannels === 1 ? 'моно' : 'стерео'} · ${(buffer.sampleRate / 1000).toFixed(1)} кГц`;
+    $('mono-warning').classList.toggle('hidden', !!instrumental);
+    $('processing').classList.add('hidden');
+    $('track-info').classList.remove('hidden');
+
+    // Восстанавливаем сохранённый проект для этой песни
+    const saved = loadProject();
+    if (saved && saved.name === file.name) {
+      if (saved.lyrics) $('lyrics-input').value = saved.lyrics;
+      if (saved.bg) setBgImage(saved.bg);
+      if (saved.eq) {
+        state.eq = { low: +saved.eq.low || 0, mid: +saved.eq.mid || 0, high: +saved.eq.high || 0 };
+        updateEqUI();
+      }
+    }
+  } catch (err) {
+    $('processing').classList.add('hidden');
+    dropzone.classList.remove('hidden');
+    alert('Не удалось прочитать этот файл как аудио. Попробуй другой формат (MP3, WAV, OGG).');
+  }
+}
+
+/* ---------- Картинка-фон для караоке ---------- */
+
+/* Ужимаем картинку до разумного размера, чтобы она
+   помещалась в localStorage и не тормозила отрисовку */
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const maxSide = 1280;
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
+    img.src = url;
+  });
+}
+
+function setBgImage(dataUrl) {
+  state.bgImage = dataUrl || null;
+  const stage = $('lyrics-stage');
+  const preview = $('bg-preview');
+  if (dataUrl) {
+    stage.classList.add('has-bg');
+    stage.style.backgroundImage =
+      `linear-gradient(rgba(10, 10, 15, 0.68), rgba(10, 10, 15, 0.68)), url("${dataUrl}")`;
+    preview.src = dataUrl;
+    preview.classList.remove('hidden');
+    $('btn-bg-remove').classList.remove('hidden');
+    $('btn-bg-add').textContent = 'Заменить';
+  } else {
+    stage.classList.remove('has-bg');
+    stage.style.backgroundImage = '';
+    preview.removeAttribute('src');
+    preview.classList.add('hidden');
+    $('btn-bg-remove').classList.add('hidden');
+    $('btn-bg-add').textContent = 'Выбрать';
+  }
+  saveProject();
+}
+
+$('btn-bg-add').addEventListener('click', () => $('bg-input').click());
+$('btn-bg-remove').addEventListener('click', () => { $('bg-input').value = ''; setBgImage(null); });
+$('bg-input').addEventListener('change', async () => {
+  const file = $('bg-input').files[0];
+  if (!file) return;
+  try {
+    setBgImage(await shrinkImage(file));
+  } catch (e) {
+    alert('Не удалось открыть эту картинку. Попробуй JPG или PNG.');
+  }
+});
+
+$('btn-change-track').addEventListener('click', () => {
+  $('track-info').classList.add('hidden');
+  dropzone.classList.remove('hidden');
+  fileInput.value = '';
+});
+
+$('btn-to-lyrics').addEventListener('click', () => goToStep(2));
+
+/* ============================================================
+   Шаг 2 — текст
+   ============================================================ */
+$('btn-back-1').addEventListener('click', () => goToStep(1));
+
+$('btn-to-sync').addEventListener('click', () => {
+  const raw = $('lyrics-input').value;
+  const texts = raw.split('\n').map((s) => s.trim()).filter(Boolean);
+  if (!texts.length) {
+    alert('Сначала вставь текст песни — хотя бы пару строк.');
+    return;
+  }
+
+  // Сохраняем старую разметку, если текст не менялся
+  const sameText = state.lines.length === texts.length &&
+    state.lines.every((l, i) => l.text === texts[i]);
+  if (!sameText) {
+    const saved = loadProject();
+    const savedTimes = saved && saved.name === state.fileName ? saved.times : null;
+    state.lines = texts.map((text, i) => ({
+      text,
+      time: savedTimes && savedTimes.length === texts.length ? savedTimes[i] : null,
+    }));
+  }
+
+  saveProject();
+  renderSyncList();
+  updateSyncButtons();
+  goToStep(3);
+});
+
+/* ============================================================
+   Шаг 3 — синхронизация
+   ============================================================ */
+const sync = { active: false, index: 0, raf: null };
+
+function renderSyncList() {
+  const ul = $('sync-list');
+  ul.innerHTML = '';
+  state.lines.forEach((line, i) => {
+    const li = document.createElement('li');
+    li.className = line.time != null ? 'done' : 'pending';
+    if (sync.active && i === sync.index) li.classList.add('next');
+    const ts = document.createElement('span');
+    ts.className = 'ts' + (line.time == null ? ' empty' : '');
+    ts.textContent = line.time == null ? '–:––' : fmtTime(line.time);
+    const text = document.createElement('span');
+    text.className = 'line-text';
+    text.textContent = line.text;
+    li.append(ts, text);
+
+    // Кнопки прослушивания и точной подстройки — только для отмеченных строк
+    if (line.time != null && !sync.active) {
+      const play = document.createElement('button');
+      play.className = 'nudge-btn line-play';
+      play.textContent = '▶';
+      play.title = 'Прослушать эту строку';
+      play.dataset.play = i;
+      li.insertBefore(play, ts);
+
+      const nudge = document.createElement('span');
+      nudge.className = 'nudge';
+      [[-1, '−1'], [-0.1, '−0,1'], [0.1, '+0,1'], [1, '+1']].forEach(([delta, label]) => {
+        const b = document.createElement('button');
+        b.className = 'nudge-btn';
+        b.textContent = label;
+        b.title = `Сдвинуть начало строки на ${label} с`;
+        b.dataset.i = i;
+        b.dataset.delta = delta;
+        nudge.appendChild(b);
+      });
+      li.appendChild(nudge);
+    }
+    ul.appendChild(li);
+  });
+  const anyDone = state.lines.some((l) => l.time != null);
+  $('shift-all').classList.toggle('hidden', sync.active || !anyDone);
+}
+
+/* Сдвиг одной строки с сохранением порядка: не раньше предыдущей
+   и не позже следующей */
+/* Прослушать одну строку: от её начала до начала следующей */
+function playLine(i) {
+  const line = state.lines[i];
+  if (!line || line.time == null) return;
+  const next = state.lines
+    .slice(i + 1)
+    .find((l) => l.time != null);
+  const to = next ? next.time : Math.min(line.time + 8, audio.duration);
+  audio.playSegment(line.time, to);
+}
+
+function setLineTime(i, t) {
+  const line = state.lines[i];
+  const prev = i > 0 && state.lines[i - 1].time != null ? state.lines[i - 1].time + 0.05 : 0;
+  const next = i < state.lines.length - 1 && state.lines[i + 1].time != null
+    ? state.lines[i + 1].time - 0.05
+    : audio.duration;
+  line.time = Math.min(Math.max(t, prev), Math.max(prev, next));
+}
+
+function nudgeLine(i, delta) {
+  const line = state.lines[i];
+  if (!line || line.time == null) return;
+  setLineTime(i, line.time + delta);
+  refreshTimes();
+  saveProject();
+}
+
+function shiftAllLines(delta) {
+  state.lines.forEach((l) => {
+    if (l.time != null) {
+      l.time = Math.min(Math.max(l.time + delta, 0), audio.duration);
+    }
+  });
+  refreshTimes();
+  saveProject();
+}
+
+/* Обновить отображение таймингов во всех списках */
+function refreshTimes() {
+  renderSyncList();
+  document.querySelectorAll('#edit-list .ts').forEach((el) => {
+    const line = state.lines[+el.dataset.tsI];
+    if (line) el.textContent = line.time == null ? '–:––' : fmtTime(line.time);
+  });
+}
+
+$('sync-list').addEventListener('click', (e) => {
+  const playBtn = e.target.closest('[data-play]');
+  if (playBtn) { playLine(+playBtn.dataset.play); return; }
+  const btn = e.target.closest('.nudge-btn');
+  if (btn) nudgeLine(+btn.dataset.i, +btn.dataset.delta);
+});
+
+$('shift-all').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-shift]');
+  if (btn) shiftAllLines(+btn.dataset.shift);
+});
+
+function updateSyncButtons() {
+  const allDone = state.lines.length > 0 && state.lines.every((l) => l.time != null);
+  $('btn-to-player').disabled = !allDone;
+}
+
+function startSync() {
+  state.lines.forEach((l) => { l.time = null; });
+  sync.active = true;
+  sync.index = 0;
+  audio.forceVocal = true;
+  audio.applyMix();
+  audio.play(0);
+  audio.onEnded = finishSync;
+
+  $('btn-sync-start').classList.add('hidden');
+  $('btn-sync-stop').classList.remove('hidden');
+  $('tap-button').classList.remove('hidden');
+  $('tap-next').textContent = `Дальше: «${state.lines[0].text}»`;
+  renderSyncList();
+  updateSyncButtons();
+  tickSync();
+}
+
+function tickSync() {
+  $('sync-time').textContent = fmtTime(audio.position());
+  if (sync.active) sync.raf = requestAnimationFrame(tickSync);
+}
+
+function tapLine() {
+  if (!sync.active || sync.index >= state.lines.length) return;
+  state.lines[sync.index].time = audio.position();
+  sync.index++;
+  if (sync.index >= state.lines.length) {
+    finishSync();
+  } else {
+    $('tap-next').textContent = `Дальше: «${state.lines[sync.index].text}»`;
+    renderSyncList();
+    // Держим следующую строку на виду
+    const nextLi = $('sync-list').children[sync.index];
+    if (nextLi) nextLi.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function finishSync() {
+  sync.active = false;
+  cancelAnimationFrame(sync.raf);
+  audio.forceVocal = false;
+  audio.pause();
+  audio.offset = 0;
+  audio.applyMix();
+  $('btn-sync-start').classList.remove('hidden');
+  $('btn-sync-start').textContent = '▶ Ещё раз';
+  $('btn-sync-stop').classList.add('hidden');
+  $('tap-button').classList.add('hidden');
+  renderSyncList();
+  updateSyncButtons();
+  saveProject();
+}
+
+function stopSync() {
+  if (sync.active) finishSync();
+}
+
+$('btn-sync-start').addEventListener('click', startSync);
+$('btn-sync-stop').addEventListener('click', () => { finishSync(); startSync(); });
+$('tap-button').addEventListener('click', tapLine);
+$('btn-back-2').addEventListener('click', () => goToStep(2));
+$('btn-to-player').addEventListener('click', () => goToStep(4));
+
+/* ============================================================
+   Шаг 4 — караоке-плеер
+   ============================================================ */
+const player = { raf: null, stageKey: '' };
+
+function syncedLines() {
+  return state.lines.filter((l) => l.time != null);
+}
+
+function currentLineIndex(pos) {
+  const lines = syncedLines();
+  let idx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (pos >= lines[i].time) idx = i; else break;
+  }
+  return idx;
+}
+
+/* Проигрыши: если до следующей строки дольше BREAK_GAP секунд,
+   строка «поётся» SING_DUR секунд, а дальше показываем «♪ проигрыш ♪». */
+const BREAK_GAP = 6;
+const SING_DUR = 4;
+
+function stagePhase(pos) {
+  const lines = syncedLines();
+  if (!lines.length) return { mode: 'empty', cur: -1 };
+  const cur = currentLineIndex(pos);
+
+  if (cur === -1) {
+    // Вступление до первой строки
+    if (lines[0].time >= BREAK_GAP) {
+      return { mode: 'break', cur, start: 0, until: lines[0].time };
+    }
+    return { mode: 'intro', cur };
+  }
+
+  const start = lines[cur].time;
+  const next = cur + 1 < lines.length ? lines[cur + 1].time : null;
+  const hasBreak = next != null && next - start > BREAK_GAP;
+  if (hasBreak && pos >= start + SING_DUR) {
+    return { mode: 'break', cur, start: start + SING_DUR, until: next };
+  }
+  const end = hasBreak ? start + SING_DUR
+    : (next ?? Math.min(start + SING_DUR, audio.duration));
+  return { mode: 'line', cur, start, end };
+}
+
+function makeBreakLine() {
+  const b = document.createElement('div');
+  b.className = 'stage-line current break-line';
+  b.textContent = '♪ ♪ ♪';
+  return b;
+}
+
+/* Строки не переносятся — если строка шире сцены,
+   уменьшаем её шрифт так, чтобы она поместилась целиком */
+function fitStageLines(container) {
+  const avail = container.clientWidth
+    - parseFloat(getComputedStyle(container).paddingLeft)
+    - parseFloat(getComputedStyle(container).paddingRight);
+  if (avail <= 0) return;
+  container.querySelectorAll('.stage-line').forEach((el) => {
+    el.style.fontSize = '';
+    // Несколько проходов: ширина меряется в целых пикселях,
+    // поэтому одного пересчёта бывает мало
+    for (let pass = 0; pass < 4 && el.scrollWidth > avail; pass++) {
+      const cur = parseFloat(getComputedStyle(el).fontSize);
+      const next = Math.max(10, cur * (avail / el.scrollWidth) * 0.98);
+      el.style.fontSize = `${next}px`;
+      if (next <= 10) break;
+    }
+  });
+}
+
+function renderStage() {
+  const stage = $('lyrics-stage');
+  const lines = syncedLines();
+  stage.innerHTML = '';
+  if (!lines.length) {
+    stage.innerHTML = '<p class="stage-empty">Нет синхронизированных строк</p>';
+    return;
+  }
+  const pos = audio.position();
+  const ph = stagePhase(pos);
+  player.stageKey = `${ph.mode}:${ph.cur}`;
+  const cur = ph.cur;
+
+  if (ph.mode === 'break' && cur === -1) stage.appendChild(makeBreakLine());
+
+  // Окно: 2 строки до текущей и 4 после
+  const from = Math.max(0, cur - 2);
+  const to = Math.min(lines.length, Math.max(from + 7, cur + 5));
+  for (let i = from; i < to; i++) {
+    const div = document.createElement('div');
+    div.className = 'stage-line';
+    if (i === cur && ph.mode === 'line') div.classList.add('current');
+    else if (i === cur + 1) div.classList.add('near');
+    div.textContent = lines[i].text;
+    div.dataset.index = i;
+    stage.appendChild(div);
+    if (i === cur && ph.mode === 'break') stage.appendChild(makeBreakLine());
+  }
+  if (cur === -1 && ph.mode !== 'break' && stage.firstChild) {
+    // Песня ещё не дошла до первой строки
+    stage.firstChild.classList.add('near');
+  }
+  fitStageLines(stage);
+}
+
+function updateStageFill() {
+  const lines = syncedLines();
+  if (!lines.length) return;
+  const pos = audio.position();
+  const ph = stagePhase(pos);
+  if (`${ph.mode}:${ph.cur}` !== player.stageKey) renderStage();
+  const el = $('lyrics-stage').querySelector(
+    ph.mode === 'break' ? '.break-line' : '.stage-line.current');
+  if (!el) return;
+  const start = ph.start;
+  const end = ph.mode === 'break' ? ph.until : ph.end;
+  const fill = end > start ? ((pos - start) / (end - start)) * 100 : 100;
+  el.style.setProperty('--fill', `${Math.min(100, Math.max(0, fill)).toFixed(1)}%`);
+}
+
+function updatePlayerUI() {
+  $('btn-play').textContent = audio.playing ? '⏸' : '▶';
+  $('time-current').textContent = fmtTime(audio.position());
+  $('time-total').textContent = fmtTime(audio.duration);
+  if (!seekDragging && audio.duration) {
+    $('seek').value = Math.round((audio.position() / audio.duration) * 1000);
+  }
+}
+
+function tickPlayer() {
+  updatePlayerUI();
+  updateStageFill();
+
+  // Конец прослушиваемого отрывка — пауза
+  if (audio.playing && audio.stopAt != null && audio.position() >= audio.stopAt) {
+    audio.endSegment();
+    updatePlayerUI();
+  }
+
+  // Обновление редактора
+  if ($('step-4').classList.contains('active') && editor.peaks) {
+    $('edit-time').textContent = fmtTime(audio.position());
+    $('btn-edit-play').textContent = audio.playing ? '⏸' : '▶';
+    updateEditStage();
+    followPlayhead();
+    drawTimeline();
+  }
+
+  player.raf = requestAnimationFrame(tickPlayer);
+}
+
+$('btn-play').addEventListener('click', () => {
+  if (audio.playing) audio.pause();
+  else {
+    audio.play();
+    audio.onEnded = () => updatePlayerUI();
+  }
+  updatePlayerUI();
+});
+
+let seekDragging = false;
+$('seek').addEventListener('input', () => { seekDragging = true; });
+$('seek').addEventListener('change', () => {
+  const pos = ($('seek').value / 1000) * audio.duration;
+  seekDragging = false;
+  if (audio.playing) audio.play(pos);
+  else audio.offset = pos;
+  updatePlayerUI();
+  renderStage();
+});
+
+$('vocal-mix').addEventListener('input', () => {
+  state.vocalMix = $('vocal-mix').value / 100;
+  $('vocal-mix-value').textContent = `${$('vocal-mix').value}%`;
+  audio.applyMix();
+});
+
+/* --- Эквалайзер --- */
+const EQ_BANDS = ['low', 'mid', 'high'];
+
+function updateEqUI() {
+  EQ_BANDS.forEach((band) => {
+    const v = state.eq[band];
+    $(`eq-${band}`).value = v;
+    $(`eq-${band}-val`).textContent = `${v > 0 ? '+' : ''}${v} дБ`;
+  });
+}
+
+EQ_BANDS.forEach((band) => {
+  $(`eq-${band}`).addEventListener('input', () => {
+    state.eq[band] = +$(`eq-${band}`).value;
+    updateEqUI();
+    if (audio.eqChain) audio.eqChain.apply();
+    saveProject();
+  });
+});
+
+$('eq-reset').addEventListener('click', () => {
+  state.eq = { low: 0, mid: 0, high: 0 };
+  updateEqUI();
+  if (audio.eqChain) audio.eqChain.apply();
+  saveProject();
+});
+
+$('btn-back-3').addEventListener('click', () => goToStep(4));
+
+/* ---------- Экспорт LRC ---------- */
+$('btn-export-lrc').addEventListener('click', () => {
+  const lines = syncedLines();
+  if (!lines.length) { alert('Сначала синхронизируй текст.'); return; }
+  const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
+  const lrc = [
+    `[ti:${name}]`,
+    '[by:Бэнэнгская Рапсодия]',
+    ...lines.map((l) => `[${fmtLrcTime(l.time)}]${l.text}`),
+  ].join('\n');
+  download(new Blob([lrc], { type: 'text/plain;charset=utf-8' }), `${name}.lrc`);
+});
+
+/* ---------- Экспорт WAV (минусовка) ---------- */
+function bufferToWav(buffer) {
+  const numCh = buffer.numberOfChannels;
+  const rate = buffer.sampleRate;
+  const frames = buffer.length;
+  const bytesPerSample = 2;
+  const dataSize = frames * numCh * bytesPerSample;
+  const ab = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(ab);
+
+  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numCh, true);
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * numCh * bytesPerSample, true);
+  view.setUint16(32, numCh * bytesPerSample, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  const channels = [];
+  for (let c = 0; c < numCh; c++) channels.push(buffer.getChannelData(c));
+  let off = 44;
+  for (let i = 0; i < frames; i++) {
+    for (let c = 0; c < numCh; c++) {
+      const s = Math.max(-1, Math.min(1, channels[c][i]));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      off += 2;
+    }
+  }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+
+$('btn-export-wav').addEventListener('click', () => {
+  if (!state.instrumentalBuffer) {
+    alert('Для моно-файла минусовку сделать нельзя.');
+    return;
+  }
+  const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
+  download(bufferToWav(state.instrumentalBuffer), `${name} (минус).wav`);
+});
+
+/* ============================================================
+   Шаг 5 — редактор: текст + предпросмотр + дорожка
+   ============================================================ */
+const editor = {
+  pxPerSec: 40,
+  scrollT: 0,
+  peaks: null,   // огибающая волны для отрисовки дорожки
+  drag: null,    // { index } — какой маркер тащим
+  stageKey: '',
+};
+
+function computePeaks() {
+  const buf = state.originalBuffer;
+  const d = buf.getChannelData(0);
+  const bucket = 2048;
+  const n = Math.ceil(d.length / bucket);
+  const mins = new Float32Array(n);
+  const maxs = new Float32Array(n);
+  for (let b = 0; b < n; b++) {
+    let mn = 1, mx = -1;
+    const end = Math.min(d.length, (b + 1) * bucket);
+    for (let i = b * bucket; i < end; i++) {
+      const v = d[i];
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    mins[b] = mn;
+    maxs[b] = mx;
+  }
+  editor.peaks = { mins, maxs, bucketDur: bucket / buf.sampleRate };
+}
+
+function openEditor() {
+  if (!state.originalBuffer) return;
+  if (!editor.peaks) computePeaks();
+  renderEditList();
+  renderEditStage();
+  resizeTimeline();
+  $('edit-total').textContent = fmtTime(audio.duration);
+  drawTimeline();
+}
+
+/* --- Список строк с редактированием текста --- */
+function renderEditList() {
+  const ul = $('edit-list');
+  ul.innerHTML = '';
+  state.lines.forEach((line, i) => {
+    const li = document.createElement('li');
+    li.className = 'edit-row';
+    li.dataset.row = i;
+
+    const play = document.createElement('button');
+    play.className = 'nudge-btn line-play';
+    play.textContent = '▶';
+    play.title = 'Прослушать эту строку';
+    play.dataset.play = i;
+
+    const ts = document.createElement('span');
+    ts.className = 'ts' + (line.time == null ? ' empty' : '');
+    ts.dataset.tsI = i;
+    ts.textContent = line.time == null ? '–:––' : fmtTime(line.time);
+
+    const text = document.createElement('div');
+    text.className = 'edit-text';
+    text.contentEditable = 'true';
+    text.spellcheck = false;
+    text.textContent = line.text;
+    text.dataset.textI = i;
+
+    const nudge = document.createElement('span');
+    nudge.className = 'nudge';
+    [[-1, '−1'], [-0.1, '−0,1'], [0.1, '+0,1'], [1, '+1']].forEach(([delta, label]) => {
+      const b = document.createElement('button');
+      b.className = 'nudge-btn';
+      b.textContent = label;
+      b.title = `Сдвинуть начало строки на ${label} с`;
+      b.dataset.i = i;
+      b.dataset.delta = delta;
+      nudge.appendChild(b);
+    });
+
+    li.append(play, ts, text, nudge);
+    ul.appendChild(li);
+  });
+}
+
+$('edit-list').addEventListener('click', (e) => {
+  const playBtn = e.target.closest('[data-play]');
+  if (playBtn) { playLine(+playBtn.dataset.play); return; }
+  const btn = e.target.closest('.nudge-btn');
+  if (btn) nudgeLine(+btn.dataset.i, +btn.dataset.delta);
+});
+
+/* Вставка в строки — только плоским текстом, без HTML из буфера */
+$('edit-list').addEventListener('paste', (e) => {
+  const el = e.target.closest('.edit-text');
+  if (!el) return;
+  e.preventDefault();
+  const text = (e.clipboardData || window.clipboardData)
+    .getData('text/plain').replace(/\n/g, ' ');
+  document.execCommand('insertText', false, text);
+});
+
+/* Правка текста прямо в списке */
+$('edit-list').addEventListener('input', (e) => {
+  const el = e.target.closest('.edit-text');
+  if (!el) return;
+  const i = +el.dataset.textI;
+  state.lines[i].text = el.textContent.replace(/\n/g, ' ').trim() || state.lines[i].text;
+  $('lyrics-input').value = state.lines.map((l) => l.text).join('\n');
+  saveProject();
+  editor.stageKey = ''; // заставляем предпросмотр перерисоваться
+});
+
+/* --- Мини-сцена предпросмотра --- */
+function renderEditStage() {
+  const el = $('edit-stage');
+  const lines = syncedLines();
+  el.innerHTML = '';
+  if (!lines.length) return;
+  const pos = audio.position();
+  const ph = stagePhase(pos);
+  editor.stageKey = `${ph.mode}:${ph.cur}`;
+  const cur = ph.cur;
+
+  const items = [];
+  if (ph.mode === 'break') {
+    if (cur >= 0) items.push([lines[cur].text, '']);
+    items.push(['♪ ♪ ♪', 'current break-line']);
+    if (cur + 1 < lines.length) items.push([lines[cur + 1].text, 'near']);
+  } else if (cur === -1) {
+    items.push([lines[0].text, 'near']);
+    if (lines[1]) items.push([lines[1].text, '']);
+  } else {
+    items.push([lines[cur].text, 'current']);
+    if (lines[cur + 1]) items.push([lines[cur + 1].text, 'near']);
+  }
+  for (const [text, cls] of items) {
+    const div = document.createElement('div');
+    div.className = 'stage-line' + (cls ? ' ' + cls : '');
+    div.textContent = text;
+    el.appendChild(div);
+  }
+  fitStageLines(el);
+
+  // Подсветка текущей строки в списке
+  const globalIdx = cur >= 0 ? state.lines.indexOf(lines[cur]) : -1;
+  document.querySelectorAll('#edit-list .edit-row').forEach((row) => {
+    row.classList.toggle('current-row', +row.dataset.row === globalIdx);
+  });
+}
+
+function updateEditStage() {
+  const lines = syncedLines();
+  if (!lines.length) return;
+  const pos = audio.position();
+  const ph = stagePhase(pos);
+  if (`${ph.mode}:${ph.cur}` !== editor.stageKey) renderEditStage();
+  const el = $('edit-stage').querySelector(
+    ph.mode === 'break' ? '.break-line' : '.stage-line.current');
+  if (!el) return;
+  const start = ph.start;
+  const end = ph.mode === 'break' ? ph.until : ph.end;
+  const fill = end > start ? ((pos - start) / (end - start)) * 100 : 100;
+  el.style.setProperty('--fill', `${Math.min(100, Math.max(0, fill)).toFixed(1)}%`);
+}
+
+/* --- Дорожка --- */
+function resizeTimeline() {
+  const c = $('timeline');
+  const w = c.parentElement.clientWidth - 2;
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(w * dpr);
+  c.height = Math.round(150 * dpr);
+  c.style.width = `${w}px`;
+  c.style.height = '150px';
+}
+
+function timelineDims() {
+  const c = $('timeline');
+  const dpr = window.devicePixelRatio || 1;
+  return { W: c.width / dpr, H: c.height / dpr, dpr };
+}
+
+function drawTimeline() {
+  if (!editor.peaks) return;
+  const c = $('timeline');
+  const g = c.getContext('2d');
+  const { W, H, dpr } = timelineDims();
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const rulerH = 20;
+  const waveH = H - rulerH;
+  const viewDur = W / editor.pxPerSec;
+  editor.scrollT = Math.min(Math.max(0, editor.scrollT), Math.max(0, audio.duration - viewDur));
+
+  g.fillStyle = '#0e0e15';
+  g.fillRect(0, 0, W, H);
+
+  // Волна
+  const { mins, maxs, bucketDur } = editor.peaks;
+  g.fillStyle = 'rgba(45, 212, 191, 0.5)';
+  const mid = rulerH + waveH / 2;
+  for (let x = 0; x < W; x++) {
+    const t0 = editor.scrollT + x / editor.pxPerSec;
+    const b0 = Math.floor(t0 / bucketDur);
+    if (b0 >= maxs.length) break;
+    const b1 = Math.min(maxs.length - 1, Math.floor((t0 + 1 / editor.pxPerSec) / bucketDur));
+    let mn = 1, mx = -1;
+    for (let b = b0; b <= b1; b++) {
+      if (mins[b] < mn) mn = mins[b];
+      if (maxs[b] > mx) mx = maxs[b];
+    }
+    const y0 = mid + mn * (waveH / 2) * 0.92;
+    const y1 = mid + mx * (waveH / 2) * 0.92;
+    g.fillRect(x, Math.min(y0, y1), 1, Math.max(1, Math.abs(y1 - y0)));
+  }
+
+  // Линейка времени
+  const step = editor.pxPerSec >= 60 ? 1 : editor.pxPerSec >= 25 ? 2 : editor.pxPerSec >= 12 ? 5 : 10;
+  g.fillStyle = '#9a9ab0';
+  g.font = '10px sans-serif';
+  g.textAlign = 'left';
+  for (let t = Math.ceil(editor.scrollT / step) * step; t <= editor.scrollT + viewDur; t += step) {
+    const x = (t - editor.scrollT) * editor.pxPerSec;
+    g.fillRect(x, 0, 1, 5);
+    g.fillText(fmtTime(t), x + 3, 12);
+  }
+
+  // Маркеры строк
+  g.font = '10px sans-serif';
+  state.lines.forEach((line, i) => {
+    if (line.time == null) return;
+    const x = (line.time - editor.scrollT) * editor.pxPerSec;
+    if (x < -60 || x > W + 60) return;
+    const active = editor.drag && editor.drag.index === i;
+    g.fillStyle = active ? '#84cc16' : '#10b981';
+    g.fillRect(x - 1, rulerH, 2, waveH);
+    g.fillStyle = active ? '#d9f99d' : 'rgba(52, 211, 153, 0.9)';
+    const label = line.text.length > 14 ? line.text.slice(0, 14) + '…' : line.text;
+    g.fillText(label, x + 4, rulerH + 12);
+  });
+
+  // Курсор воспроизведения
+  const px = (audio.position() - editor.scrollT) * editor.pxPerSec;
+  if (px >= 0 && px <= W) {
+    g.fillStyle = '#f2f2f7';
+    g.fillRect(px - 1, 0, 2, H);
+  }
+}
+
+function timelineHitMarker(x) {
+  let best = null, bestDist = 7;
+  state.lines.forEach((line, i) => {
+    if (line.time == null) return;
+    const mx = (line.time - editor.scrollT) * editor.pxPerSec;
+    const dist = Math.abs(mx - x);
+    if (dist < bestDist) { best = i; bestDist = dist; }
+  });
+  return best;
+}
+
+const tl = $('timeline');
+
+tl.addEventListener('pointerdown', (e) => {
+  const rect = tl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const idx = timelineHitMarker(x);
+  if (idx != null) {
+    editor.drag = { index: idx };
+    try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
+  } else {
+    const t = editor.scrollT + x / editor.pxPerSec;
+    if (audio.playing) audio.play(t);
+    else audio.offset = Math.min(Math.max(0, t), audio.duration);
+    renderEditStage();
+  }
+  drawTimeline();
+});
+
+tl.addEventListener('pointermove', (e) => {
+  const rect = tl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  if (editor.drag) {
+    setLineTime(editor.drag.index, editor.scrollT + x / editor.pxPerSec);
+    refreshTimes();
+    drawTimeline();
+  } else {
+    tl.style.cursor = timelineHitMarker(x) != null ? 'ew-resize' : 'pointer';
+  }
+});
+
+tl.addEventListener('pointerup', () => {
+  if (editor.drag) {
+    editor.drag = null;
+    saveProject();
+    renderEditStage();
+    drawTimeline();
+  }
+});
+
+tl.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  editor.scrollT += (e.deltaX + e.deltaY) / editor.pxPerSec;
+  drawTimeline();
+}, { passive: false });
+
+function zoomTimeline(factor) {
+  const { W } = timelineDims();
+  const center = editor.scrollT + W / editor.pxPerSec / 2;
+  editor.pxPerSec = Math.min(200, Math.max(8, editor.pxPerSec * factor));
+  editor.scrollT = center - W / editor.pxPerSec / 2;
+  drawTimeline();
+}
+$('tl-zoom-in').addEventListener('click', () => zoomTimeline(1.5));
+$('tl-zoom-out').addEventListener('click', () => zoomTimeline(1 / 1.5));
+
+$('btn-edit-play').addEventListener('click', () => {
+  if (audio.playing) audio.pause();
+  else audio.play();
+});
+
+$('btn-back-4').addEventListener('click', () => goToStep(3));
+$('btn-editor-next').addEventListener('click', () => goToStep(5));
+
+window.addEventListener('resize', () => {
+  if ($('step-4').classList.contains('active')) {
+    resizeTimeline();
+    drawTimeline();
+    fitStageLines($('edit-stage'));
+  }
+  if ($('step-5').classList.contains('active')) fitStageLines($('lyrics-stage'));
+});
+
+/* Держим курсор в кадре во время воспроизведения */
+function followPlayhead() {
+  if (!audio.playing) return;
+  const { W } = timelineDims();
+  const viewDur = W / editor.pxPerSec;
+  const pos = audio.position();
+  if (pos > editor.scrollT + viewDur * 0.85 || pos < editor.scrollT) {
+    editor.scrollT = Math.max(0, pos - viewDur * 0.15);
+  }
+}
+
+/* ---------- Экспорт видео для YouTube ----------
+   Рисуем караоке на canvas 1280×720, звук ведём в MediaStream,
+   пишем всё вместе через MediaRecorder. Запись в реальном времени. */
+const videoExport = { active: false, cancelled: false };
+
+function drawVideoFrame(g2d, W, H, bgImg, pos) {
+  // Фон
+  if (bgImg) {
+    const scale = Math.max(W / bgImg.width, H / bgImg.height);
+    const w = bgImg.width * scale, h = bgImg.height * scale;
+    g2d.drawImage(bgImg, (W - w) / 2, (H - h) / 2, w, h);
+    g2d.fillStyle = 'rgba(10, 10, 15, 0.72)';
+  } else {
+    const grad = g2d.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, '#171129');
+    grad.addColorStop(1, '#0a0a0f');
+    g2d.fillStyle = grad;
+  }
+  g2d.fillRect(0, 0, W, H);
+
+  const lines = syncedLines();
+  const ph = stagePhase(pos);
+  const cur = ph.cur;
+
+  // Безопасная зона: текст занимает не больше 80% ширины кадра
+  const maxWidth = W * 0.8;
+  g2d.textAlign = 'center';
+  g2d.textBaseline = 'middle';
+
+  const font = (size, bold) =>
+    `${bold ? '700' : '600'} ${size}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+
+  // Собираем блоки: строка до текущей, текущая (или ноты проигрыша) и следующие.
+  // Без переносов: длинная строка ужимается по ширине безопасной зоны.
+  const baseSize = 40; // единый размер: активная строка выделяется только цветом
+  const blocks = [];
+  const pushText = (text, isCur, isBreak) => {
+    g2d.font = font(baseSize, isCur);
+    const w = g2d.measureText(text).width;
+    const size = w > maxWidth ? Math.max(16, baseSize * maxWidth / w) : baseSize;
+    blocks.push({ text, size, isCur, isBreak });
+  };
+  if (ph.mode === 'break') {
+    if (cur >= 0) pushText(lines[cur].text, false);
+    pushText('♪   ♪   ♪', true, true);
+    for (let i = cur + 1; i < Math.min(lines.length, cur + 3); i++) pushText(lines[i].text, false);
+  } else {
+    const first = cur === -1 ? 0 : Math.max(0, cur - 1);
+    for (let i = first; i < Math.min(lines.length, (cur === -1 ? 0 : cur) + 3); i++) {
+      pushText(lines[i].text, i === cur);
+    }
+  }
+
+  const lineGap = 1.35;
+  const blockGap = 26;
+  const totalH = blocks.reduce((sum, b) => sum + b.size * lineGap + blockGap, -blockGap);
+  let y = H / 2 - totalH / 2;
+
+  for (const b of blocks) {
+    g2d.font = font(b.size, b.isCur);
+    const rowH = b.size * lineGap;
+    const cy = y + rowH / 2;
+    if (b.isCur) {
+      const start = ph.start;
+      const end = ph.mode === 'break' ? ph.until : ph.end;
+      const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
+      // Базовый белый текст
+      g2d.fillStyle = '#f2f2f7';
+      g2d.fillText(b.text, W / 2, cy);
+      // Оранжевая «заливка» слева направо по мере пения
+      const textW = g2d.measureText(b.text).width;
+      g2d.save();
+      g2d.beginPath();
+      g2d.rect((W - textW) / 2, y - 4, textW * p, rowH + 8);
+      g2d.clip();
+      g2d.fillStyle = '#f97316';
+      g2d.fillText(b.text, W / 2, cy);
+      g2d.restore();
+    } else {
+      g2d.fillStyle = 'rgba(210, 210, 225, 0.55)';
+      g2d.fillText(b.text, W / 2, cy);
+    }
+    y += rowH + blockGap;
+  }
+}
+
+async function exportVideo() {
+  if (videoExport.active || !state.originalBuffer) return;
+  const lines = syncedLines();
+  if (!lines.length) { alert('Сначала синхронизируй текст.'); return; }
+
+  audio.pause();
+  updatePlayerUI();
+  videoExport.active = true;
+  videoExport.cancelled = false;
+  $('export-overlay').classList.remove('hidden');
+  $('export-fill').style.width = '0%';
+  $('export-status').textContent = 'Записываем видео…';
+
+  // Фоновая картинка (если есть)
+  let bgImg = null;
+  if (state.bgImage) {
+    bgImg = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = state.bgImage;
+    });
+  }
+
+  const W = 1280, H = 720;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const g2d = canvas.getContext('2d');
+
+  // Звук: та же смесь, что в плеере, но в MediaStream вместо колонок
+  const ctx = audio.ensureCtx();
+  const dest = ctx.createMediaStreamDestination();
+  const eq = buildEqChain(ctx);
+  const limiter = makeLimiter(ctx);
+  eq.output.connect(limiter);
+  limiter.connect(dest);
+  const vGain = ctx.createGain();
+  const iGain = ctx.createGain();
+  vGain.connect(eq.input);
+  iGain.connect(eq.input);
+  const hasInst = !!state.instrumentalBuffer;
+  vGain.gain.value = hasInst ? state.vocalMix : 1;
+  iGain.gain.value = hasInst ? 1 - state.vocalMix : 0;
+
+  const sources = [];
+  const orig = ctx.createBufferSource();
+  orig.buffer = state.originalBuffer;
+  orig.connect(vGain);
+  sources.push(orig);
+  if (hasInst) {
+    const inst = ctx.createBufferSource();
+    inst.buffer = state.instrumentalBuffer;
+    inst.connect(iGain);
+    sources.push(inst);
+  }
+
+  const stream = new MediaStream([
+    ...canvas.captureStream(30).getVideoTracks(),
+    ...dest.stream.getAudioTracks(),
+  ]);
+  const mime = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4',
+  ].find((m) => MediaRecorder.isTypeSupported(m)) || '';
+  const recorder = new MediaRecorder(stream, mime
+    ? { mimeType: mime, videoBitsPerSecond: 6_000_000 }
+    : undefined);
+  const chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+
+  const duration = audio.duration;
+  const t0 = ctx.currentTime + 0.1;
+  const cleanup = () => {
+    sources.forEach((s) => { try { s.stop(); } catch (e) { /* уже остановлен */ } });
+    videoExport.active = false;
+    $('export-overlay').classList.add('hidden');
+  };
+
+  recorder.onstop = () => {
+    cleanup();
+    if (videoExport.cancelled || !chunks.length) return;
+    const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
+    const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
+    download(new Blob(chunks, { type: mime || 'video/webm' }), `${name} (караоке).${ext}`);
+  };
+
+  sources.forEach((s) => s.start(t0));
+  recorder.start(1000);
+
+  const tick = () => {
+    if (videoExport.cancelled) { recorder.stop(); return; }
+    const pos = ctx.currentTime - t0;
+    if (pos >= duration + 0.3) { recorder.stop(); return; }
+    drawVideoFrame(g2d, W, H, bgImg, Math.max(0, pos));
+    const pct = Math.min(100, (pos / duration) * 100);
+    $('export-fill').style.width = `${pct.toFixed(1)}%`;
+    $('export-status').textContent =
+      `Записываем видео… ${fmtTime(Math.max(0, pos))} / ${fmtTime(duration)}`;
+    requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+$('btn-export-video').addEventListener('click', exportVideo);
+$('btn-export-cancel').addEventListener('click', () => { videoExport.cancelled = true; });
+
+/* ---------- Клавиатура ---------- */
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space') return;
+  const active = document.activeElement;
+  const tag = active && active.tagName;
+  if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'BUTTON' || (active && active.isContentEditable)) {
+    if (!sync.active) return;
+  }
+  if (sync.active) {
+    e.preventDefault();
+    tapLine();
+  } else if (($('step-4').classList.contains('active') || $('step-5').classList.contains('active'))
+      && state.originalBuffer) {
+    e.preventDefault();
+    if (audio.playing) audio.pause();
+    else audio.play();
+    updatePlayerUI();
+  }
+});
+
+/* ---------- Автосохранение текста ---------- */
+$('lyrics-input').addEventListener('input', () => saveProject());
+
+/* ---------- Восстановление текста при загрузке страницы ---------- */
+(function init() {
+  const saved = loadProject();
+  if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
+  tickPlayer(); // общий цикл обновления UI (лёгкий, обновляет только видимое)
+})();
