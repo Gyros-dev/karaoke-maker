@@ -31,7 +31,8 @@ const audio = {
 
   ensureCtx() {
     if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    // 'suspended' и сафариевский 'interrupted' — будим в обоих случаях
+    if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
     return this.ctx;
   },
 
@@ -639,7 +640,7 @@ function startSync() {
 }
 
 function tickSync() {
-  $('sync-time').textContent = fmtTime(audio.position());
+  setText('sync-time', fmtTime(audio.position()));
   if (sync.active) sync.raf = requestAnimationFrame(tickSync);
 }
 
@@ -808,12 +809,22 @@ function updateStageFill() {
   el.style.setProperty('--fill', `${Math.min(100, Math.max(0, fill)).toFixed(1)}%`);
 }
 
+/* Пишем в DOM только при реальном изменении: обновление текста кнопки
+   60 раз в секунду «съедает» клики в Safari (узел пересоздаётся
+   между нажатием и отпусканием мыши) */
+function setText(id, text) {
+  const el = $(id);
+  if (el.textContent !== text) el.textContent = text;
+}
+
 function updatePlayerUI() {
-  $('btn-play').textContent = audio.playing ? '⏸' : '▶';
-  $('time-current').textContent = fmtTime(audio.position());
-  $('time-total').textContent = fmtTime(audio.duration);
+  setText('btn-play', audio.playing ? '⏸' : '▶');
+  setText('time-current', fmtTime(audio.position()));
+  setText('time-total', fmtTime(audio.duration));
   if (!seekDragging && audio.duration) {
-    $('seek').value = Math.round((audio.position() / audio.duration) * 1000);
+    const v = String(Math.round((audio.position() / audio.duration) * 1000));
+    const seek = $('seek');
+    if (seek.value !== v) seek.value = v;
   }
 }
 
@@ -829,8 +840,8 @@ function tickPlayer() {
 
   // Обновление редактора
   if ($('step-4').classList.contains('active') && editor.peaks) {
-    $('edit-time').textContent = fmtTime(audio.position());
-    $('btn-edit-play').textContent = audio.playing ? '⏸' : '▶';
+    setText('edit-time', fmtTime(audio.position()));
+    setText('btn-edit-play', audio.playing ? '⏸' : '▶');
     updateEditStage();
     followPlayhead();
     drawTimeline();
@@ -1497,7 +1508,7 @@ $('btn-export-cancel').addEventListener('click', () => { videoExport.cancelled =
 /* Политика автовоспроизведения: некоторые браузеры «замораживают»
    аудиоконтекст до жеста пользователя — размораживаем при любом клике */
 document.addEventListener('pointerdown', () => {
-  if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
+  if (audio.ctx && audio.ctx.state !== 'running') audio.ctx.resume().catch(() => {});
 }, true);
 
 /* ---------- Клавиатура ---------- */
