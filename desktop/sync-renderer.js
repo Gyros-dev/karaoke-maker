@@ -15,11 +15,18 @@
 const fs = require('fs');
 const path = require('path');
 
-const WEB = path.join(__dirname, '..', 'karaoke-maker');
 const OUT = path.join(__dirname, 'renderer');
 
-if (!fs.existsSync(path.join(WEB, 'index.html'))) {
-  console.error('Не нашёл веб-версию в', WEB);
+/* Работает в двух раскладках: когда папка лежит внутри репозитория
+   сайта (../index.html) и когда рядом с ним (../karaoke-maker/) */
+const CANDIDATES = [
+  path.join(__dirname, '..'),
+  path.join(__dirname, '..', 'karaoke-maker'),
+];
+const WEB = CANDIDATES.find((dir) => fs.existsSync(path.join(dir, 'index.html')));
+
+if (!WEB) {
+  console.error('Не нашёл веб-версию. Искал в:\n  ' + CANDIDATES.join('\n  '));
   process.exit(1);
 }
 
