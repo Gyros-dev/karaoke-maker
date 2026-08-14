@@ -77,8 +77,9 @@
   <h2>Нужна минусовка получше?</h2>
   <p class="desktop-lead">
     В браузере вокал приглушается простым способом — быстро, но эхо и бэк-вокал остаются.
-    Настольная версия убирает голос нейросетью HTDemucs, той же, что стоит за UVR5:
-    качество несравнимо, а считает всё твой компьютер, ничего не уходит в интернет.
+    Настольная версия убирает голос локальной моделью семейства Demucs — тем же
+    классом разделения, который поддерживает UVR5. Всё считает твой компьютер,
+    ничего не уходит в интернет.
   </p>
   <div class="desktop-buttons">
     <a class="btn btn-primary" id="dl-mac"
@@ -106,11 +107,11 @@
 <section class="how" id="how">
   <h2>Как это работает</h2>
   <ol class="how-steps">
-    <li><span class="how-num">1</span><div><b>Загрузи песню</b><p>Подойдёт MP3, WAV, OGG или M4A в стерео.</p></div></li>
-    <li><span class="how-num">2</span><div><b>Вставь текст</b><p>Каждая строка с новой строки — как будешь петь.</p></div></li>
-    <li><span class="how-num">3</span><div><b>Синхронизируй</b><p>Слушай песню и нажимай пробел в начале каждой строки.</p></div></li>
-    <li><span class="how-num">4</span><div><b>Подправь</b><p>Редактор с дорожкой: двигай строки и слушай построчно.</p></div></li>
-    <li><span class="how-num">5</span><div><b>Пой!</b><p>Убавь вокал и следи за подсветкой строк.</p></div></li>
+    <li><span class="how-num">1</span><div><b>Загрузи песню</b><p>Подойдут MP3, WAV, OGG и M4A. Можно добавить фон и готовую минусовку; в версии для компьютера есть удаление вокала нейросетью.</p></div></li>
+    <li><span class="how-num">2</span><div><b>Вставь текст</b><p>Одна непустая строка — одна караоке-фраза.</p></div></li>
+    <li><span class="how-num">3</span><div><b>Отметь начала</b><p>Нажимай пробел в начале строк. Если ошибся — остановись, выбери строку и продолжи только с неё.</p></div></li>
+    <li><span class="how-num">4</span><div><b>Доведи разметку</b><p>В редакторе правь текст, начала и окончания фраз, слушай их по отдельности и тяни маркеры на дорожке.</p></div></li>
+    <li><span class="how-num">5</span><div><b>Пой и сохрани</b><p>Настрой текст, фон, вокал и эквалайзер. Сохрани LRC, WAV-минусовку или видео для YouTube в HD, Full HD либо 2K.</p></div></li>
   </ol>
 </section>
 
@@ -169,7 +170,7 @@
       <div class="bg-upload hidden" id="ai-block">
         <div class="bg-upload-text">
           <b>🧠 Убрать вокал нейросетью</b>
-          <span>Качество как у UVR5: модель HTDemucs посчитает минусовку прямо на этом компьютере, ничего не отправляя в интернет</span>
+          <span>Локальная модель Demucs: тот же класс разделения, который поддерживает UVR5. Всё посчитается прямо на компьютере</span>
         </div>
         <button class="btn btn-primary btn-small" id="btn-ai-run">Убрать вокал</button>
       </div>
@@ -195,11 +196,13 @@
     <p class="panel-hint">
       Нажми «Старт» — заиграет песня (с вокалом, чтобы было слышно слова).
       В момент начала каждой строки нажимай <b>пробел</b> или большую кнопку.
-      Потом можно подвинуть начало любой строки кнопками ±1с и ±0,1с.
+      Можно остановиться, выбрать строку в списке и продолжить с неё. Точные
+      начало и конец строки при необходимости правятся в редакторе.
     </p>
     <div class="sync-controls">
-      <button class="btn btn-primary" id="btn-sync-start">▶ Старт</button>
-      <button class="btn btn-ghost hidden" id="btn-sync-stop">⏹ Заново</button>
+      <button class="btn btn-primary" id="btn-sync-start">▶ Начать</button>
+      <button class="btn btn-ghost hidden" id="btn-sync-stop">⏸ Остановить</button>
+      <button class="btn btn-ghost" id="btn-sync-reset">↺ Начать заново</button>
       <span class="sync-time" id="sync-time">0:00</span>
     </div>
     <button class="tap-button hidden" id="tap-button">
@@ -346,6 +349,13 @@
         <button class="btn btn-ghost" id="btn-sound-check">🔊 Проверить звук</button>
         <button class="btn btn-ghost" id="btn-export-lrc">⬇ Текст .lrc</button>
         <button class="btn btn-ghost" id="btn-export-wav">⬇ Минусовка .wav</button>
+        <label class="export-quality" for="video-quality">Качество
+          <select id="video-quality">
+            <option value="720">HD · 1280×720</option>
+            <option value="1080" selected>Full HD · 1920×1080</option>
+            <option value="1440">2K · 2560×1440</option>
+          </select>
+        </label>
         <button class="btn btn-primary" id="btn-export-video">🎬 Видео для YouTube</button>
       </div>
     </div>
@@ -353,7 +363,7 @@
       <div class="export-box">
         <p id="export-status">Записываем видео…</p>
         <div class="export-bar"><div id="export-fill"></div></div>
-        <p class="export-hint">Запись идёт в реальном времени — займёт столько же, сколько длится песня. Не закрывай вкладку.</p>
+        <p class="export-hint">Запись идёт в реальном времени. Её можно свернуть: экспорт продолжится в фоне. Не закрывай страницу до окончания.</p>
         <button class="btn btn-ghost" id="btn-export-cancel">Отменить</button>
       </div>
     </div>
@@ -363,6 +373,8 @@
   <div class="step-panel" id="step-4">
     <p class="panel-hint">
       Слева — текст: его можно править прямо в списке, слушать построчно (▶) и двигать кнопками.
+      Метка «до …» и кнопки «конец» задают точный момент окончания строки — так
+      во время проигрыша не будет висеть предыдущий текст.
       Справа — предпросмотр караоке. Внизу — звуковая дорожка: клик перематывает,
       зелёный маркер строки можно тащить мышью.
     </p>
@@ -405,7 +417,7 @@
   </details>
   <details>
     <summary>Как получить по-настоящему чистую минусовку?</summary>
-    <p><b>Проще всего — поставить <a href="#desktop">настольную версию</a>:</b> в ней есть кнопка «Убрать вокал нейросетью», которая делает всё сама. Внутри модель HTDemucs — та же, на которой работает UVR5.</p>
+    <p><b>Проще всего — поставить <a href="#desktop">настольную версию</a>:</b> в ней есть кнопка «Убрать вокал нейросетью», которая делает всё сама. Используется локальная модель Demucs — семейство моделей, которое поддерживает UVR5.</p>
     <p>Если ставить программу не хочется, можно прогнать песню через нейросеть отдельно и загрузить готовый файл в поле «Своя минусовка» на первом шаге. Бесплатный вариант — <b>Ultimate Vocal Remover (UVR5)</b>: работает локально, выбери модель из семейства Demucs или MDX-Net и сохрани дорожку «Instrumental». Из платных сервисов похожее качество дают LALAL.AI и Moises.</p>
     <p>Файл минусовки должен быть той же песней и той же длительности, что и оригинал — иначе текст разъедется.</p>
   </details>

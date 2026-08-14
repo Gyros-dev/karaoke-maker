@@ -58,10 +58,17 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: '#0a0a0f',
     title: 'Бэнэнгская Рапсодия',
+    // Явно задаём иконку окну: без этого в dev-режиме Electron показывает
+    // стандартную иконку, хотя installer уже использует нашу.
+    icon: process.platform === 'win32'
+      ? path.join(__dirname, 'build', 'icon.ico')
+      : path.join(__dirname, 'build', 'icon.icns'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Экспорт видео продолжает рисовать кадры при свёрнутом приложении.
+      backgroundThrottling: false,
     },
   });
   win.loadURL('app://bundle/index.html');

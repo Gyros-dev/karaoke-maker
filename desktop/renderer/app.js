@@ -13,7 +13,7 @@ const state = {
   fileName: null,
   originalBuffer: null,     // AudioBuffer исходной песни
   instrumentalBuffer: null, // AudioBuffer с приглушённым вокалом (null для моно)
-  lines: [],                // [{ text, time|null }]
+  lines: [],                // [{ text, time|null, end:number|null }]
   vocalMix: 0,              // 0..1 — громкость вокала в караоке
   bgImage: null,            // dataURL картинки-фона для караоке
   eq: { low: 0, mid: 0, high: 0 }, // эквалайзер, дБ (−12…+12)
@@ -127,12 +127,14 @@ const audio = {
 
     this.vocalGain = ctx.createGain();
     this.instGain = ctx.createGain();
+    const fade = ctx.createGain();
     this.eqChain = buildEqChain(ctx);
     const limiter = makeLimiter(ctx);
     this.vocalGain.connect(this.eqChain.input);
     this.instGain.connect(this.eqChain.input);
     this.eqChain.output.connect(limiter);
-    limiter.connect(ctx.destination);
+    limiter.connect(fade);
+    fade.connect(ctx.destination);
     this.applyMix();
 
     const orig = ctx.createBufferSource();
@@ -148,6 +150,9 @@ const audio = {
     }
 
     const t = ctx.currentTime + 0.03;
+    // Убираем щелчок/искажение на самом старте трека от резкого скачка уровня.
+    fade.gain.setValueAtTime(0, t);
+    fade.gain.linearRampToValueAtTime(1, t + 0.012);
     this.sources.forEach((s) => s.start(t, this.offset));
     this.startedAt = t - this.offset;
     this.playing = true;
@@ -345,6 +350,8 @@ function saveProject() {
     lyrics: $('lyrics-input').value || (keepPrev && prev.lyrics) || '',
     times: state.lines.length ? state.lines.map((l) => l.time)
       : (keepPrev && prev.times) || [],
+    ends: state.lines.length ? state.lines.map((l) => l.end ?? null)
+      : (keepPrev && prev.ends) || [],
     bg: state.bgImage,
     eq: { ...state.eq },
     style: { ...state.style },
@@ -608,6 +615,8 @@ $('btn-to-sync').addEventListener('click', () => {
     state.lines = texts.map((text, i) => ({
       text,
       time: savedTimes && savedTimes.length === texts.length ? savedTimes[i] : null,
+      end: saved && saved.name === state.fileName && saved.ends && saved.ends.length === texts.length
+        ? saved.ends[i] : null,
     }));
   }
 
@@ -620,7 +629,7 @@ $('btn-to-sync').addEventListener('click', () => {
 /* ============================================================
    Шаг 3 — синхронизация
    ============================================================ */
-const sync = { active: false, index: 0, raf: null };
+const sync = { active: false, index: 0, selected: 0, raf: null };
 
 function renderSyncList() {
   const ul = $('sync-list');
@@ -629,6 +638,7 @@ function renderSyncList() {
     const li = document.createElement('li');
     li.className = line.time != null ? 'done' : 'pending';
     if (sync.active && i === sync.index) li.classList.add('next');
+    if (!sync.active && i === sync.selected) li.classList.add('next');
     const ts = document.createElement('span');
     ts.className = 'ts' + (line.time == null ? ' empty' : '');
     ts.textContent = line.time == null ? '–:––' : fmtTime(line.time);
@@ -636,6 +646,15 @@ function renderSyncList() {
     text.className = 'line-text';
     text.textContent = line.text;
     li.append(ts, text);
+
+    if (!sync.active) {
+      const resume = document.createElement('button');
+      resume.className = 'nudge-btn';
+      resume.textContent = 'Продолжить отсюда';
+      resume.title = 'Стереть метки с этой строки и продолжить синхронизацию';
+      resume.dataset.resume = i;
+      li.appendChild(resume);
+    }
 
     // Кнопки прослушивания и точной подстройки — только для отмеченных строк
     if (line.time != null && !sync.active) {
@@ -695,6 +714,23 @@ function nudgeLine(i, delta) {
   saveProject();
 }
 
+function setLineEnd(i, t) {
+  const line = state.lines[i];
+  if (!line || line.time == null) return;
+  const next = state.lines.slice(i + 1).find((l) => l.time != null);
+  const max = next ? next.time - 0.05 : audio.duration;
+  line.end = Math.min(Math.max(t, line.time + 0.05), max);
+}
+
+function nudgeLineEnd(i, delta) {
+  const line = state.lines[i];
+  if (!line || line.time == null) return;
+  setLineEnd(i, (line.end ?? lineEnd(syncedLines(), syncedLines().indexOf(line))) + delta);
+  refreshTimes();
+  saveProject();
+  editor.stageKey = '';
+}
+
 function shiftAllLines(delta) {
   state.lines.forEach((l) => {
     if (l.time != null) {
@@ -715,6 +751,13 @@ function refreshTimes() {
 }
 
 $('sync-list').addEventListener('click', (e) => {
+  const resume = e.target.closest('[data-resume]');
+  if (resume) {
+    sync.selected = +resume.dataset.resume;
+    renderSyncList();
+    $('btn-sync-start').textContent = `▶ Продолжить с ${sync.selected + 1}-й строки`;
+    return;
+  }
   const playBtn = e.target.closest('[data-play]');
   if (playBtn) { playLine(+playBtn.dataset.play); return; }
   const btn = e.target.closest('.nudge-btn');
@@ -731,19 +774,26 @@ function updateSyncButtons() {
   $('btn-to-player').disabled = !allDone;
 }
 
-function startSync() {
-  state.lines.forEach((l) => { l.time = null; });
+function startSync(from = sync.selected) {
+  if (typeof from !== 'number') from = sync.selected;
+  from = Math.max(0, Math.min(from, state.lines.length - 1));
+  const resumeAt = state.lines[from].time;
+  // Всё до выбранной строки оставляем нетронутым. Выбранная и последующие
+  // метки будут записаны заново, поэтому ошибку не нужно переделывать с нуля.
+  state.lines.slice(from).forEach((l) => { l.time = null; l.end = null; });
   sync.active = true;
-  sync.index = 0;
+  sync.index = from;
+  sync.selected = from;
   audio.forceVocal = true;
   audio.applyMix();
-  audio.play(0);
+  const prev = from > 0 ? state.lines[from - 1].time : 0;
+  audio.play(Math.max(0, (resumeAt ?? prev ?? 0) - 1));
   audio.onEnded = finishSync;
 
   $('btn-sync-start').classList.add('hidden');
   $('btn-sync-stop').classList.remove('hidden');
   $('tap-button').classList.remove('hidden');
-  $('tap-next').textContent = `Дальше: «${state.lines[0].text}»`;
+  $('tap-next').textContent = `Дальше: «${state.lines[from].text}»`;
   renderSyncList();
   updateSyncButtons();
   tickSync();
@@ -776,8 +826,9 @@ function finishSync() {
   audio.pause();
   audio.offset = 0;
   audio.applyMix();
+  sync.selected = Math.min(sync.index, Math.max(0, state.lines.length - 1));
   $('btn-sync-start').classList.remove('hidden');
-  $('btn-sync-start').textContent = '▶ Ещё раз';
+  $('btn-sync-start').textContent = '▶ Продолжить';
   $('btn-sync-stop').classList.add('hidden');
   $('tap-button').classList.add('hidden');
   renderSyncList();
@@ -790,7 +841,15 @@ function stopSync() {
 }
 
 $('btn-sync-start').addEventListener('click', startSync);
-$('btn-sync-stop').addEventListener('click', () => { finishSync(); startSync(); });
+$('btn-sync-stop').addEventListener('click', finishSync);
+$('btn-sync-reset').addEventListener('click', () => {
+  sync.selected = 0;
+  state.lines.forEach((l) => { l.time = null; l.end = null; });
+  saveProject();
+  renderSyncList();
+  updateSyncButtons();
+  $('btn-sync-start').textContent = '▶ Начать';
+});
 $('tap-button').addEventListener('click', tapLine);
 $('btn-back-2').addEventListener('click', () => goToStep(2));
 $('btn-to-player').addEventListener('click', () => goToStep(4));
@@ -813,10 +872,19 @@ function currentLineIndex(pos) {
   return idx;
 }
 
-/* Проигрыши: если до следующей строки дольше BREAK_GAP секунд,
-   строка «поётся» SING_DUR секунд, а дальше показываем «♪ проигрыш ♪». */
+/* Если конец задан в редакторе, он всегда важнее эвристики. Иначе используем
+   следующую строку или короткую длительность по умолчанию. */
 const BREAK_GAP = 6;
 const SING_DUR = 4;
+
+function lineEnd(lines, index) {
+  const line = lines[index];
+  const next = index + 1 < lines.length ? lines[index + 1].time : null;
+  const limit = next != null ? next - 0.02 : audio.duration;
+  if (line.end != null) return Math.max(line.time + 0.05, Math.min(line.end, limit));
+  return next != null && next - line.time <= BREAK_GAP
+    ? next : Math.min(line.time + SING_DUR, limit);
+}
 
 function stagePhase(pos) {
   const lines = syncedLines();
@@ -832,13 +900,11 @@ function stagePhase(pos) {
   }
 
   const start = lines[cur].time;
+  const end = lineEnd(lines, cur);
   const next = cur + 1 < lines.length ? lines[cur + 1].time : null;
-  const hasBreak = next != null && next - start > BREAK_GAP;
-  if (hasBreak && pos >= start + SING_DUR) {
-    return { mode: 'break', cur, start: start + SING_DUR, until: next };
+  if (next != null && end < next - 0.02 && pos >= end) {
+    return { mode: 'break', cur, start: end, until: next };
   }
-  const end = hasBreak ? start + SING_DUR
-    : (next ?? Math.min(start + SING_DUR, audio.duration));
   return { mode: 'line', cur, start, end };
 }
 
@@ -1345,6 +1411,10 @@ function renderEditList() {
     ts.dataset.tsI = i;
     ts.textContent = line.time == null ? '–:––' : fmtTime(line.time);
 
+    const end = document.createElement('span');
+    end.className = 'ts end-ts' + (line.end == null ? ' empty' : '');
+    end.textContent = line.time == null ? '–:––' : `до ${fmtTime(lineEnd(syncedLines(), syncedLines().indexOf(line)))}`;
+
     const text = document.createElement('div');
     text.className = 'edit-text';
     text.contentEditable = 'true';
@@ -1364,7 +1434,16 @@ function renderEditList() {
       nudge.appendChild(b);
     });
 
-    li.append(play, ts, text, nudge);
+    const endNudge = document.createElement('span');
+    endNudge.className = 'nudge end-nudge';
+    [[-1, 'конец −1'], [-0.1, '−0,1'], [0.1, '+0,1'], [1, 'конец +1']].forEach(([delta, label]) => {
+      const b = document.createElement('button');
+      b.className = 'nudge-btn'; b.textContent = label;
+      b.title = `Сдвинуть конец строки на ${label} с`;
+      b.dataset.endI = i; b.dataset.endDelta = delta;
+      endNudge.appendChild(b);
+    });
+    li.append(play, ts, end, text, nudge, endNudge);
     ul.appendChild(li);
   });
 }
@@ -1372,6 +1451,8 @@ function renderEditList() {
 $('edit-list').addEventListener('click', (e) => {
   const playBtn = e.target.closest('[data-play]');
   if (playBtn) { playLine(+playBtn.dataset.play); return; }
+  const endBtn = e.target.closest('[data-end-i]');
+  if (endBtn) { nudgeLineEnd(+endBtn.dataset.endI, +endBtn.dataset.endDelta); renderEditList(); return; }
   const btn = e.target.closest('.nudge-btn');
   if (btn) nudgeLine(+btn.dataset.i, +btn.dataset.delta);
 });
@@ -1664,15 +1745,14 @@ function drawVideoFrame(g2d, W, H, bgImg, pos) {
   const family = (FONTS[st.font] || FONTS.system).css;
   const font = (size) => `${st.weight} ${size}px ${family}`;
 
-  // Собираем блоки: строка до текущей, текущая (или ноты проигрыша) и следующие.
-  // Без переносов: длинная строка ужимается по ширине безопасной зоны.
+  // Собираем блоки: все строки одного кадра получают один размер. Иначе
+  // длинная фраза визуально «проваливается» относительно остальных.
   const baseSize = Math.round(40 * st.size / 100);
-  const blocks = [];
+  const rawBlocks = [];
   const pushText = (text, isCur) => {
     g2d.font = font(baseSize);
     const w = g2d.measureText(text).width;
-    const size = w > maxWidth ? Math.max(14, baseSize * maxWidth / w) : baseSize;
-    blocks.push({ text, size, isCur });
+    rawBlocks.push({ text, width: w, isCur });
   };
   const total = st.lines;
   const before = Math.min(2, Math.floor((total - 1) / 2));
@@ -1689,6 +1769,10 @@ function drawVideoFrame(g2d, W, H, bgImg, pos) {
       pushText(lines[i].text, i === cur);
     }
   }
+
+  const fittedSize = rawBlocks.reduce((size, b) =>
+    Math.min(size, b.width > maxWidth ? baseSize * maxWidth / b.width : baseSize), baseSize);
+  const blocks = rawBlocks.map((b) => ({ ...b, size: Math.max(14, fittedSize) }));
 
   const lineGap = st.line / 10;
   const blockGap = Math.round(baseSize * 0.35);
@@ -1766,7 +1850,9 @@ async function exportVideo() {
     });
   }
 
-  const W = 1280, H = 720;
+  const quality = Number($('video-quality').value) || 1080;
+  const H = quality;
+  const W = Math.round(H * 16 / 9);
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -1799,8 +1885,10 @@ async function exportVideo() {
     sources.push(inst);
   }
 
+  const canvasStream = canvas.captureStream(30);
+  const videoTrack = canvasStream.getVideoTracks()[0];
   const stream = new MediaStream([
-    ...canvas.captureStream(30).getVideoTracks(),
+    videoTrack,
     ...dest.stream.getAudioTracks(),
   ]);
   const mime = [
@@ -1810,7 +1898,7 @@ async function exportVideo() {
     'video/mp4',
   ].find((m) => MediaRecorder.isTypeSupported(m)) || '';
   const recorder = new MediaRecorder(stream, mime
-    ? { mimeType: mime, videoBitsPerSecond: 6_000_000 }
+    ? { mimeType: mime, videoBitsPerSecond: quality >= 1440 ? 18_000_000 : quality >= 1080 ? 12_000_000 : 7_000_000 }
     : undefined);
   const chunks = [];
   recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
@@ -1819,6 +1907,7 @@ async function exportVideo() {
   const t0 = ctx.currentTime + 0.1;
   const cleanup = () => {
     sources.forEach((s) => { try { s.stop(); } catch (e) { /* уже остановлен */ } });
+    try { videoTrack.stop(); } catch (e) { /* уже остановлен */ }
     videoExport.active = false;
     $('export-overlay').classList.add('hidden');
   };
@@ -1834,18 +1923,20 @@ async function exportVideo() {
   sources.forEach((s) => s.start(t0));
   recorder.start(1000);
 
-  const tick = () => {
-    if (videoExport.cancelled) { recorder.stop(); return; }
+  // Не используем requestAnimationFrame: браузер замедляет его в свёрнутой
+  // вкладке, а звук Web Audio продолжает идти. Интервал и requestFrame дают
+  // видеотреку следующий кадр даже когда окно не на переднем плане.
+  const timer = setInterval(() => {
+    if (videoExport.cancelled) { clearInterval(timer); recorder.stop(); return; }
     const pos = ctx.currentTime - t0;
-    if (pos >= duration + 0.3) { recorder.stop(); return; }
+    if (pos >= duration + 0.3) { clearInterval(timer); recorder.stop(); return; }
     drawVideoFrame(g2d, W, H, bgImg, Math.max(0, pos));
+    if (videoTrack && typeof videoTrack.requestFrame === 'function') videoTrack.requestFrame();
     const pct = Math.min(100, (pos / duration) * 100);
     $('export-fill').style.width = `${pct.toFixed(1)}%`;
     $('export-status').textContent =
       `Записываем видео… ${fmtTime(Math.max(0, pos))} / ${fmtTime(duration)}`;
-    requestAnimationFrame(tick);
-  };
-  tick();
+  }, 1000 / 30);
 }
 
 $('btn-export-video').addEventListener('click', exportVideo);

@@ -41,7 +41,7 @@ const CSP_DESKTOP =
 const AI_BLOCK = `      <div class="bg-upload hidden" id="ai-block">
         <div class="bg-upload-text">
           <b>🧠 Убрать вокал нейросетью</b>
-          <span>Качество как у UVR5: модель HTDemucs посчитает минусовку прямо на этом компьютере, ничего не отправляя в интернет</span>
+          <span>Локальная модель Demucs: тот же класс разделения, который поддерживает UVR5. Всё посчитается прямо на компьютере</span>
         </div>
         <button class="btn btn-primary btn-small" id="btn-ai-run">Убрать вокал</button>
       </div>

@@ -172,11 +172,14 @@
       buf.copyToChannel(outL, 0);
       buf.copyToChannel(outR, 1);
       if (Math.abs(ctx.sampleRate - MODEL_SR) > 1) buf = await resample(buf, ctx.sampleRate);
+      // Защита от пиков после нейросети: иначе на старте и громких атаках
+      // возможны клиппинг и цифровой треск.
+      buf = normalizeInstrumental(buf, state.originalBuffer);
 
       audio.stop();
       state.instrumentalBuffer = buf;
       state.customInst = true;
-      state.instName = 'нейросеть (HTDemucs)';
+      state.instName = 'нейросеть (Demucs)';
       $('mono-warning').classList.add('hidden');
       updateInstUI();
       $('inst-input').value = '';
