@@ -7,7 +7,7 @@
   <title>Бэнэнгская Рапсодия — создай караоке из любой песни</title>
   <meta name="description" content="Бесплатная караоке-студия в браузере: загрузи песню, приглуши вокал, синхронизируй текст и пой. Без серверов и регистрации.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎤</text></svg>">
-  <link rel="stylesheet" href="style.css?v=1.1.0">
+  <link rel="stylesheet" href="style.css?v=1.1.1">
 </head>
 <body>
 
@@ -93,6 +93,14 @@
     <br>macOS — для Apple Silicon, Windows — x64 и ARM.
     <a href="https://github.com/Gyros-dev/karaoke-maker/releases/latest">Все версии и заметки к выпуску</a>
   </p>
+  <details class="first-run">
+    <summary>Первый запуск: система попросит подтверждение</summary>
+    <p>Приложение подписано «для себя», но не заверено у Apple — сертификат разработчика платный. Один раз придётся подтвердить запуск вручную.</p>
+    <p><b>macOS.</b> Перетащи приложение в «Программы», открой Терминал и выполни команду — она снимает пометку «скачано из интернета»:</p>
+    <pre>xattr -dr com.apple.quarantine "/Applications/Бэнэнгская Рапсодия.app"</pre>
+    <p>Без Терминала: попробуй открыть приложение, получи отказ, потом зайди в Системные настройки → «Конфиденциальность и безопасность» и нажми «Всё равно открыть». Совет «правый клик → Открыть» в свежих macOS больше не работает.</p>
+    <p><b>Windows.</b> SmartScreen покажет синее окно → «Подробнее» → «Выполнить в любом случае».</p>
+  </details>
 </section>
 
 <!-- ===================== HOW ===================== -->
@@ -418,6 +426,6 @@
   <span>Сделано с любовью к музыке · работает без серверов</span>
 </footer>
 
-<script src="app.js?v=1.1.0"></script>
+<script src="app.js?v=1.1.1"></script>
 </body>
 </html>

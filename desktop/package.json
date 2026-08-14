@@ -60,6 +60,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "afterPack": "build/afterPack.js"
   }
 }
