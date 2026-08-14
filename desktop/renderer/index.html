@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Бэнэнгская Рапсодия — создай караоке из любой песни</title>
   <meta name="description" content="Бесплатная караоке-студия в браузере: загрузи песню, приглуши вокал, синхронизируй текст и пой. Без серверов и регистрации.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎤</text></svg>">
-  <link rel="stylesheet" href="style.css?v=1.1.0">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -156,6 +156,13 @@
         <button class="btn btn-ghost btn-small" id="btn-inst-add">Выбрать</button>
         <button class="btn btn-ghost btn-small hidden" id="btn-inst-remove">Убрать</button>
         <input type="file" id="inst-input" accept="audio/*" hidden>
+      </div>
+      <div class="bg-upload hidden" id="ai-block">
+        <div class="bg-upload-text">
+          <b>🧠 Убрать вокал нейросетью</b>
+          <span>Качество как у UVR5: модель HTDemucs посчитает минусовку прямо на этом компьютере, ничего не отправляя в интернет</span>
+        </div>
+        <button class="btn btn-primary btn-small" id="btn-ai-run">Убрать вокал</button>
       </div>
       <div class="panel-actions">
         <button class="btn btn-ghost" id="btn-change-track">Другой файл</button>
@@ -416,6 +423,18 @@
   <span>Сделано с любовью к музыке · работает без серверов</span>
 </footer>
 
-<script src="app.js?v=1.1.0"></script>
+<div class="export-overlay hidden" id="ai-overlay">
+  <div class="export-box">
+    <p id="ai-status">Готовим модель…</p>
+    <div class="export-bar"><div id="ai-fill"></div></div>
+    <p class="export-hint" id="ai-hint">Считает на твоём компьютере, ничего не отправляется в интернет.</p>
+    <button class="btn btn-ghost" id="btn-ai-cancel">Отменить</button>
+  </div>
+</div>
+
+<script src="ort/ort.min.js"></script>
+<script src="app.js"></script>
+<script src="desktop.js"></script>
+<script src="speedtest.js"></script>
 </body>
 </html>

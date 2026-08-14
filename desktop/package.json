@@ -1,0 +1,65 @@
+{
+  "name": "benengskaya-rapsodiya",
+  "productName": "Бэнэнгская Рапсодия",
+  "version": "1.0.0",
+  "description": "Караоке-студия с удалением вокала нейросетью",
+  "main": "main.js",
+  "author": "Gyros-dev",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac --arm64",
+    "dist:win": "electron-builder --win --x64 --arm64",
+    "dist": "electron-builder --mac --arm64 --win --x64 --arm64",
+    "sync": "node sync-renderer.js",
+    "postinstall": "node setup-ort.js",
+    "setup": "node setup-ort.js"
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.27.0"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.gyros.benengskaya",
+    "productName": "Бэнэнгская Рапсодия",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.music",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

@@ -2,3 +2,7 @@
 .DS_Store
 test-*.wav
 test-*.png
+
+# Настольная версия
+desktop/node_modules/
+desktop/dist/
