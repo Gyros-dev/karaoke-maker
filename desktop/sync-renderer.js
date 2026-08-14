@@ -65,15 +65,21 @@ function patchHtml(src) {
   if (!CSP_WEB.test(s)) throw new Error('не нашёл строку с политикой безопасности');
   s = s.replace(CSP_WEB, CSP_DESKTOP);
 
-  // 2. Версии в путях к файлам не нужны — тут нет кэша браузера
+  // 2. Иконки сайта в приложении не нужны — у окна своя иконка
+  s = s.replace(/^.*<link rel="(icon|apple-touch-icon)"[^>]*>\n/gm, '');
+  s = s.replace(/^.*<meta name="theme-color"[^>]*>\n/gm, '');
+  s = s.replace(/^.*<img class="logo-img"[^>]*>\n/gm, '');
+  s = s.replace('<span class="logo-icon hidden" id="logo-fallback">', '<span class="logo-icon" id="logo-fallback">');
+
+  // 3. Версии в путях к файлам не нужны — тут нет кэша браузера
   s = s.replace(/(href|src)="(style\.css|app\.js)\?v=[^"]*"/g, '$1="$2"');
 
-  // 3. Блок удаления вокала — после блока своей минусовки
+  // 4. Блок удаления вокала — после блока своей минусовки
   const anchor = '        <input type="file" id="inst-input" accept="audio/*" hidden>\n      </div>\n';
   if (!s.includes(anchor)) throw new Error('не нашёл блок «Своя минусовка»');
   s = s.replace(anchor, anchor + AI_BLOCK);
 
-  // 4. Окно прогресса и подключение скриптов
+  // 5. Окно прогресса и подключение скриптов
   const scriptTag = '<script src="app.js"></script>';
   if (!s.includes(scriptTag)) throw new Error('не нашёл подключение app.js');
   s = s.replace(scriptTag,

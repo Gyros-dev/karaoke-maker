@@ -1880,6 +1880,23 @@ document.addEventListener('keydown', (e) => {
 /* ---------- Автосохранение текста ---------- */
 $('lyrics-input').addEventListener('input', () => saveProject());
 
+/* ---------- Логотип ----------
+   Если файлы иконок ещё не сделаны (node make-icons.js),
+   вместо битой картинки показываем прежний значок */
+function useLogoFallback(img) {
+  img.classList.add('hidden');
+  const fallback = $('logo-fallback');
+  if (fallback) fallback.classList.remove('hidden');
+}
+
+['logo-img', 'logo-img-footer'].forEach((id) => {
+  const img = $(id);
+  if (!img) return;
+  img.addEventListener('error', () => useLogoFallback(img));
+  // Картинка могла не загрузиться ещё до подключения скрипта
+  if (img.complete && img.naturalWidth === 0) useLogoFallback(img);
+});
+
 /* ---------- Проверка обновлений ----------
    Браузер охотно показывает старую копию из кэша, поэтому сверяем
    версию с сервером и предлагаем перезагрузиться в обход кэша.

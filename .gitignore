@@ -6,3 +6,5 @@ test-*.png
 # Настольная версия
 desktop/node_modules/
 desktop/dist/
+
+# Иконки собираются из logo.png скриптом make-icons.js
