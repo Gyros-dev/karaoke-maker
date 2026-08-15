@@ -253,8 +253,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .card a, .faq a { color: #34d399; }
 
 /* ============ Как это работает ============ */
-.how-steps { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.2rem; }
-.how-steps li { display: flex; gap: 1rem; align-items: flex-start; }
+/* Пять шагов держим одной строкой: с auto-fit последний срывался вниз */
+.how-steps { list-style: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+.how-steps li { display: flex; gap: 0.7rem; align-items: flex-start; }
 .how-num {
   flex-shrink: 0;
   width: 40px; height: 40px;
@@ -263,7 +264,11 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   background: var(--grad);
   font-weight: 700;
 }
-.how-steps p { color: var(--text-dim); font-size: 0.9rem; }
+.how-steps p { color: var(--text-dim); font-size: 0.85rem; }
+.how-num { width: 34px; height: 34px; font-size: 0.9rem; }
+@media (max-width: 900px) {
+  .how-steps { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+}
 
 /* ============ Студия ============ */
 .studio {
@@ -509,6 +514,18 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   overflow: hidden;
 }
 .edit-stage { --st-size: 1rem; }
+/* В превью строка может переноситься: подсветка идёт посимвольно,
+   поэтому перенос её не ломает, и длинный текст виден целиком */
+.edit-stage .stage-line {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  background: none;
+  color: var(--st-inactive);
+}
+.edit-stage .stage-line.current { color: var(--st-active); }
+.edit-stage .stage-line.current span.sung { color: var(--st-effect); }
+.edit-stage .stage-line.near { color: var(--st-active); }
 .editor-controls {
   display: flex;
   align-items: center;

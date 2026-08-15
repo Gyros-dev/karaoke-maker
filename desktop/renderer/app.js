@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.2.0';
 
 /* ---------- Состояние ---------- */
 const state = {
@@ -209,9 +209,28 @@ const audio = {
 async function makeInstrumental(buffer) {
   if (buffer.numberOfChannels < 2) return null;
 
-  const ctx = new OfflineAudioContext(2, buffer.length, buffer.sampleRate);
+  /* Фильтр стартует с нулевого состояния и первые доли секунды даёт
+     выброс — на слух это «странный» звук в самом начале трека.
+     Поэтому даём ему разогнаться на зеркальной копии начала записи,
+     а потом отрезаем этот разгон. */
+  const PREROLL = Math.min(Math.round(buffer.sampleRate * 0.5), buffer.length);
+  const padded = new OfflineAudioContext(2, 1, buffer.sampleRate)
+    .createBuffer(2, buffer.length + PREROLL, buffer.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const from = buffer.getChannelData(Math.min(c, buffer.numberOfChannels - 1));
+    const to = padded.getChannelData(c);
+    // Копия начала записи, плавно нарастающая от нуля: фильтр успевает
+    // выйти на режим, а сам разгон не начинается со скачка
+    for (let i = 0; i < PREROLL; i++) {
+      // Косинусное нарастание: мягче линейного, меньше раскачивает фильтр
+      to[i] = from[i] * (0.5 - 0.5 * Math.cos((Math.PI * i) / PREROLL));
+    }
+    to.set(from, PREROLL);
+  }
+
+  const ctx = new OfflineAudioContext(2, padded.length, buffer.sampleRate);
   const src = ctx.createBufferSource();
-  src.buffer = buffer;
+  src.buffer = padded;
 
   const split = ctx.createChannelSplitter(2);
   src.connect(split);
@@ -227,6 +246,9 @@ async function makeInstrumental(buffer) {
   const lowpass = ctx.createBiquadFilter();
   lowpass.type = 'lowpass';
   lowpass.frequency.value = 170;
+  // Без резонанса на частоте среза: по умолчанию фильтр её подчёркивает
+  // и долго звенит, из-за чего начало трека звучит грязно
+  lowpass.Q.value = 0.707;
   const ml = ctx.createGain(); ml.gain.value = 0.5;
   const mr = ctx.createGain(); mr.gain.value = 0.5;
   split.connect(ml, 0); split.connect(mr, 1);
@@ -239,7 +261,14 @@ async function makeInstrumental(buffer) {
 
   src.start();
   const rendered = await ctx.startRendering();
-  return normalizeInstrumental(rendered, buffer);
+
+  // Отрезаем разгон фильтра
+  const trimmed = ctx.createBuffer(2, buffer.length, buffer.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    trimmed.copyToChannel(
+      rendered.getChannelData(c).subarray(PREROLL, PREROLL + buffer.length), c);
+  }
+  return normalizeInstrumental(trimmed, buffer);
 }
 
 /* Сумма «разность каналов + бас» может вылезать за 1.0 — на выходе это
@@ -1504,10 +1533,19 @@ function renderEditStage() {
   for (const [text, cls] of items) {
     const div = document.createElement('div');
     div.className = 'stage-line' + (cls ? ' ' + cls : '');
-    div.textContent = text;
+    if (cls.includes('current')) {
+      // Текущую строку набираем посимвольно: так подсветка работает
+      // и когда строка переносится, а длинный текст не приходится обрезать
+      for (const ch of text) {
+        const span = document.createElement('span');
+        span.textContent = ch;
+        div.appendChild(span);
+      }
+    } else {
+      div.textContent = text;
+    }
     el.appendChild(div);
   }
-  fitStageLines(el);
 
   // Подсветка текущей строки в списке
   const globalIdx = cur >= 0 ? state.lines.indexOf(lines[cur]) : -1;
@@ -1527,8 +1565,13 @@ function updateEditStage() {
   if (!el) return;
   const start = ph.start;
   const end = ph.mode === 'break' ? ph.until : ph.end;
-  const fill = end > start ? ((pos - start) / (end - start)) * 100 : 100;
-  el.style.setProperty('--fill', `${Math.min(100, Math.max(0, fill)).toFixed(1)}%`);
+  const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
+  // Красим символы по мере пения — работает и с перенесённой строкой
+  const spans = el.children;
+  const sung = Math.round(spans.length * p);
+  for (let i = 0; i < spans.length; i++) {
+    spans[i].classList.toggle('sung', i < sung);
+  }
 }
 
 /* --- Дорожка --- */
@@ -1885,7 +1928,10 @@ async function exportVideo() {
     sources.push(inst);
   }
 
-  const canvasStream = canvas.captureStream(30);
+  // Ноль кадров в секунду: захват идёт только по нашему requestFrame.
+  // При автозахвате браузер сам решает, когда брать кадр, и в свёрнутом
+  // окне перестаёт это делать — картинка замирает, а звук пишется дальше.
+  const canvasStream = canvas.captureStream(0);
   const videoTrack = canvasStream.getVideoTracks()[0];
   const stream = new MediaStream([
     videoTrack,
@@ -1923,20 +1969,65 @@ async function exportVideo() {
   sources.forEach((s) => s.start(t0));
   recorder.start(1000);
 
-  // Не используем requestAnimationFrame: браузер замедляет его в свёрнутой
-  // вкладке, а звук Web Audio продолжает идти. Интервал и requestFrame дают
-  // видеотреку следующий кадр даже когда окно не на переднем плане.
-  const timer = setInterval(() => {
-    if (videoExport.cancelled) { clearInterval(timer); recorder.stop(); return; }
+  // Такты берём из фонового потока: обычные таймеры в свёрнутом окне
+  // браузер замедляет до одного раза в секунду, и вместо видео получается
+  // слайд-шоу, хотя звук пишется на полной скорости. Таймеры внутри
+  // Worker такому замедлению не подвержены.
+  const ticker = makeTicker(1000 / 30);
+  let finished = false;
+  const stop = () => {
+    if (finished) return;
+    finished = true;
+    ticker.stop();
+    recorder.stop();
+  };
+  videoExport.stop = stop;
+
+  ticker.onTick = () => {
+    if (videoExport.cancelled) { stop(); return; }
     const pos = ctx.currentTime - t0;
-    if (pos >= duration + 0.3) { clearInterval(timer); recorder.stop(); return; }
+    if (pos >= duration + 0.3) { stop(); return; }
     drawVideoFrame(g2d, W, H, bgImg, Math.max(0, pos));
-    if (videoTrack && typeof videoTrack.requestFrame === 'function') videoTrack.requestFrame();
+    if (typeof videoTrack.requestFrame === 'function') videoTrack.requestFrame();
     const pct = Math.min(100, (pos / duration) * 100);
     $('export-fill').style.width = `${pct.toFixed(1)}%`;
     $('export-status').textContent =
       `Записываем видео… ${fmtTime(Math.max(0, pos))} / ${fmtTime(duration)}`;
-  }, 1000 / 30);
+  };
+  ticker.start();
+}
+
+/* Тактовый генератор в фоновом потоке — чтобы запись не замирала,
+   когда окно свёрнуто или пользователь ушёл в другую вкладку */
+function makeTicker(intervalMs) {
+  const src = `let id = null;
+    onmessage = (e) => {
+      if (e.data.cmd === 'start') {
+        clearInterval(id);
+        id = setInterval(() => postMessage('tick'), e.data.ms);
+      } else { clearInterval(id); id = null; }
+    };`;
+  const api = { onTick: null, start: null, stop: null };
+  let worker = null;
+  let fallback = null;
+
+  api.start = () => {
+    try {
+      const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      worker = new Worker(url);
+      URL.revokeObjectURL(url);
+      worker.onmessage = () => { if (api.onTick) api.onTick(); };
+      worker.postMessage({ cmd: 'start', ms: intervalMs });
+    } catch (e) {
+      // Если фоновый поток запретили — пишем обычным таймером
+      fallback = setInterval(() => { if (api.onTick) api.onTick(); }, intervalMs);
+    }
+  };
+  api.stop = () => {
+    if (worker) { worker.postMessage({ cmd: 'stop' }); worker.terminate(); worker = null; }
+    if (fallback) { clearInterval(fallback); fallback = null; }
+  };
+  return api;
 }
 
 $('btn-export-video').addEventListener('click', exportVideo);
