@@ -12,8 +12,9 @@
     "dist:win": "electron-builder --win --x64 --arm64",
     "dist": "electron-builder --mac --arm64 --win --x64 --arm64",
     "sync": "node sync-renderer.js",
-    "postinstall": "node setup-ort.js",
-    "setup": "node setup-ort.js"
+    "postinstall": "node fix-electron.js && node setup-ort.js",
+    "setup": "node setup-ort.js",
+    "fix": "node fix-electron.js"
   },
   "dependencies": {
     "onnxruntime-web": "^1.27.0"
