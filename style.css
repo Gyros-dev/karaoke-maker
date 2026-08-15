@@ -634,6 +634,19 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   margin-bottom: 1.2rem;
   overflow: hidden;
 }
+/* Режим закреплённых мест: строки стоят там, где их поставили,
+   и не съезжают вверх по мере пения */
+.lyrics-stage[data-slots="on"] { position: relative; display: block; }
+.lyrics-stage[data-slots="on"] .stage-line.slot {
+  /* Абсолютные потомки живут внутри области с полями родителя,
+     поэтому left/right в ноль — это и есть заданные поля */
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  margin: 0;
+}
+
 .lyrics-stage.has-bg {
   background-size: cover;
   background-position: center;

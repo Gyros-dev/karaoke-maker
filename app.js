@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 
 /* ---------- Состояние ---------- */
 const state = {
@@ -40,6 +40,9 @@ function defaultStyle() {
     line: 13,           // ×0.1 — межстрочный интервал
     lines: 7,           // сколько строк видно
     pad: 8,             // поля по краям сцены, % — 0 растягивает текст во всю ширину
+    swapLines: true,    // строки поднимаются вверх по мере пения
+    posCurrent: 40,     // где стоит первая строка, % от верха (когда не меняются местами)
+    posNext: 60,        // где стоит вторая строка
     anim: 'fade',       // fade | slide | none
     valign: 'center',   // flex-start | center | flex-end
   };
@@ -990,6 +993,47 @@ function fitStageLines(container) {
   });
 }
 
+/* Две строки на закреплённых местах. Активна та, чья очередь петь,
+   вторая показывает, что будет дальше. Местами они не меняются. */
+function renderFixedSlots(stage, lines, ph) {
+  const s = state.style;
+  const cur = ph.cur;
+  const activeSlot = cur < 0 ? 0 : cur % 2;   // 0 — первое место, 1 — второе
+  const nextIndex = cur < 0 ? 0 : cur + 1;
+
+  for (const slot of [0, 1]) {
+    const div = document.createElement('div');
+    div.className = 'stage-line slot';
+    div.style.top = `${slot === 0 ? s.posCurrent : s.posNext}%`;
+
+    let index;
+    let active = false;
+    if (cur < 0) {
+      // До первой строки показываем только начало
+      index = slot === 0 ? 0 : 1;
+    } else if (slot === activeSlot) {
+      index = cur;
+      active = ph.mode !== 'break';
+    } else {
+      index = nextIndex;
+    }
+
+    if (index >= lines.length) continue;
+    if (active) div.classList.add('current');
+    else if (index === nextIndex) div.classList.add('near');
+    div.textContent = lines[index].text;
+    stage.appendChild(div);
+  }
+
+  if (ph.mode === 'break') {
+    const b = makeBreakLine();
+    b.classList.add('slot');
+    b.style.top = `${activeSlot === 0 ? s.posCurrent : s.posNext}%`;
+    stage.appendChild(b);
+  }
+  fitStageLines(stage);
+}
+
 function renderStage() {
   const stage = $('lyrics-stage');
   const lines = syncedLines();
@@ -1000,8 +1044,18 @@ function renderStage() {
   }
   const pos = audio.position();
   const ph = stagePhase(pos);
-  player.stageKey = `${ph.mode}:${ph.cur}`;
+  player.stageKey = state.style.swapLines
+    ? `${ph.mode}:${ph.cur}`
+    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
   const cur = ph.cur;
+
+  /* Режим закреплённых мест: две строки стоят каждая на своём месте
+     и не съезжают вверх. Чётные строки живут на первом месте, нечётные
+     на втором — как в обычном караоке, где строки чередуются. */
+  if (!state.style.swapLines) {
+    renderFixedSlots(stage, lines, ph);
+    return;
+  }
 
   if (ph.mode === 'break' && cur === -1) stage.appendChild(makeBreakLine());
 
@@ -1032,7 +1086,11 @@ function updateStageFill() {
   if (!lines.length) return;
   const pos = audio.position();
   const ph = stagePhase(pos);
-  if (`${ph.mode}:${ph.cur}` !== player.stageKey) renderStage();
+  // В режиме закреплённых мест перерисовываем и при смене активного места
+  const key = state.style.swapLines
+    ? `${ph.mode}:${ph.cur}`
+    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
+  if (key !== player.stageKey) renderStage();
   const el = $('lyrics-stage').querySelector(
     ph.mode === 'break' ? '.break-line' : '.stage-line.current');
   if (!el) return;
@@ -1135,6 +1193,7 @@ function applyStyle() {
     stage.style.paddingRight = `${s.pad}%`;
     stage.style.justifyContent = s.valign;
     stage.dataset.effect = s.effect;
+    stage.dataset.slots = s.swapLines ? 'off' : 'on';
     stage.dataset.anim = s.anim;
   });
 
@@ -1174,6 +1233,14 @@ function updateStyleUI() {
   $('st-line-val').textContent = (s.line / 10).toFixed(1).replace('.', ',');
   $('st-pad').value = s.pad;
   $('st-pad-val').textContent = `${s.pad}%`;
+  $('st-swap').checked = s.swapLines;
+  $('st-pos-cur').value = s.posCurrent;
+  $('st-pos-cur-val').textContent = `${s.posCurrent}%`;
+  $('st-pos-next').value = s.posNext;
+  $('st-pos-next-val').textContent = `${s.posNext}%`;
+  // Места строк нужны только когда они закреплены
+  $('row-pos-cur').classList.toggle('hidden', s.swapLines);
+  $('row-pos-next').classList.toggle('hidden', s.swapLines);
   $('st-lines').value = s.lines;
   $('st-lines-val').textContent = s.lines;
   [['st-effect', s.effect], ['st-bg-mode', s.bgMode], ['st-anim', s.anim], ['st-valign', s.valign]]
@@ -1202,7 +1269,8 @@ Object.entries(FONTS).forEach(([key, f]) => {
 
 $('st-font').addEventListener('change', () => setStyle('font', $('st-font').value));
 [['st-size', 'size'], ['st-weight', 'weight'], ['st-outline', 'outline'],
- ['st-letter', 'letter'], ['st-line', 'line'], ['st-lines', 'lines'], ['st-pad', 'pad']]
+ ['st-letter', 'letter'], ['st-line', 'line'], ['st-lines', 'lines'], ['st-pad', 'pad'],
+ ['st-pos-cur', 'posCurrent'], ['st-pos-next', 'posNext']]
   .forEach(([id, key]) => {
     $(id).addEventListener('input', () => setStyle(key, +$(id).value));
   });
@@ -1218,6 +1286,8 @@ $('st-font').addEventListener('change', () => setStyle('font', $('st-font').valu
       if (btn) setStyle(key, btn.dataset.v);
     });
   });
+$('st-swap').addEventListener('change', () => setStyle('swapLines', $('st-swap').checked));
+
 $('st-reset').addEventListener('click', () => {
   state.style = defaultStyle();
   updateStyleUI();
@@ -1850,14 +1920,6 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     Math.min(size, b.width > maxWidth ? baseSize * maxWidth / b.width : baseSize), baseSize);
   const blocks = rawBlocks.map((b) => ({ ...b, size: Math.max(14, fittedSize) }));
 
-  const lineGap = st.line / 10;
-  const blockGap = Math.round(baseSize * 0.35);
-  const totalH = blocks.reduce((sum, b) => sum + b.size * lineGap + blockGap, -blockGap);
-  const pad = 40;
-  let y = st.valign === 'flex-start' ? pad
-    : st.valign === 'flex-end' ? H - pad - totalH
-    : H / 2 - totalH / 2;
-
   const strokeIfNeeded = (text, x, cy) => {
     if (st.outline > 0) {
       g2d.lineWidth = st.outline * 2;
@@ -1866,6 +1928,77 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       g2d.strokeText(text, x, cy);
     }
   };
+
+  /* Закреплённые места: две строки рисуются каждая на своей высоте
+     и не съезжают. Активна та, чья очередь петь. */
+  if (!st.swapLines) {
+    const drawAt = (text, topPercent, isCur) => {
+      g2d.font = font(baseSize);
+      let size = baseSize;
+      const w = g2d.measureText(text).width;
+      if (w > maxWidth) size = Math.max(14, baseSize * maxWidth / w);
+      g2d.font = font(size);
+      g2d.letterSpacing = `${st.letter}px`;
+      const cy = H * (topPercent / 100);
+      strokeIfNeeded(text, W / 2, cy);
+      if (isCur) {
+        const start = ph.start;
+        const end = ph.mode === 'break' ? ph.until : ph.end;
+        const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
+        if (st.effect === 'fill') {
+          g2d.fillStyle = st.active;
+          g2d.fillText(text, W / 2, cy);
+          const textW = g2d.measureText(text).width;
+          g2d.save();
+          g2d.beginPath();
+          g2d.rect((W - textW) / 2, cy - size, textW * p, size * 2);
+          g2d.clip();
+          g2d.fillStyle = st.accent;
+          g2d.fillText(text, W / 2, cy);
+          g2d.restore();
+        } else {
+          g2d.fillStyle = st.effect === 'highlight' ? st.accent : st.active;
+          g2d.fillText(text, W / 2, cy);
+        }
+      } else {
+        g2d.fillStyle = st.inactive;
+        g2d.fillText(text, W / 2, cy);
+      }
+    };
+
+    const activeSlot = cur < 0 ? 0 : cur % 2;
+    const nextIndex = cur < 0 ? 0 : cur + 1;
+    for (const slot of [0, 1]) {
+      const top = slot === 0 ? st.posCurrent : st.posNext;
+      let index, isCur = false;
+      if (cur < 0) index = slot === 0 ? 0 : 1;
+      else if (slot === activeSlot) { index = cur; isCur = ph.mode !== 'break'; }
+      else index = nextIndex;
+      if (index >= lines.length) continue;
+      drawAt(lines[index].text, top, isCur);
+    }
+    if (ph.mode === 'break') {
+      drawAt('♪   ♪   ♪', activeSlot === 0 ? st.posCurrent : st.posNext, true);
+    }
+    g2d.letterSpacing = '0px';
+    if (watermark) {
+      const size = Math.round(H * 0.09);
+      const margin = Math.round(H * 0.03);
+      g2d.save();
+      g2d.globalAlpha = 0.75;
+      g2d.drawImage(watermark, W - size - margin, H - size - margin, size, size);
+      g2d.restore();
+    }
+    return;
+  }
+
+  const lineGap = st.line / 10;
+  const blockGap = Math.round(baseSize * 0.35);
+  const totalH = blocks.reduce((sum, b) => sum + b.size * lineGap + blockGap, -blockGap);
+  const pad = 40;
+  let y = st.valign === 'flex-start' ? pad
+    : st.valign === 'flex-end' ? H - pad - totalH
+    : H / 2 - totalH / 2;
 
   for (const b of blocks) {
     g2d.font = font(b.size);
