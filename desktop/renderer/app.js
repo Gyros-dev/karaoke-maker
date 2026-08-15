@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 
 /* ---------- Состояние ---------- */
 const state = {
@@ -825,7 +825,22 @@ function startSync(from = sync.selected) {
   $('tap-next').textContent = `Дальше: «${state.lines[from].text}»`;
   renderSyncList();
   updateSyncButtons();
+  // Если начали не с первой строки, список сам к ней не прокрутится
+  scrollSyncListTo(from);
   tickSync();
+}
+
+/* Прокручиваем только сам список, не страницу.
+   scrollIntoView двигает все контейнеры сразу, и при отметке строк
+   разметка уезжает вверх — кнопка «Отметить» пропадает с экрана. */
+function scrollSyncListTo(index) {
+  const list = $('sync-list');
+  const li = list.children[index];
+  if (!li) return;
+  const listBox = list.getBoundingClientRect();
+  const liBox = li.getBoundingClientRect();
+  const delta = (liBox.top + liBox.height / 2) - (listBox.top + listBox.height / 2);
+  list.scrollTop = Math.max(0, list.scrollTop + delta);
 }
 
 function tickSync() {
@@ -842,9 +857,7 @@ function tapLine() {
   } else {
     $('tap-next').textContent = `Дальше: «${state.lines[sync.index].text}»`;
     renderSyncList();
-    // Держим следующую строку на виду
-    const nextLi = $('sync-list').children[sync.index];
-    if (nextLi) nextLi.scrollIntoView({ block: 'nearest' });
+    scrollSyncListTo(sync.index);
   }
 }
 
