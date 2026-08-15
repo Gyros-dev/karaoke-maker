@@ -40,11 +40,16 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 /* ============ Кнопки ============ */
 .btn {
   display: inline-block;
-  border: none;
+  /* Прозрачная рамка, а не её отсутствие: иначе кнопки с рамкой
+     на 2px выше соседних и ряд выглядит неровным */
+  border: 1px solid transparent;
   border-radius: 999px;
   font-size: 1rem;
   font-weight: 600;
   font-family: inherit;
+  /* Явная высота строки: у кнопок она системная, а эмодзи в подписях
+     раздувают её по-разному — из-за этого ряд получался неровным */
+  line-height: 1.6;
   color: var(--text);
   cursor: pointer;
   text-decoration: none;
@@ -593,8 +598,6 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   transition: width 0.3s linear;
 }
 .export-hint { color: var(--text-dim); font-size: 0.85rem; }
-.export-quality { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-dim); font-size: 0.85rem; }
-.export-quality select { max-width: 165px; }
 
 /* --- Шаг 4: караоке --- */
 .player { text-align: center; }
@@ -715,7 +718,45 @@ input[type="range"]::-moz-range-thumb {
 .mixer-icon { font-size: 1.2rem; }
 .mixer-value { font-variant-numeric: tabular-nums; min-width: 3rem; text-align: right; }
 
-.export-row { display: flex; justify-content: center; gap: 0.8rem; flex-wrap: wrap; }
+.export-row { display: flex; justify-content: center; gap: 0.8rem; flex-wrap: wrap; align-items: center; }
+
+/* Выбор качества стоит в ряду с кнопками экспорта и выглядит так же.
+   Оформление берётся у самой кнопки — классы btn btn-ghost на метке,
+   здесь только раскладка и сброс системного вида списка. Дублировать
+   рамку и отступы нельзя: они разъезжаются на пару пикселей. */
+.export-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 1.2rem;
+}
+.export-quality:focus-within { border-color: var(--violet); color: var(--text); }
+.export-quality select {
+  /* Убираем системный вид — иначе среди кнопок торчит серый прямоугольник */
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0 1.1rem 0 0;
+  color: inherit;
+  font-family: inherit;
+  /* Ровно как у текста метки, иначе список тянет строку вверх */
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+  cursor: pointer;
+}
+/* Своя стрелка вместо системной */
+.export-quality select {
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 8px center, right 3px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+/* Выпадающий список рисует система — задаём ему тёмные цвета */
+.export-quality option { background: var(--bg-card); color: var(--text); }
 
 /* --- Эквалайзер --- */
 .eq-panel {
