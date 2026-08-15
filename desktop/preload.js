@@ -18,4 +18,12 @@ contextBridge.exposeInMainWorld('desktop', {
   appVersion: () => ipcRenderer.invoke('app-version'),
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
+  autoUpdateSupported: () => ipcRenderer.invoke('auto-update-supported'),
+  downloadUpdate: () => ipcRenderer.invoke('auto-update-download'),
+  installUpdate: () => ipcRenderer.invoke('auto-update-install'),
+  onAutoUpdate: (cb) => {
+    ipcRenderer.removeAllListeners('auto-update');
+    ipcRenderer.on('auto-update', (_e, data) => cb(data));
+  },
 });

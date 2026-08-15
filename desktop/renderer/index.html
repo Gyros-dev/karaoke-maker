@@ -83,9 +83,9 @@
   </p>
   <div class="desktop-buttons">
     <a class="btn btn-primary" id="dl-mac"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.1.0/Benengskaya-Rapsodiya-1.1.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.3.0/Benengskaya-Rapsodiya-1.3.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
     <a class="btn btn-primary" id="dl-win"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.1.0/Benengskaya-Rapsodiya-1.1.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.3.0/Benengskaya-Rapsodiya-1.3.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
   </div>
   <p class="desktop-note">
     Бесплатно и с открытым кодом. Модель весит 172 МБ и скачивается один раз при первом
@@ -172,6 +172,12 @@
           <b>🧠 Убрать вокал нейросетью</b>
           <span>Локальная модель Demucs: тот же класс разделения, который поддерживает UVR5. Всё посчитается прямо на компьютере</span>
         </div>
+        <label class="btn btn-ghost btn-small export-quality" for="ai-quality">Режим
+          <select id="ai-quality">
+            <option value="1" selected>Быстро</option>
+            <option value="3">Точнее · дольше втрое</option>
+          </select>
+        </label>
         <button class="btn btn-primary btn-small" id="btn-ai-run">Убрать вокал</button>
       </div>
       <div class="panel-actions">

@@ -43,6 +43,12 @@ const AI_BLOCK = `      <div class="bg-upload hidden" id="ai-block">
           <b>🧠 Убрать вокал нейросетью</b>
           <span>Локальная модель Demucs: тот же класс разделения, который поддерживает UVR5. Всё посчитается прямо на компьютере</span>
         </div>
+        <label class="btn btn-ghost btn-small export-quality" for="ai-quality">Режим
+          <select id="ai-quality">
+            <option value="1" selected>Быстро</option>
+            <option value="3">Точнее · дольше втрое</option>
+          </select>
+        </label>
         <button class="btn btn-primary btn-small" id="btn-ai-run">Убрать вокал</button>
       </div>
 `;

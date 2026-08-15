@@ -25,7 +25,22 @@
   updater.handled = true;
   let updateUrl = null;
 
-  $('update-action').addEventListener('click', () => {
+  $('update-action').addEventListener('click', async () => {
+    const label = $('update-action').textContent;
+    if (autoReady && label === 'Перезапустить') {
+      window.desktop.installUpdate();
+      return;
+    }
+    if (autoReady) {
+      $('update-action').disabled = true;
+      $('update-text').textContent = 'Скачиваем обновление…';
+      const res = await window.desktop.downloadUpdate();
+      if (!res.ok) {
+        $('update-action').disabled = false;
+        $('update-text').textContent = 'Не удалось скачать обновление';
+      }
+      return;
+    }
     if (updateUrl) window.desktop.openExternal(updateUrl);
   });
 
@@ -42,8 +57,35 @@
     } catch (e) { /* нет сети — не мешаем работать */ }
   }
 
-  setTimeout(checkDesktopUpdate, 3000);
-  setInterval(checkDesktopUpdate, 6 * 60 * 60 * 1000);
+  /* Windows умеет обновляться сам: там показываем не ссылку,
+     а кнопку, которая скачивает и ставит новую версию. */
+  let autoReady = false;
+
+  window.desktop.onAutoUpdate((m) => {
+    if (m.stage === 'available') {
+      autoReady = true;
+      updater.latest = m.version;
+      showUpdateBar(`Вышла версия ${m.version}`, 'Обновить');
+    } else if (m.stage === 'progress') {
+      $('update-text').textContent = `Скачиваем обновление… ${m.percent}%`;
+    } else if (m.stage === 'ready') {
+      $('update-text').textContent = `Версия ${m.version} готова к установке`;
+      $('update-action').textContent = 'Перезапустить';
+      $('update-action').disabled = false;
+    } else if (m.stage === 'error') {
+      $('update-text').textContent = 'Не удалось обновиться автоматически';
+      $('update-action').textContent = 'Скачать вручную';
+      autoReady = false;
+    }
+  });
+
+  window.desktop.autoUpdateSupported().then((yes) => {
+    // Где автообновления нет — обычная проверка со ссылкой на загрузку
+    if (!yes) {
+      setTimeout(checkDesktopUpdate, 3000);
+      setInterval(checkDesktopUpdate, 6 * 60 * 60 * 1000);
+    }
+  });
 
   function setProgress(percent, status, hint) {
     $('ai-fill').style.width = `${Math.max(0, Math.min(100, percent))}%`;
@@ -106,7 +148,7 @@
   let sepWorker = null;
 
   /* Считаем в фоновом потоке окна: тяжёлый счёт не морозит интерфейс */
-  function runSeparation(modelBytes, left, right) {
+  function runSeparation(modelBytes, left, right, shifts) {
     return new Promise((resolve) => {
       sepWorker = new Worker('separator-worker.js');
       sepWorker.onmessage = (e) => {
@@ -129,7 +171,7 @@
       const l = left.slice();
       const r = right.slice();
       sepWorker.postMessage(
-        { modelBytes, left: l.buffer, right: r.buffer, sampleRate: MODEL_SR },
+        { modelBytes, left: l.buffer, right: r.buffer, sampleRate: MODEL_SR, shifts },
         [l.buffer, r.buffer]);
     });
   }
@@ -154,7 +196,8 @@
       const modelBytes = await window.desktop.modelBytes();
       if (!modelBytes) throw new Error('Модель не найдена');
 
-      const res = await runSeparation(modelBytes, left, right);
+      const shifts = Number($('ai-quality').value) || 1;
+      const res = await runSeparation(modelBytes, left, right, shifts);
       if (!res.ok) {
         showOverlay(false);
         busy = false;
@@ -179,7 +222,7 @@
       audio.stop();
       state.instrumentalBuffer = buf;
       state.customInst = true;
-      state.instName = 'нейросеть (Demucs)';
+      state.instName = shifts > 1 ? 'нейросеть (Demucs, точный режим)' : 'нейросеть (Demucs)';
       $('mono-warning').classList.add('hidden');
       updateInstUI();
       $('inst-input').value = '';

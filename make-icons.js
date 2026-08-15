@@ -46,6 +46,17 @@ for (const [size, name] of WEB_SIZES) resize(size, path.join(WEB_OUT, name));
 run('magick', [SRC, '-resize', '32x32', '-strip', path.join(WEB_OUT, 'favicon.ico')]);
 console.log(`Сайт:    ${WEB_SIZES.length + 1} файлов в icons/`);
 
+/* --- Водяной знак для видео ---
+   Лежит рядом с интерфейсом, а не в icons/: настольная сборка папку
+   icons вычищает, а знак нужен и там. */
+const WM = 'watermark.png';
+resize(256, path.join(__dirname, WM));
+const rendererDir = path.join(__dirname, 'desktop', 'renderer');
+if (fs.existsSync(rendererDir)) {
+  fs.copyFileSync(path.join(__dirname, WM), path.join(rendererDir, WM));
+}
+console.log('Знак:    watermark.png (сайт и приложение)');
+
 /* --- Иконка macOS --- */
 fs.mkdirSync(APP_OUT, { recursive: true });
 const iconset = fs.mkdtempSync(path.join(os.tmpdir(), 'iconset-')) + '.iconset';

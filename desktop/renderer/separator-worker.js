@@ -80,31 +80,9 @@ async function ensureSession(modelBytes) {
   return session;
 }
 
-async function separate({ modelBytes, left, right, sampleRate }) {
-  cancelled = false;
-  const L = new Float32Array(left);
-  const R = new Float32Array(right);
-  const total = L.length;
-
-  post({ type: 'progress', percent: 0, text: 'Готовим модель…' });
-  await ensureSession(modelBytes);
-
-  // Нормализация по моно-миксу, как в demucs.apply_model
-  let mean = 0;
-  for (let i = 0; i < total; i++) mean += (L[i] + R[i]) * 0.5;
-  mean /= total;
-  let varSum = 0;
-  for (let i = 0; i < total; i++) {
-    const m = (L[i] + R[i]) * 0.5 - mean;
-    varSum += m * m;
-  }
-  const std = Math.sqrt(varSum / total) || 1;
-
-  // Треугольные веса — плавная склейка перекрытий
-  const weight = new Float32Array(SEG);
-  const half = Math.floor(SEG / 2);
-  for (let i = 0; i < SEG; i++) weight[i] = (i < half ? i + 1 : SEG - i) / half;
-
+/* Один полный проход разделения по всей записи.
+   Возвращает накопленный инструментал и веса для склейки. */
+async function separatePass(L, R, total, mean, std, weight, session, onSegment) {
   const instL = new Float64Array(total);
   const instR = new Float64Array(total);
   const wAcc = new Float64Array(total);
@@ -113,7 +91,6 @@ async function separate({ modelBytes, left, right, sampleRate }) {
   for (let s = 0; s < total; s += STRIDE) starts.push(s);
   const segL = new Float32Array(SEG);
   const segR = new Float32Array(SEG);
-  const t0 = Date.now();
 
   for (let si = 0; si < starts.length; si++) {
     if (cancelled) throw new Error('отменено');
@@ -150,25 +127,97 @@ async function separate({ modelBytes, left, right, sampleRate }) {
     }
     for (let i = 0; i < n; i++) wAcc[start + i] += weight[i];
 
-    const doneFrac = (si + 1) / starts.length;
-    const elapsed = (Date.now() - t0) / 1000;
-    const left = elapsed / doneFrac - elapsed;
-    post({
-      type: 'progress',
-      percent: Math.round(doneFrac * 100),
-      text: `Убираем вокал: ${si + 1} из ${starts.length}`,
-      eta: left > 3 ? `осталось около ${Math.ceil(left / 6) * 6 < 60
-        ? Math.ceil(left / 6) * 6 + ' с'
-        : Math.ceil(left / 60) + ' мин'}` : '',
-    });
+    onSegment(si + 1, starts.length);
+  }
+
+  // Нормируем на сумму весов — получаем готовую дорожку прохода
+  const outL = new Float32Array(total);
+  const outR = new Float32Array(total);
+  for (let i = 0; i < total; i++) {
+    const w = wAcc[i] || 1;
+    outL[i] = instL[i] / w;
+    outR[i] = instR[i] / w;
+  }
+  return { outL, outR };
+}
+
+async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
+  cancelled = false;
+  const L = new Float32Array(left);
+  const R = new Float32Array(right);
+  const total = L.length;
+
+  post({ type: 'progress', percent: 0, text: 'Готовим модель…' });
+  await ensureSession(modelBytes);
+
+  // Нормализация по моно-миксу, как в demucs.apply_model
+  let mean = 0;
+  for (let i = 0; i < total; i++) mean += (L[i] + R[i]) * 0.5;
+  mean /= total;
+  let varSum = 0;
+  for (let i = 0; i < total; i++) {
+    const m = (L[i] + R[i]) * 0.5 - mean;
+    varSum += m * m;
+  }
+  const std = Math.sqrt(varSum / total) || 1;
+
+  // Треугольные веса — плавная склейка перекрытий
+  const weight = new Float32Array(SEG);
+  const half = Math.floor(SEG / 2);
+  for (let i = 0; i < SEG; i++) weight[i] = (i < half ? i + 1 : SEG - i) / half;
+
+  /* Приём со сдвигами: каждый проход смещает запись на случайную долю
+     секунды, результаты усредняются. Так делает demucs и, следом за ним,
+     UVR5 — модель по-разному режет одни и те же места, и остаточный
+     вокал взаимно гасится. Цена — время растёт кратно числу проходов. */
+  const passes = Math.max(1, Math.min(4, shifts));
+  const MAX_SHIFT = Math.round(sampleRate * 0.5);
+  const sumL = new Float64Array(total);
+  const sumR = new Float64Array(total);
+  const t0 = Date.now();
+  let segmentsDone = 0;
+  const segmentsTotal = passes * Math.ceil(total / STRIDE);
+
+  for (let pass = 0; pass < passes; pass++) {
+    // Первый проход без смещения, дальше — со сдвигом
+    const shift = pass === 0 ? 0 : 1 + Math.floor(Math.random() * MAX_SHIFT);
+    const padded = total + shift;
+    const sL = new Float32Array(padded);
+    const sR = new Float32Array(padded);
+    sL.set(L, shift);
+    sR.set(R, shift);
+
+    const { outL, outR } = await separatePass(
+      sL, sR, padded, mean, std, weight, session,
+      (done, all) => {
+        segmentsDone++;
+        const frac = segmentsDone / segmentsTotal;
+        const elapsed = (Date.now() - t0) / 1000;
+        const rest = elapsed / Math.max(frac, 0.001) - elapsed;
+        post({
+          type: 'progress',
+          percent: Math.round(frac * 100),
+          text: passes > 1
+            ? `Убираем вокал: проход ${pass + 1} из ${passes}, отрезок ${done} из ${all}`
+            : `Убираем вокал: ${done} из ${all}`,
+          eta: rest > 3 ? `осталось около ${Math.ceil(rest / 6) * 6 < 60
+            ? Math.ceil(rest / 6) * 6 + ' с'
+            : Math.ceil(rest / 60) + ' мин'}` : '',
+        });
+      });
+
+    // Снимаем сдвиг и копим сумму
+    for (let i = 0; i < total; i++) {
+      sumL[i] += outL[i + shift];
+      sumR[i] += outR[i + shift];
+    }
   }
 
   const outL = new Float32Array(total);
   const outR = new Float32Array(total);
   for (let i = 0; i < total; i++) {
-    const w = wAcc[i] || 1;
-    outL[i] = (instL[i] / w) * std + mean;
-    outR[i] = (instR[i] / w) * std + mean;
+    outL[i] = (sumL[i] / passes) * std + mean;
+    outR[i] = (sumR[i] / passes) * std + mean;
   }
   return { left: outL, right: outR, sampleRate };
 }

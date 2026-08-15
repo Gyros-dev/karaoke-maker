@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.2.2';
+const APP_VERSION = '1.3.0';
 
 /* ---------- Состояние ---------- */
 const state = {
@@ -1790,7 +1790,7 @@ function followPlayhead() {
    пишем всё вместе через MediaRecorder. Запись в реальном времени. */
 const videoExport = { active: false, cancelled: false };
 
-function drawVideoFrame(g2d, W, H, bgImg, pos) {
+function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   const st = state.style;
 
   // Фон
@@ -1900,6 +1900,17 @@ function drawVideoFrame(g2d, W, H, bgImg, pos) {
     y += rowH + blockGap;
   }
   g2d.letterSpacing = '0px';
+
+  // Логотип в правом нижнем углу — размер от высоты кадра,
+  // чтобы одинаково смотрелся и в HD, и в 2K
+  if (watermark) {
+    const size = Math.round(H * 0.09);
+    const margin = Math.round(H * 0.03);
+    g2d.save();
+    g2d.globalAlpha = 0.75;
+    g2d.drawImage(watermark, W - size - margin, H - size - margin, size, size);
+    g2d.restore();
+  }
 }
 
 async function exportVideo() {
@@ -1914,6 +1925,14 @@ async function exportVideo() {
   $('export-overlay').classList.remove('hidden');
   $('export-fill').style.width = '0%';
   $('export-status').textContent = 'Записываем видео…';
+
+  // Логотип для угла кадра — грузим заранее, чтобы не мигал
+  const watermark = await new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = 'watermark.png';
+  });
 
   // Фоновая картинка (если есть)
   let bgImg = null;
@@ -2020,7 +2039,7 @@ async function exportVideo() {
     if (videoExport.cancelled) { stop(); return; }
     const pos = ctx.currentTime - t0;
     if (pos >= duration + 0.3) { stop(); return; }
-    drawVideoFrame(g2d, W, H, bgImg, Math.max(0, pos));
+    drawVideoFrame(g2d, W, H, bgImg, Math.max(0, pos), watermark);
     if (typeof videoTrack.requestFrame === 'function') videoTrack.requestFrame();
     const pct = Math.min(100, (pos / duration) * 100);
     $('export-fill').style.width = `${pct.toFixed(1)}%`;

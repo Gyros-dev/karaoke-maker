@@ -135,6 +135,7 @@ function createWindow() {
 app.whenReady().then(() => {
   registerAppProtocol();
   createWindow();
+  setupAutoUpdate();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -278,6 +279,58 @@ ipcMain.handle('open-external', (_evt, url) => {
 });
 
 ipcMain.handle('app-version', () => app.getVersion());
+
+/* ---------- Автообновление (только Windows) ----------
+   На macOS механизм Electron требует подписи разработчика: без неё
+   обновление скачается и молча не установится. Поэтому там остаётся
+   уведомление со ссылкой, а полный цикл делаем под Windows. */
+let updater = null;
+
+function setupAutoUpdate() {
+  if (process.platform !== 'win32') return;
+  try {
+    updater = require('electron-updater').autoUpdater;
+  } catch (e) {
+    console.error('[update]', e.message);
+    return;
+  }
+  updater.autoDownload = false;          // спрашиваем, прежде чем качать
+  updater.autoInstallOnAppQuit = true;
+
+  updater.on('update-available', (info) => {
+    send('auto-update', { stage: 'available', version: info.version });
+  });
+  updater.on('download-progress', (p) => {
+    send('auto-update', { stage: 'progress', percent: Math.round(p.percent) });
+  });
+  updater.on('update-downloaded', (info) => {
+    send('auto-update', { stage: 'ready', version: info.version });
+  });
+  updater.on('error', (err) => {
+    send('auto-update', { stage: 'error', error: String(err && err.message || err) });
+  });
+
+  // Первая проверка чуть погодя, дальше раз в шесть часов
+  setTimeout(() => updater.checkForUpdates().catch(() => {}), 8000);
+  setInterval(() => updater.checkForUpdates().catch(() => {}), 6 * 60 * 60 * 1000);
+}
+
+ipcMain.handle('auto-update-supported', () => process.platform === 'win32' && !!updater);
+ipcMain.handle('auto-update-download', async () => {
+  if (!updater) return { ok: false };
+  try {
+    await updater.downloadUpdate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  }
+});
+ipcMain.handle('auto-update-install', () => {
+  if (!updater) return false;
+  // Закрываем приложение и ставим скачанное обновление
+  setImmediate(() => updater.quitAndInstall(false, true));
+  return true;
+});
 
 ipcMain.handle('save-file', async (_evt, { name, data }) => {
   const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: name });
