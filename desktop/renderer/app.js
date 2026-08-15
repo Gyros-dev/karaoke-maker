@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.2.2';
 
 /* ---------- Состояние ---------- */
 const state = {
@@ -39,6 +39,7 @@ function defaultStyle() {
     letter: 0,          // px
     line: 13,           // ×0.1 — межстрочный интервал
     lines: 7,           // сколько строк видно
+    pad: 8,             // поля по краям сцены, % — 0 растягивает текст во всю ширину
     anim: 'fade',       // fade | slide | none
     valign: 'center',   // flex-start | center | flex-end
   };
@@ -101,10 +102,13 @@ const audio = {
     return Math.min(this.ctx.currentTime - this.startedAt, this.duration);
   },
 
-  /* Проиграть отрывок [from, to) с вокалом — чтобы услышать слова строки */
+  /* Проиграть отрывок [from, to) с вокалом — чтобы услышать слова строки.
+     Флаг ставим после play(): тот его сбрасывает, чтобы «принудительный
+     вокал» не оставался включённым от прошлого прослушивания. */
   playSegment(from, to) {
-    this.forceVocal = true;
     this.play(from);
+    this.forceVocal = true;
+    this.applyMix();
     this.stopAt = to;
   },
 
@@ -120,6 +124,9 @@ const audio = {
   play(fromOffset) {
     this.stopSources();
     this.stopAt = null;
+    // Вокал принудительно звучит только во время разметки; обычный запуск
+    // всегда возвращает громкость к той, что выставлена ползунком
+    this.forceVocal = sync.active;
     const ctx = this.ensureCtx();
     this.offset = Math.max(0, Math.min(fromOffset ?? this.offset, this.duration));
     // Позиция у самого конца — начинаем сначала, иначе тишина
@@ -415,6 +422,12 @@ function goToStep(n) {
   $(`step-${n}`).classList.add('active');
 
   stopSync();
+  // Смена шага гасит режим принудительного вокала: иначе он остаётся
+  // от недослушанной строки и ползунок в караоке будто не действует
+  if (!sync.active && audio.forceVocal) {
+    audio.forceVocal = false;
+    audio.applyMix();
+  }
   if (n !== 4 && n !== 5) { audio.pause(); updatePlayerUI(); }
   if (n === 4) openEditor();
   if (n === 5) renderStage();
@@ -1106,7 +1119,10 @@ function applyStyle() {
     if (!stage) return;
     const baseRem = i === 0 ? 1.15 : 1.0; // редакторская сцена меньше
     stage.style.setProperty('--st-font', (FONTS[s.font] || FONTS.system).css);
-    stage.style.setProperty('--st-size', `${baseRem * s.size / 100}rem`);
+    // На узком экране базовый размер меньше, но настройка пользователя
+    // по-прежнему действует — она умножается, а не перекрывается
+    const narrow = parseFloat(getComputedStyle(stage).getPropertyValue('--st-narrow')) || 1;
+    stage.style.setProperty('--st-size', `${baseRem * narrow * s.size / 100}rem`);
     stage.style.setProperty('--st-weight', s.weight);
     stage.style.setProperty('--st-inactive', s.inactive);
     stage.style.setProperty('--st-active', s.active);
@@ -1115,6 +1131,8 @@ function applyStyle() {
     stage.style.setProperty('--st-outline', `${s.outline}px`);
     stage.style.setProperty('--st-ls', `${s.letter}px`);
     stage.style.setProperty('--st-gap', `${(s.line / 10 - 1).toFixed(2)}em`);
+    stage.style.paddingLeft = `${s.pad}%`;
+    stage.style.paddingRight = `${s.pad}%`;
     stage.style.justifyContent = s.valign;
     stage.dataset.effect = s.effect;
     stage.dataset.anim = s.anim;
@@ -1154,6 +1172,8 @@ function updateStyleUI() {
   $('st-letter-val').textContent = s.letter;
   $('st-line').value = s.line;
   $('st-line-val').textContent = (s.line / 10).toFixed(1).replace('.', ',');
+  $('st-pad').value = s.pad;
+  $('st-pad-val').textContent = `${s.pad}%`;
   $('st-lines').value = s.lines;
   $('st-lines-val').textContent = s.lines;
   [['st-effect', s.effect], ['st-bg-mode', s.bgMode], ['st-anim', s.anim], ['st-valign', s.valign]]
@@ -1182,7 +1202,7 @@ Object.entries(FONTS).forEach(([key, f]) => {
 
 $('st-font').addEventListener('change', () => setStyle('font', $('st-font').value));
 [['st-size', 'size'], ['st-weight', 'weight'], ['st-outline', 'outline'],
- ['st-letter', 'letter'], ['st-line', 'line'], ['st-lines', 'lines']]
+ ['st-letter', 'letter'], ['st-line', 'line'], ['st-lines', 'lines'], ['st-pad', 'pad']]
   .forEach(([id, key]) => {
     $(id).addEventListener('input', () => setStyle(key, +$(id).value));
   });
@@ -1793,8 +1813,8 @@ function drawVideoFrame(g2d, W, H, bgImg, pos) {
   const ph = stagePhase(pos);
   const cur = ph.cur;
 
-  // Безопасная зона: текст занимает не больше 80% ширины кадра
-  const maxWidth = W * 0.8;
+  // Поля по краям берём из настроек: на нуле текст занимает всю ширину
+  const maxWidth = W * (1 - (st.pad / 100) * 2);
   g2d.textAlign = 'center';
   g2d.textBaseline = 'middle';
 

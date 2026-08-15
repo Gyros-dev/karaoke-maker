@@ -498,6 +498,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   outline: none;
   padding: 0.1rem 0.35rem;
   border-radius: 6px;
+  /* Явный цвет курсора: в Windows он берётся системный и на тёмном
+     фоне становится невидимым */
+  caret-color: #34d399;
 }
 .edit-text:focus { background: rgba(255, 255, 255, 0.07); }
 .line-play { min-width: 30px; }
@@ -885,6 +888,8 @@ input[type="range"]::-moz-range-thumb {
   .site-nav { display: none; }
   .hero { padding: 4.5rem 1.2rem 4rem; }
   .studio { padding: 2rem 1rem 2.5rem; }
-  .stage-line { font-size: 0.95rem; }
+  /* На узком экране уменьшаем базовый размер через переменную,
+     а не жёстким font-size — иначе ползунок размера перестаёт работать */
+  .lyrics-stage { --st-narrow: 0.83; }
   .panel-actions { justify-content: center; }
 }
