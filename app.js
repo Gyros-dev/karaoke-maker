@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 
 /* ---------- Состояние ---------- */
 const state = {
@@ -45,6 +45,10 @@ function defaultStyle() {
     posNext: 60,        // где стоит вторая строка
     anim: 'fade',       // fade | slide | none
     valign: 'center',   // flex-start | center | flex-end
+    dim: 45,            // прозрачность неактивных строк, % (размер не меняется)
+    blur: 0,            // лёгкое размытие неактивных строк, px
+    scrim: 70,          // подложка-градиент под текстом поверх картинки, %
+    countdown: true,    // отсчёт из трёх точек перед вступлением строки
   };
 }
 state.style = defaultStyle();
@@ -599,10 +603,11 @@ function setBgImage(dataUrl) {
   const preview = $('bg-preview');
   if (dataUrl) {
     stage.classList.add('has-bg');
+    // Затемнения всего кадра нет — читаемость даёт подложка под текстом
     if (state.style.bgMode !== 'color') {
-      stage.style.backgroundImage =
-        `linear-gradient(rgba(10, 10, 15, 0.68), rgba(10, 10, 15, 0.68)), url("${dataUrl}")`;
+      stage.style.backgroundImage = `url("${dataUrl}")`;
     }
+    stage.style.setProperty('--st-scrim', scrimCss(state.style));
     preview.src = dataUrl;
     preview.classList.remove('hidden');
     $('btn-bg-remove').classList.remove('hidden');
@@ -966,6 +971,71 @@ function stagePhase(pos) {
   return { mode: 'line', cur, start, end };
 }
 
+/* ---------- Отсчёт перед вступлением строки ----------
+   Три точки гаснут по одной за COUNT_LEAD секунд до начала строки.
+   Показываем только там, где перед строкой действительно есть пауза:
+   после проигрыша и перед самым первым куплетом. */
+const COUNT_LEAD = 3;      // за сколько секунд начинается отсчёт
+const COUNT_MIN_GAP = 2.2; // короче этой паузы отсчёт только мешает
+const COUNT_DOTS = 3;
+
+function countdownState(pos, ph) {
+  if (!state.style.countdown) return null;
+  const lines = syncedLines();
+  if (!lines.length) return null;
+
+  let next = null;
+  let from = null;
+  if (ph.mode === 'break') { next = ph.until; from = ph.start; }
+  else if (ph.mode === 'intro') { next = lines[0].time; from = 0; }
+  else return null;
+  if (next == null || next - from < COUNT_MIN_GAP) return null;
+
+  const left = next - pos;
+  if (left < 0 || left > COUNT_LEAD) return null;
+  const step = COUNT_LEAD / COUNT_DOTS;
+  return {
+    left,
+    lit: Math.min(COUNT_DOTS, Math.ceil(left / step)),   // сколько точек ещё горит
+    // Доля текущей точки: 1 в начале её секунды, 0 в конце — для сжатия
+    frac: Math.min(1, Math.max(0, (left % step) / step || (left > 0 ? 1 : 0))),
+  };
+}
+
+/* Подложка под текстом: вместо затемнения всего кадра — мягкая полоса
+   там, где стоят строки. Одни и те же остановки идут и в CSS, и в видео. */
+function scrimStops(s) {
+  const k = (s.scrim || 0) / 100;
+  if (k <= 0) return null;
+  let mid;
+  let half;
+  if (!s.swapLines) {
+    const a = Math.min(s.posCurrent, s.posNext);
+    const b = Math.max(s.posCurrent, s.posNext);
+    mid = (a + b) / 2;
+    half = (b - a) / 2 + 14;
+  } else if (s.valign === 'flex-start') { mid = 26; half = 30; }
+  else if (s.valign === 'flex-end') { mid = 74; half = 30; }
+  else { mid = 50; half = 32; }
+
+  const clamp = (v) => Math.max(0, Math.min(100, v)) / 100;
+  return [
+    [mid - half - 16, 0], [mid - half, 0.42], [mid - half * 0.45, 0.86],
+    [mid + half * 0.45, 0.86], [mid + half, 0.42], [mid + half + 16, 0],
+  ].map(([at, a]) => ({ at: clamp(at), alpha: +(a * k).toFixed(3) }));
+}
+
+function scrimCss(s) {
+  const stops = scrimStops(s);
+  if (!stops) return 'none';
+  const parts = stops.map((p) => `rgba(8, 8, 12, ${p.alpha}) ${(p.at * 100).toFixed(1)}%`);
+  return `linear-gradient(to bottom, ${parts.join(', ')})`;
+}
+
+/* Системная настройка «меньше движения» — гасит все анимации студии */
+const reduceMotion = window.matchMedia
+  ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+
 /* ---------- Слова внутри строки ----------
    Если слова размечены вручную или распознаванием, берём их метки.
    Иначе делим время строки между словами пропорционально длине:
@@ -1041,11 +1111,103 @@ function applyWordFill(el, line, start, end, pos) {
   }
 }
 
-function makeBreakLine() {
-  const b = document.createElement('div');
-  b.className = 'stage-line current break-line';
-  b.textContent = '♪ ♪ ♪';
-  return b;
+const BREAK_TEXT = '♪ ♪ ♪';
+
+/* ---------- Сборка сцены с переиспользованием строк ----------
+   Раньше сцена собиралась заново на каждой строке, поэтому смена строк
+   выглядела рывком: браузеру нечего было плавно менять. Теперь элементы
+   живут между кадрами, а меняются только классы — и переход прозрачности
+   и цвета проигрывается настоящим CSS-переходом. */
+function syncStageLines(stage, items) {
+  const old = new Map();
+  Array.from(stage.children).forEach((el) => {
+    if (el.classList.contains('stage-count')) return; // отсчёт живёт отдельно
+    const key = el.dataset ? el.dataset.key : null;
+    if (key != null) old.set(key, el);
+    else el.remove();
+  });
+
+  const out = [];
+  for (const it of items) {
+    let el = old.get(it.key);
+    if (el && el.dataset.text !== it.text) { old.delete(it.key); el.remove(); el = null; }
+    let fresh = false;
+    if (el) {
+      old.delete(it.key);
+    } else {
+      el = buildLineEl(it.text, '');
+      el.dataset.key = it.key;
+      el.dataset.text = it.text;
+      fresh = true;
+    }
+    const wasCurrent = el.classList.contains('current');
+    el.className = 'stage-line' + (it.cls ? ` ${it.cls}` : '') + (fresh ? ' enter' : '');
+    // Строка перестала быть активной — снимаем с неё закраску слов,
+    // иначе при перемотке назад мелькнёт старая доля
+    if (wasCurrent && !el.classList.contains('current')) {
+      el.querySelectorAll('.w').forEach((s) => s.style.removeProperty('--wfill'));
+    }
+    if (it.top != null) el.style.top = `${it.top}%`;
+    else el.style.removeProperty('top');
+    if (it.index != null) el.dataset.index = it.index;
+    out.push(el);
+  }
+  old.forEach((el) => el.remove());
+
+  // Расставляем по порядку, не трогая те, что уже стоят где надо:
+  // перенос узла в DOM сбрасывает переходы и анимации
+  out.forEach((el, i) => {
+    if (stage.children[i] !== el) stage.insertBefore(el, stage.children[i] || null);
+  });
+  return out;
+}
+
+/* Точки отсчёта — отдельный слой поверх сцены, чтобы не сбивать
+   раскладку строк. Место считаем один раз при перерисовке. */
+function ensureCountdownEl(stage) {
+  let el = stage.querySelector('.stage-count');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'stage-count';
+    for (let i = 0; i < COUNT_DOTS; i++) el.appendChild(document.createElement('i'));
+    stage.appendChild(el);
+  } else if (stage.lastElementChild !== el) {
+    // Держим последним, поверх строк. Лишний перенос узла сбрасывал бы
+    // его переход прозрачности, поэтому двигаем только когда правда надо.
+    stage.appendChild(el);
+  }
+  return el;
+}
+
+function placeCountdown(stage) {
+  const el = stage.querySelector('.stage-count');
+  if (!el) return;
+  // Отсчёт стоит там, где ноты проигрыша, а если их нет — над строкой,
+  // которая вот-вот зазвучит
+  const anchor = stage.querySelector('.break-line') || stage.querySelector('.stage-line.near');
+  if (!anchor) { el.style.top = '50%'; return; }
+  const sr = stage.getBoundingClientRect();
+  const r = anchor.getBoundingClientRect();
+  if (!sr.height || !r.height) { el.style.top = '50%'; return; }
+  const y = anchor.classList.contains('break-line')
+    ? r.top - sr.top + r.height / 2
+    : r.top - sr.top - Math.max(12, r.height * 0.35);
+  el.style.top = `${((y / sr.height) * 100).toFixed(2)}%`;
+}
+
+function updateCountdown(stage, cd) {
+  const el = stage.querySelector('.stage-count');
+  if (!el) return;
+  stage.classList.toggle('counting', !!cd);
+  if (!cd) return;
+  const dots = el.children;
+  for (let i = 0; i < dots.length; i++) {
+    // Гаснут справа налево: последняя точка уходит перед самым вступлением
+    const alive = i < cd.lit;
+    dots[i].classList.toggle('off', !alive);
+    dots[i].style.setProperty('--cd-p',
+      alive && i === cd.lit - 1 && !reduceMotion.matches ? cd.frac.toFixed(3) : '1');
+  }
 }
 
 /* Строки не переносятся — если строка шире сцены,
@@ -1070,17 +1232,14 @@ function fitStageLines(container) {
 
 /* Две строки на закреплённых местах. Активна та, чья очередь петь,
    вторая показывает, что будет дальше. Местами они не меняются. */
-function renderFixedSlots(stage, lines, ph) {
+function fixedSlotItems(lines, ph) {
   const s = state.style;
   const cur = ph.cur;
   const activeSlot = cur < 0 ? 0 : cur % 2;   // 0 — первое место, 1 — второе
   const nextIndex = cur < 0 ? 0 : cur + 1;
+  const items = [];
 
   for (const slot of [0, 1]) {
-    const div = document.createElement('div');
-    div.className = 'stage-line slot';
-    div.style.top = `${slot === 0 ? s.posCurrent : s.posNext}%`;
-
     let index;
     let active = false;
     if (cur < 0) {
@@ -1092,52 +1251,32 @@ function renderFixedSlots(stage, lines, ph) {
     } else {
       index = nextIndex;
     }
-
     if (index >= lines.length) continue;
-    if (active) div.classList.add('current');
-    else if (index === nextIndex) div.classList.add('near');
-    for (const chunk of splitWords(lines[index].text)) {
-      const span = document.createElement('span');
-      span.className = 'w';
-      span.textContent = chunk;
-      div.appendChild(span);
-    }
-    stage.appendChild(div);
+
+    let cls = 'slot';
+    if (active) cls += ' current';
+    else if (index === nextIndex) cls += ' near';
+    items.push({
+      key: `slot${slot}`, text: lines[index].text, cls, index,
+      top: slot === 0 ? s.posCurrent : s.posNext,
+    });
   }
 
   if (ph.mode === 'break') {
-    const b = makeBreakLine();
-    b.classList.add('slot');
-    b.style.top = `${activeSlot === 0 ? s.posCurrent : s.posNext}%`;
-    stage.appendChild(b);
+    items.push({
+      key: 'break', text: BREAK_TEXT, cls: 'slot current break-line',
+      top: activeSlot === 0 ? s.posCurrent : s.posNext,
+    });
   }
-  fitStageLines(stage);
+  return items;
 }
 
-function renderStage() {
-  const stage = $('lyrics-stage');
-  const lines = syncedLines();
-  stage.innerHTML = '';
-  if (!lines.length) {
-    stage.innerHTML = '<p class="stage-empty">Нет синхронизированных строк</p>';
-    return;
-  }
-  const pos = audio.position();
-  const ph = stagePhase(pos);
-  player.stageKey = state.style.swapLines
-    ? `${ph.mode}:${ph.cur}`
-    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
+function scrollingItems(lines, ph) {
   const cur = ph.cur;
-
-  /* Режим закреплённых мест: две строки стоят каждая на своём месте
-     и не съезжают вверх. Чётные строки живут на первом месте, нечётные
-     на втором — как в обычном караоке, где строки чередуются. */
-  if (!state.style.swapLines) {
-    renderFixedSlots(stage, lines, ph);
-    return;
+  const items = [];
+  if (ph.mode === 'break' && cur === -1) {
+    items.push({ key: 'break', text: BREAK_TEXT, cls: 'current break-line' });
   }
-
-  if (ph.mode === 'break' && cur === -1) stage.appendChild(makeBreakLine());
 
   // Окно строк вокруг текущей: сколько показывать — из настроек
   const total = state.style.lines;
@@ -1148,16 +1287,40 @@ function renderStage() {
     let cls = '';
     if (i === cur && ph.mode === 'line') cls = 'current';
     else if (i === cur + 1) cls = 'near';
-    const div = buildLineEl(lines[i].text, cls);
-    div.dataset.index = i;
-    stage.appendChild(div);
-    if (i === cur && ph.mode === 'break') stage.appendChild(makeBreakLine());
+    // Песня ещё не дошла до первой строки — подсвечиваем её как ближайшую
+    else if (i === 0 && cur === -1 && ph.mode !== 'break') cls = 'near';
+    items.push({ key: `l${i}`, text: lines[i].text, cls, index: i });
+    if (i === cur && ph.mode === 'break') {
+      items.push({ key: 'break', text: BREAK_TEXT, cls: 'current break-line' });
+    }
   }
-  if (cur === -1 && ph.mode !== 'break' && stage.firstChild) {
-    // Песня ещё не дошла до первой строки
-    stage.firstChild.classList.add('near');
+  return items;
+}
+
+function renderStage() {
+  const stage = $('lyrics-stage');
+  const lines = syncedLines();
+  if (!lines.length) {
+    stage.innerHTML = '<p class="stage-empty">Нет синхронизированных строк</p>';
+    return;
   }
+  if (stage.querySelector('.stage-empty')) stage.innerHTML = '';
+  const pos = audio.position();
+  const ph = stagePhase(pos);
+  player.stageKey = state.style.swapLines
+    ? `${ph.mode}:${ph.cur}`
+    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
+
+  /* Режим закреплённых мест: две строки стоят каждая на своём месте
+     и не съезжают вверх. Чётные строки живут на первом месте, нечётные
+     на втором — как в обычном караоке, где строки чередуются. */
+  syncStageLines(stage, state.style.swapLines
+    ? scrollingItems(lines, ph)
+    : fixedSlotItems(lines, ph));
   fitStageLines(stage);
+  ensureCountdownEl(stage);
+  placeCountdown(stage);
+  updateCountdown(stage, countdownState(pos, ph));
 }
 
 function updateStageFill() {
@@ -1170,16 +1333,23 @@ function updateStageFill() {
     ? `${ph.mode}:${ph.cur}`
     : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
   if (key !== player.stageKey) renderStage();
-  const el = $('lyrics-stage').querySelector(
+  const stage = $('lyrics-stage');
+  updateCountdown(stage, countdownState(pos, ph));
+  const el = stage.querySelector(
     ph.mode === 'break' ? '.break-line' : '.stage-line.current');
   if (!el) return;
   const start = ph.start;
   const end = ph.mode === 'break' ? ph.until : ph.end;
 
   if (ph.mode === 'break') {
-    // У нот нет слов — красим целиком
-    const fill = end > start ? ((pos - start) / (end - start)) * 100 : 100;
-    el.style.setProperty('--fill', `${Math.min(100, Math.max(0, fill)).toFixed(1)}%`);
+    // Ноты — три «слова»: закрашиваем их по ходу проигрыша
+    const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
+    const spans = el.querySelectorAll('.w');
+    for (let i = 0; i < spans.length; i++) {
+      const share = Math.min(1, Math.max(0, p * spans.length - i));
+      spans[i].style.setProperty('--wfill', `${(share * 100).toFixed(1)}%`);
+      spans[i].classList.toggle('sung', share >= 0.5);
+    }
     return;
   }
   applyWordFill(el, lines[ph.cur], start, end, pos);
@@ -1274,6 +1444,12 @@ function applyStyle() {
     stage.style.setProperty('--st-outline', `${s.outline}px`);
     stage.style.setProperty('--st-ls', `${s.letter}px`);
     stage.style.setProperty('--st-gap', `${(s.line / 10 - 1).toFixed(2)}em`);
+    // Неактивные строки глушим прозрачностью и (по желанию) размытием.
+    // Размер строк при этом НЕ меняется — иначе текст «прыгает».
+    const dim = Math.max(0, Math.min(100, s.dim)) / 100;
+    stage.style.setProperty('--st-dim', dim.toFixed(2));
+    stage.style.setProperty('--st-near', Math.min(0.95, dim + 0.3).toFixed(2));
+    stage.style.setProperty('--st-blur', `${s.blur}px`);
     stage.style.paddingLeft = `${s.pad}%`;
     stage.style.paddingRight = `${s.pad}%`;
     stage.style.justifyContent = s.valign;
@@ -1284,14 +1460,14 @@ function applyStyle() {
 
   // Фон сцены плеера: либо картинка/градиент как раньше, либо сплошной цвет
   const stage = $('lyrics-stage');
+  // Подложка-градиент под текстом вместо затемнения всего кадра
+  stage.style.setProperty('--st-scrim', scrimCss(s));
   if (s.bgMode === 'color') {
     stage.style.backgroundColor = s.bgColor;
     stage.style.backgroundImage = 'none';
   } else {
     stage.style.backgroundColor = '';
-    stage.style.backgroundImage = state.bgImage
-      ? `linear-gradient(rgba(10, 10, 15, 0.68), rgba(10, 10, 15, 0.68)), url("${state.bgImage}")`
-      : '';
+    stage.style.backgroundImage = state.bgImage ? `url("${state.bgImage}")` : '';
   }
 
   renderStage();
@@ -1328,6 +1504,13 @@ function updateStyleUI() {
   $('row-pos-next').classList.toggle('hidden', s.swapLines);
   $('st-lines').value = s.lines;
   $('st-lines-val').textContent = s.lines;
+  $('st-dim').value = s.dim;
+  $('st-dim-val').textContent = `${s.dim}%`;
+  $('st-blur').value = s.blur;
+  $('st-blur-val').textContent = s.blur;
+  $('st-scrim').value = s.scrim;
+  $('st-scrim-val').textContent = `${s.scrim}%`;
+  $('st-countdown').checked = s.countdown;
   [['st-effect', s.effect], ['st-bg-mode', s.bgMode], ['st-anim', s.anim], ['st-valign', s.valign]]
     .forEach(([id, val]) => {
       $(id).querySelectorAll('button').forEach((b) => {
@@ -1355,7 +1538,8 @@ Object.entries(FONTS).forEach(([key, f]) => {
 $('st-font').addEventListener('change', () => setStyle('font', $('st-font').value));
 [['st-size', 'size'], ['st-weight', 'weight'], ['st-outline', 'outline'],
  ['st-letter', 'letter'], ['st-line', 'line'], ['st-lines', 'lines'], ['st-pad', 'pad'],
- ['st-pos-cur', 'posCurrent'], ['st-pos-next', 'posNext']]
+ ['st-pos-cur', 'posCurrent'], ['st-pos-next', 'posNext'],
+ ['st-dim', 'dim'], ['st-blur', 'blur'], ['st-scrim', 'scrim']]
   .forEach(([id, key]) => {
     $(id).addEventListener('input', () => setStyle(key, +$(id).value));
   });
@@ -1372,6 +1556,7 @@ $('st-font').addEventListener('change', () => setStyle('font', $('st-font').valu
     });
   });
 $('st-swap').addEventListener('change', () => setStyle('swapLines', $('st-swap').checked));
+$('st-countdown').addEventListener('change', () => setStyle('countdown', $('st-countdown').checked));
 
 $('st-reset').addEventListener('click', () => {
   state.style = defaultStyle();
@@ -1928,7 +2113,10 @@ window.addEventListener('resize', () => {
     drawTimeline();
     fitStageLines($('edit-stage'));
   }
-  if ($('step-5').classList.contains('active')) fitStageLines($('lyrics-stage'));
+  if ($('step-5').classList.contains('active')) {
+    fitStageLines($('lyrics-stage'));
+    placeCountdown($('lyrics-stage')); // раскладка поехала — точки тоже
+  }
 });
 
 /* Держим курсор в кадре во время воспроизведения */
@@ -1953,18 +2141,26 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   // Фон
   if (st.bgMode === 'color') {
     g2d.fillStyle = st.bgColor;
+    g2d.fillRect(0, 0, W, H);
   } else if (bgImg) {
     const scale = Math.max(W / bgImg.width, H / bgImg.height);
     const w = bgImg.width * scale, h = bgImg.height * scale;
     g2d.drawImage(bgImg, (W - w) / 2, (H - h) / 2, w, h);
-    g2d.fillStyle = 'rgba(10, 10, 15, 0.72)';
+    // Та же подложка, что на экране: полоса под текстом, а не общее затемнение
+    const stops = scrimStops(st);
+    if (stops) {
+      const scrim = g2d.createLinearGradient(0, 0, 0, H);
+      stops.forEach((p) => scrim.addColorStop(p.at, `rgba(8, 8, 12, ${p.alpha})`));
+      g2d.fillStyle = scrim;
+      g2d.fillRect(0, 0, W, H);
+    }
   } else {
     const grad = g2d.createLinearGradient(0, 0, W, H);
     grad.addColorStop(0, '#171129');
     grad.addColorStop(1, '#0a0a0f');
     g2d.fillStyle = grad;
+    g2d.fillRect(0, 0, W, H);
   }
-  g2d.fillRect(0, 0, W, H);
 
   const lines = syncedLines();
   const ph = stagePhase(pos);
@@ -1982,10 +2178,11 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   // длинная фраза визуально «проваливается» относительно остальных.
   const baseSize = Math.round(40 * st.size / 100);
   const rawBlocks = [];
-  const pushText = (text, isCur) => {
+  // index — номер строки: без него подсветка по словам не включалась
+  const pushText = (text, isCur, index = null, isNear = false) => {
     g2d.font = font(baseSize);
     const w = g2d.measureText(text).width;
-    rawBlocks.push({ text, width: w, isCur });
+    rawBlocks.push({ text, width: w, isCur, index, isNear });
   };
   const total = st.lines;
   const before = Math.min(2, Math.floor((total - 1) / 2));
@@ -1993,13 +2190,13 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     for (let i = Math.max(0, cur - before + 1); i <= cur; i++) pushText(lines[i].text, false);
     pushText('♪   ♪   ♪', true);
     for (let i = cur + 1; i < Math.min(lines.length, cur + total - before); i++) {
-      pushText(lines[i].text, false);
+      pushText(lines[i].text, false, i, i === cur + 1);
     }
   } else {
     const anchor = cur === -1 ? 0 : cur;
     const first = Math.max(0, anchor - before);
     for (let i = first; i < Math.min(lines.length, first + total); i++) {
-      pushText(lines[i].text, i === cur);
+      pushText(lines[i].text, i === cur, i, i === cur + 1 || (cur === -1 && i === 0));
     }
   }
 
@@ -2063,10 +2260,48 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     }
   };
 
+  /* Приглушение неактивных строк — прозрачностью и размытием, как на экране.
+     Размер строк одинаковый у всех, меняется только «плотность». */
+  const dimAlpha = Math.max(0, Math.min(100, st.dim)) / 100;
+  const nearAlpha = Math.min(0.95, dimAlpha + 0.3);
+  const canFilter = 'filter' in g2d;
+  const blurPx = (st.blur || 0) * (H / 360); // на экране сцена вдвое ниже кадра
+  const setDim = (kind) => {
+    g2d.globalAlpha = kind === 'cur' ? 1 : kind === 'near' ? nearAlpha : dimAlpha;
+    if (canFilter) {
+      const b = kind === 'cur' ? 0 : kind === 'near' ? blurPx * 0.5 : blurPx;
+      g2d.filter = b > 0.1 ? `blur(${b.toFixed(2)}px)` : 'none';
+    }
+  };
+  const clearDim = () => {
+    g2d.globalAlpha = 1;
+    if (canFilter) g2d.filter = 'none';
+  };
+
+  /* Отсчёт перед вступлением строки: три точки на месте нот проигрыша */
+  const cd = countdownState(pos, ph);
+  const drawCountdown = (cy) => {
+    const r = Math.max(4, baseSize * 0.2);
+    const gap = r * 3.4;
+    const from = W / 2 - ((COUNT_DOTS - 1) * gap) / 2;
+    for (let i = 0; i < COUNT_DOTS; i++) {
+      const alive = i < cd.lit;
+      const scale = alive
+        ? (i === cd.lit - 1 && !reduceMotion.matches ? 0.55 + 0.45 * cd.frac : 1)
+        : 0.55;
+      g2d.globalAlpha = alive ? 1 : 0.18;
+      g2d.fillStyle = alive ? st.accent : st.inactive;
+      g2d.beginPath();
+      g2d.arc(from + i * gap, cy, r * scale, 0, Math.PI * 2);
+      g2d.fill();
+    }
+    clearDim();
+  };
+
   /* Закреплённые места: две строки рисуются каждая на своей высоте
      и не съезжают. Активна та, чья очередь петь. */
   if (!st.swapLines) {
-    const drawAt = (text, topPercent, isCur, line) => {
+    const drawAt = (text, topPercent, kind, line) => {
       g2d.font = font(baseSize);
       let size = baseSize;
       const w = g2d.measureText(text).width;
@@ -2074,9 +2309,10 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       g2d.font = font(size);
       g2d.letterSpacing = `${st.letter}px`;
       const cy = H * (topPercent / 100);
-      if (isCur && line) {
+      setDim(kind);
+      if (kind === 'cur' && line) {
         drawWords(line, text, size, cy, ph);
-      } else if (isCur) {
+      } else if (kind === 'cur') {
         strokeIfNeeded(text, W / 2, cy);
         const start = ph.start;
         const end = ph.mode === 'break' ? ph.until : ph.end;
@@ -2093,24 +2329,32 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
         g2d.restore();
       } else {
         strokeIfNeeded(text, W / 2, cy);
-        g2d.fillStyle = st.inactive;
+        g2d.fillStyle = kind === 'near' ? st.active : st.inactive;
         g2d.fillText(text, W / 2, cy);
       }
+      clearDim();
     };
 
     const activeSlot = cur < 0 ? 0 : cur % 2;
     const nextIndex = cur < 0 ? 0 : cur + 1;
     for (const slot of [0, 1]) {
       const top = slot === 0 ? st.posCurrent : st.posNext;
-      let index, isCur = false;
+      let index;
+      let kind = 'off';
       if (cur < 0) index = slot === 0 ? 0 : 1;
-      else if (slot === activeSlot) { index = cur; isCur = ph.mode !== 'break'; }
+      else if (slot === activeSlot) { index = cur; if (ph.mode !== 'break') kind = 'cur'; }
       else index = nextIndex;
       if (index >= lines.length) continue;
-      drawAt(lines[index].text, top, isCur, isCur ? lines[index] : null);
+      if (kind !== 'cur' && index === nextIndex) kind = 'near';
+      drawAt(lines[index].text, top, kind, kind === 'cur' ? lines[index] : null);
     }
-    if (ph.mode === 'break') {
-      drawAt('♪   ♪   ♪', activeSlot === 0 ? st.posCurrent : st.posNext, true);
+    const breakTop = activeSlot === 0 ? st.posCurrent : st.posNext;
+    // Пока идёт отсчёт, точки занимают место нот проигрыша
+    if (ph.mode === 'break' && !cd) drawAt('♪   ♪   ♪', breakTop, 'cur');
+    if (cd) {
+      drawCountdown(ph.mode === 'break'
+        ? H * (breakTop / 100)
+        : H * (st.posCurrent / 100) - baseSize * 0.9);
     }
     g2d.letterSpacing = '0px';
     if (watermark) {
@@ -2132,12 +2376,19 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     : st.valign === 'flex-end' ? H - pad - totalH
     : H / 2 - totalH / 2;
 
+  let countCy = null;
   for (const b of blocks) {
     g2d.font = font(b.size);
     g2d.letterSpacing = `${st.letter}px`;
     const rowH = b.size * lineGap;
     const cy = y + rowH / 2;
-    if (b.isCur && b.index != null && ph.mode !== 'break') {
+    const isBreak = b.isCur && b.index == null && ph.mode === 'break';
+    // Отсчёт встаёт на место нот проигрыша, а до первого куплета — над строкой
+    if (cd && (isBreak || (countCy == null && b.isNear))) countCy = isBreak ? cy : cy - rowH * 0.85;
+    setDim(b.isCur ? 'cur' : b.isNear ? 'near' : 'off');
+    if (isBreak && cd) {
+      // ноты скрыты — вместо них отсчёт
+    } else if (b.isCur && b.index != null && ph.mode !== 'break') {
       drawWords(lines[b.index], b.text, b.size, cy, ph);
     } else if (b.isCur) {
       strokeIfNeeded(b.text, W / 2, cy);
@@ -2156,12 +2407,14 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       g2d.restore();
     } else {
       strokeIfNeeded(b.text, W / 2, cy);
-      g2d.fillStyle = st.inactive;
+      g2d.fillStyle = b.isNear ? st.active : st.inactive;
       g2d.fillText(b.text, W / 2, cy);
     }
+    clearDim();
     y += rowH + blockGap;
   }
   g2d.letterSpacing = '0px';
+  if (cd) drawCountdown(countCy != null ? countCy : H / 2);
 
   // Логотип в правом нижнем углу — размер от высоты кадра,
   // чтобы одинаково смотрелся и в HD, и в 2K

@@ -621,6 +621,12 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   --st-outline: 0px;
   --st-ls: 0px;
   --st-gap: 0.35rem;
+  --st-dim: 0.45;
+  --st-near: 0.75;
+  --st-blur: 0px;
+  --st-scrim: none;
+  /* Подложка живёт в ::before, поэтому сцене нужна своя система координат */
+  position: relative;
   min-height: 340px;
   display: flex;
   flex-direction: column;
@@ -651,6 +657,20 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   background-size: cover;
   background-position: center;
 }
+/* Читаемость поверх картинки: мягкая полоса ровно под строками,
+   а не общее затемнение всего кадра — картинка остаётся видна */
+.lyrics-stage.has-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--st-scrim);
+  pointer-events: none;
+  z-index: 0;
+}
+/* Строки — над подложкой. Отсчёт сюда не берём: у него своё
+   абсолютное позиционирование, и position: relative его ломает */
+.lyrics-stage > .stage-line,
+.lyrics-stage > .stage-empty { position: relative; z-index: 1; }
 .lyrics-stage.has-bg .stage-line:not(.current) { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
 .stage-line {
   font-family: var(--st-font);
@@ -659,8 +679,13 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   letter-spacing: var(--st-ls);
   -webkit-text-stroke: var(--st-outline) var(--st-outline-c);
   color: var(--st-inactive);
-  opacity: 0.45;
-  transition: opacity 0.3s, color 0.3s;
+  /* Приглушение только прозрачностью и размытием: размер строк
+     не меняется никогда, иначе текст «прыгает» на каждой смене */
+  opacity: var(--st-dim, 0.45);
+  filter: blur(var(--st-blur, 0px));
+  transition: opacity 0.25s cubic-bezier(0.33, 0, 0.2, 1),
+              color 0.25s cubic-bezier(0.33, 0, 0.2, 1),
+              filter 0.25s cubic-bezier(0.33, 0, 0.2, 1);
   min-height: 1.6em;
   /* Длинные строки ужимаются скриптом, но не обрезаются. */
   white-space: nowrap;
@@ -668,7 +693,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   overflow: visible;
   text-overflow: clip;
 }
-.stage-line.current { opacity: 1; }
+.stage-line.current { opacity: 1; filter: none; }
 /* Эффект «заливка» — классическое караоке */
 /* Подсветка идёт по словам: каждое слово — свой элемент со своей
    долей закраски. Так выделение переключается на границах слов,
@@ -686,14 +711,50 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 [data-effect="highlight"] .stage-line.current { color: var(--st-effect); }
 /* Без эффекта — просто активный цвет */
 [data-effect="none"] .stage-line.current { color: var(--st-active); }
-.stage-line.near { opacity: 0.75; color: var(--st-active); }
+.stage-line.near {
+  opacity: var(--st-near, 0.75);
+  color: var(--st-active);
+  filter: blur(calc(var(--st-blur, 0px) * 0.5));
+}
 
-/* Появление строк */
-[data-anim="fade"] .stage-line { animation: lineFade 0.35s ease; }
-[data-anim="slide"] .stage-line { animation: lineSlide 0.35s ease; }
+/* Появление строк: анимируется только та, что реально появилась.
+   Остальные плавно меняют прозрачность своим переходом. */
+[data-anim="fade"] .stage-line.enter { animation: lineFade 0.28s cubic-bezier(0.22, 0.61, 0.36, 1); }
+[data-anim="slide"] .stage-line.enter { animation: lineSlide 0.28s cubic-bezier(0.22, 0.61, 0.36, 1); }
 @keyframes lineFade { from { opacity: 0; } }
 @keyframes lineSlide { from { opacity: 0; transform: translateY(16px); } }
 .stage-empty { color: var(--text-dim); font-size: 1.1rem; }
+
+/* --- Отсчёт перед вступлением строки --- */
+.stage-count {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: center;
+  gap: 0.7em;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s cubic-bezier(0.33, 0, 0.2, 1);
+}
+.lyrics-stage.counting .stage-count { opacity: 1; }
+/* Пока идёт отсчёт, ноты проигрыша уступают место точкам */
+.lyrics-stage.counting .break-line { opacity: 0; }
+.stage-count i {
+  width: 0.62em;
+  height: 0.62em;
+  font-size: var(--st-size);
+  border-radius: 50%;
+  background: var(--st-effect);
+  box-shadow: 0 0 0.5em rgba(0, 0, 0, 0.55);
+  /* Точка слегка сжимается внутри своей секунды */
+  transform: scale(calc(0.55 + 0.45 * var(--cd-p, 1)));
+  transition: opacity 0.2s linear, transform 0.12s linear;
+}
+.stage-count i.off { opacity: 0.18; transform: scale(0.55); background: var(--st-inactive); }
 
 .player-bar { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
 .play-btn {
@@ -905,6 +966,20 @@ input[type="range"]::-moz-range-thumb {
   border-top: 1px solid var(--border);
   color: var(--text-dim);
   font-size: 0.9rem;
+}
+
+/* ============ Меньше движения ============
+   Системная настройка «Уменьшить движение»: гасим анимации студии,
+   но не сам караоке — подсветка слов остаётся, она несёт смысл. */
+@media (prefers-reduced-motion: reduce) {
+  .stage-line,
+  .stage-count,
+  .stage-count i,
+  .edit-stage .stage-line {
+    animation: none !important;
+    transition: none !important;
+  }
+  .stage-count i { transform: none !important; }
 }
 
 /* ============ Адаптив ============ */

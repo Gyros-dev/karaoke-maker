@@ -313,6 +313,28 @@
           <span class="eq-val" id="st-lines-val">7</span>
         </div>
         <div class="style-row">
+          <span class="style-label">Приглушение</span>
+          <input type="range" id="st-dim" min="10" max="90" step="5" value="45">
+          <span class="eq-val" id="st-dim-val">45%</span>
+          <span class="eq-hint">Насколько видны строки, которые сейчас не поют</span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Размытие фоновых</span>
+          <input type="range" id="st-blur" min="0" max="3" step="0.5" value="0">
+          <span class="eq-val" id="st-blur-val">0</span>
+        </div>
+        <div class="style-row">
+          <span class="style-label">Подложка под текстом</span>
+          <input type="range" id="st-scrim" min="0" max="100" step="5" value="70">
+          <span class="eq-val" id="st-scrim-val">70%</span>
+          <span class="eq-hint">Тёмная полоса под строками поверх картинки — вместо затемнения всего кадра</span>
+        </div>
+        <div class="style-row">
+          <label class="style-label" for="st-countdown">Отсчёт перед строкой</label>
+          <input type="checkbox" id="st-countdown" checked>
+          <span class="eq-hint">Три точки гаснут за три секунды до вступления — видно, когда вступать после проигрыша</span>
+        </div>
+        <div class="style-row">
           <label class="style-label" for="st-swap">Строки меняются местами</label>
           <input type="checkbox" id="st-swap" checked>
           <span class="eq-hint">Выключи — строки будут стоять каждая на своём месте</span>
