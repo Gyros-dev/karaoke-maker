@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 
 /* ---------- Состояние ---------- */
 const state = {
@@ -395,6 +395,9 @@ function saveProject() {
       : (keepPrev && prev.times) || [],
     ends: state.lines.length ? state.lines.map((l) => l.end ?? null)
       : (keepPrev && prev.ends) || [],
+    // Ручная разметка слов: [{text, time, end}] или null для строк без неё
+    words: state.lines.length ? state.lines.map((l) => l.words || null)
+      : (keepPrev && prev.words) || [],
     bg: state.bgImage,
     eq: { ...state.eq },
     style: { ...state.style },
@@ -429,6 +432,7 @@ function goToStep(n) {
   $(`step-${n}`).classList.add('active');
 
   stopSync();
+  if (wordTap.active) finishWordTap(false);
   // Смена шага гасит режим принудительного вокала: иначе он остаётся
   // от недослушанной строки и ползунок в караоке будто не действует
   if (!sync.active && audio.forceVocal) {
@@ -661,16 +665,28 @@ $('btn-to-sync').addEventListener('click', () => {
     state.lines.every((l, i) => l.text === texts[i]);
   if (!sameText) {
     const saved = loadProject();
-    const savedTimes = saved && saved.name === state.fileName ? saved.times : null;
-    state.lines = texts.map((text, i) => ({
-      text,
-      time: savedTimes && savedTimes.length === texts.length ? savedTimes[i] : null,
-      end: saved && saved.name === state.fileName && saved.ends && saved.ends.length === texts.length
-        ? saved.ends[i] : null,
-    }));
+    const mine = saved && saved.name === state.fileName ? saved : null;
+    const savedTimes = mine ? mine.times : null;
+    const savedWords = mine && mine.words && mine.words.length === texts.length ? mine.words : null;
+    state.lines = texts.map((text, i) => {
+      const line = {
+        text,
+        time: savedTimes && savedTimes.length === texts.length ? savedTimes[i] : null,
+        end: mine && mine.ends && mine.ends.length === texts.length ? mine.ends[i] : null,
+      };
+      // Метки слов годятся, пока число слов в строке то же самое:
+      // поправленную орфографию переживают, переписанную строку — нет
+      const w = savedWords ? savedWords[i] : null;
+      const chunks = splitWords(text);
+      if (w && w.length && w.length === chunks.length) {
+        line.words = w.map((x, k) => ({ ...x, text: chunks[k] }));
+      }
+      return line;
+    });
   }
 
   saveProject();
+  updateWordExportBtn();
   renderSyncList();
   updateSyncButtons();
   goToStep(3);
@@ -747,13 +763,26 @@ function playLine(i) {
   audio.playSegment(line.time, to);
 }
 
+/* Метки слов заданы абсолютным временем, поэтому при сдвиге строки
+   их надо двигать вместе с ней — иначе разметка «съедет» */
+function shiftWords(line, delta) {
+  if (!delta || !line || !line.words) return;
+  line.words = line.words.map((w) => ({
+    ...w,
+    time: w.time + delta,
+    end: w.end != null ? w.end + delta : w.end,
+  }));
+}
+
 function setLineTime(i, t) {
   const line = state.lines[i];
   const prev = i > 0 && state.lines[i - 1].time != null ? state.lines[i - 1].time + 0.05 : 0;
   const next = i < state.lines.length - 1 && state.lines[i + 1].time != null
     ? state.lines[i + 1].time - 0.05
     : audio.duration;
+  const was = line.time;
   line.time = Math.min(Math.max(t, prev), Math.max(prev, next));
+  if (was != null) shiftWords(line, line.time - was);
 }
 
 function nudgeLine(i, delta) {
@@ -784,7 +813,9 @@ function nudgeLineEnd(i, delta) {
 function shiftAllLines(delta) {
   state.lines.forEach((l) => {
     if (l.time != null) {
+      const was = l.time;
       l.time = Math.min(Math.max(l.time + delta, 0), audio.duration);
+      shiftWords(l, l.time - was);
     }
   });
   refreshTimes();
@@ -1381,8 +1412,11 @@ function tickPlayer() {
   // Конец прослушиваемого отрывка — пауза
   if (audio.playing && audio.stopAt != null && audio.position() >= audio.stopAt) {
     audio.endSegment();
+    // Отрывок доиграл до конца строки — разметку слов закрываем с сохранением
+    if (wordTap.active) finishWordTap(true);
     updatePlayerUI();
   }
+  if (wordTap.active) highlightWordTap();
 
   // Обновление редактора
   if ($('step-4').classList.contains('active') && editor.peaks) {
@@ -1704,6 +1738,32 @@ $('btn-export-lrc').addEventListener('click', () => {
   download(new Blob([lrc], { type: 'text/plain;charset=utf-8' }), `${name}.lrc`);
 });
 
+/* Расширенный LRC («enhanced LRC»): после метки строки идут метки слов
+   в угловых скобках. Обычные плееры угловые скобки игнорируют и всё
+   равно читают текст, а понимающие — подсвечивают по словам.
+   Слова берём те же, что показывает сцена: ручные метки, если они есть,
+   иначе автоматическое деление по длине слов. */
+$('btn-export-lrc-words').addEventListener('click', () => {
+  const lines = syncedLines();
+  if (!lines.length) { alert('Сначала синхронизируй текст.'); return; }
+  const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
+  const body = lines.map((l, i) => {
+    const words = lineWords(l, l.time, lineEnd(lines, i));
+    const inner = words
+      .map((w) => `<${fmtLrcTime(w.start)}>${w.text}`)
+      .join('')
+      .replace(/\s+$/, '');
+    // Метка конца строки — чтобы плеер знал, когда гасить подсветку
+    return `[${fmtLrcTime(l.time)}]${inner}<${fmtLrcTime(lineEnd(lines, i))}>`;
+  });
+  const lrc = [
+    `[ti:${name}]`,
+    '[by:Бэнэнгская Рапсодия]',
+    ...body,
+  ].join('\n');
+  download(new Blob([lrc], { type: 'text/plain;charset=utf-8' }), `${name} (по словам).lrc`);
+});
+
 /* ---------- Экспорт WAV (минусовка) ---------- */
 function bufferToWav(buffer) {
   const numCh = buffer.numberOfChannels;
@@ -1788,6 +1848,7 @@ function openEditor() {
   if (!editor.peaks) computePeaks();
   renderEditList();
   renderEditStage();
+  updateWordExportBtn();
   resizeTimeline();
   $('edit-total').textContent = fmtTime(audio.duration);
   drawTimeline();
@@ -1845,7 +1906,29 @@ function renderEditList() {
       b.dataset.endI = i; b.dataset.endDelta = delta;
       endNudge.appendChild(b);
     });
-    li.append(play, ts, end, text, nudge, endNudge);
+
+    // Разметка слов: у размеченных строк кнопка светится и рядом появляется сброс
+    const marked = hasWords(line);
+    const wordsGroup = document.createElement('span');
+    wordsGroup.className = 'nudge words-nudge';
+    const wordsBtn = document.createElement('button');
+    wordsBtn.className = 'nudge-btn words-btn' + (marked ? ' marked' : '');
+    wordsBtn.textContent = marked ? '♪ слова ✓' : '♪ слова';
+    wordsBtn.title = marked
+      ? 'Строка размечена по словам. Нажми, чтобы простучать заново'
+      : 'Простучать слова внутри строки';
+    wordsBtn.dataset.words = i;
+    wordsGroup.appendChild(wordsBtn);
+    if (marked) {
+      const rst = document.createElement('button');
+      rst.className = 'nudge-btn words-reset';
+      rst.textContent = '⨯';
+      rst.title = 'Вернуть автоматическое деление слов';
+      rst.dataset.wordsReset = i;
+      wordsGroup.appendChild(rst);
+    }
+
+    li.append(play, ts, end, text, nudge, endNudge, wordsGroup);
     ul.appendChild(li);
   });
 }
@@ -1853,11 +1936,177 @@ function renderEditList() {
 $('edit-list').addEventListener('click', (e) => {
   const playBtn = e.target.closest('[data-play]');
   if (playBtn) { playLine(+playBtn.dataset.play); return; }
+  const wordsBtn = e.target.closest('[data-words]');
+  if (wordsBtn) { startWordTap(+wordsBtn.dataset.words); return; }
+  const wordsReset = e.target.closest('[data-words-reset]');
+  if (wordsReset) { resetWords(+wordsReset.dataset.wordsReset); return; }
   const endBtn = e.target.closest('[data-end-i]');
   if (endBtn) { nudgeLineEnd(+endBtn.dataset.endI, +endBtn.dataset.endDelta); renderEditList(); return; }
   const btn = e.target.closest('.nudge-btn');
   if (btn) nudgeLine(+btn.dataset.i, +btn.dataset.delta);
 });
+
+/* ============================================================
+   Разметка слов внутри строки
+
+   Автоматическое деление времени строки между словами по их длине
+   работает сносно, но настоящая подсветка получается только с ручными
+   метками: играет отрывок строки, пользователь жмёт пробел на каждом
+   слове. Метки ложатся в line.words и попадают и на сцену, и в видео,
+   и в расширенный LRC.
+   ============================================================ */
+const wordTap = {
+  active: false,
+  line: -1,      // номер строки в state.lines
+  index: 0,      // какое слово ждём
+  marks: [],     // отмеченные моменты, по одному на слово
+  chunks: [],
+  start: 0,
+  end: 0,
+};
+const WORD_TAP_LEAD = 1.2; // сколько секунд играем до начала строки
+
+function hasWords(line) {
+  return !!(line && line.words && line.words.length);
+}
+
+function anyWords() {
+  return state.lines.some(hasWords);
+}
+
+function updateWordExportBtn() {
+  $('btn-export-lrc-words').classList.toggle('hidden', !anyWords());
+}
+
+function startWordTap(i) {
+  const line = state.lines[i];
+  if (!line || line.time == null) {
+    alert('Сначала отметь начало этой строки на шаге «Синхронизация».');
+    return;
+  }
+  const chunks = splitWords(line.text);
+  if (!chunks.length) return;
+  if (wordTap.active) finishWordTap(false);
+
+  const synced = syncedLines();
+  wordTap.active = true;
+  wordTap.line = i;
+  wordTap.index = 0;
+  wordTap.marks = [];
+  wordTap.chunks = chunks;
+  wordTap.start = line.time;
+  wordTap.end = lineEnd(synced, synced.indexOf(line));
+
+  // playSegment сам включает вокал — без него не понять, куда попадать
+  audio.playSegment(Math.max(0, line.time - WORD_TAP_LEAD),
+    Math.min(audio.duration, wordTap.end + 0.4));
+
+  $('word-tap').classList.remove('hidden');
+  renderWordTap();
+}
+
+function renderWordTap() {
+  const box = $('word-tap-line');
+  box.innerHTML = '';
+  wordTap.chunks.forEach((chunk, k) => {
+    const span = document.createElement('span');
+    span.className = 'wt-word';
+    if (k < wordTap.marks.length) span.classList.add('done');
+    else if (k === wordTap.index) span.classList.add('next');
+    span.textContent = chunk.trim();
+    box.appendChild(span);
+  });
+  $('word-tap-count').textContent =
+    `${wordTap.marks.length} из ${wordTap.chunks.length}`;
+}
+
+function tapWord() {
+  if (!wordTap.active || wordTap.index >= wordTap.chunks.length) return;
+  // Раньше начала строки метка бессмысленна — подтягиваем к началу
+  wordTap.marks.push(Math.max(wordTap.start, audio.position()));
+  wordTap.index++;
+  renderWordTap();
+  if (wordTap.index >= wordTap.chunks.length) finishWordTap(true);
+}
+
+/* Из отмеченных моментов делаем метки слов. Если пользователь не успел
+   отметить всё, остаток делим пропорционально длине слов — как делает
+   автоматика, но уже от последней настоящей метки. */
+function buildWords(chunks, marks, start, end) {
+  const n = chunks.length;
+  const exact = Math.min(marks.length, n);
+  const times = [];
+  for (let k = 0; k < exact; k++) {
+    // Метки должны идти по возрастанию: случайный двойной тап не должен
+    // создавать слово отрицательной длины
+    const t = Math.max(start, marks[k]);
+    times.push(k > 0 ? Math.max(t, times[k - 1] + 0.02) : t);
+  }
+  if (exact < n) {
+    /* Последнее отмеченное слово входит в хвост вместе с неотмеченными:
+       где оно кончается, мы не знаем — это сказал бы следующий тап.
+       Поэтому остаток времени делим начиная с него. */
+    const first = Math.max(0, exact - 1);
+    const from = times.length ? times[first] : start;
+    const rest = chunks.slice(first);
+    const weights = rest.map((c) => Math.max(1, c.trim().length));
+    const total = weights.reduce((a, b) => a + b, 0);
+    const span = Math.max(0.05, end - from);
+    let acc = from;
+    for (let j = 0; j < rest.length; j++) {
+      if (first + j >= times.length) times.push(acc);
+      acc += span * (weights[j] / total);
+    }
+  }
+  return chunks.map((text, k) => ({
+    text,
+    time: times[k],
+    end: k + 1 < chunks.length ? times[k + 1] : Math.max(times[k] + 0.05, end),
+  }));
+}
+
+function finishWordTap(save) {
+  if (!wordTap.active) return;
+  const line = state.lines[wordTap.line];
+  wordTap.active = false;
+  audio.pause();
+  audio.stopAt = null;
+  audio.forceVocal = false;
+  audio.applyMix();
+  $('word-tap').classList.add('hidden');
+
+  if (save && wordTap.marks.length && line) {
+    line.words = buildWords(wordTap.chunks, wordTap.marks, wordTap.start, wordTap.end);
+    saveProject();
+  }
+  renderEditList();
+  editor.stageKey = '';
+  renderEditStage();
+  updateWordExportBtn();
+  updatePlayerUI();
+}
+
+function resetWords(i) {
+  const line = state.lines[i];
+  if (!line) return;
+  delete line.words;
+  saveProject();
+  renderEditList();
+  editor.stageKey = '';
+  renderEditStage();
+  updateWordExportBtn();
+}
+
+/* Пока идёт вступление, отмечать нечего — показываем это приглушением */
+function highlightWordTap() {
+  const waiting = audio.position() < wordTap.start;
+  const box = $('word-tap');
+  if (box.classList.contains('waiting') !== waiting) box.classList.toggle('waiting', waiting);
+}
+
+$('btn-word-done').addEventListener('click', () => finishWordTap(true));
+$('btn-word-cancel').addEventListener('click', () => finishWordTap(false));
+$('word-tap-line').addEventListener('click', tapWord); // на телефоне пробела нет
 
 /* Вставка в строки — только плоским текстом, без HTML из буфера */
 $('edit-list').addEventListener('paste', (e) => {
@@ -1874,7 +2123,25 @@ $('edit-list').addEventListener('input', (e) => {
   const el = e.target.closest('.edit-text');
   if (!el) return;
   const i = +el.dataset.textI;
-  state.lines[i].text = el.textContent.replace(/\n/g, ' ').trim() || state.lines[i].text;
+  const line = state.lines[i];
+  line.text = el.textContent.replace(/\n/g, ' ').trim() || line.text;
+  // Метки слов держатся, пока число слов не изменилось. Иначе они
+  // указывали бы не на те слова, и лучше вернуться к автоматике.
+  if (hasWords(line)) {
+    const chunks = splitWords(line.text);
+    if (chunks.length === line.words.length) {
+      line.words = line.words.map((w, k) => ({ ...w, text: chunks[k] }));
+    } else {
+      delete line.words;
+      // Перерисовать список сразу нельзя — потеряется курсор в поле,
+      // поэтому просто гасим отметку у этой строки
+      const btn = el.closest('.edit-row').querySelector('.words-btn');
+      if (btn) { btn.classList.remove('marked'); btn.textContent = '♪ слова'; }
+      const rst = el.closest('.edit-row').querySelector('.words-reset');
+      if (rst) rst.remove();
+      updateWordExportBtn();
+    }
+  }
   $('lyrics-input').value = state.lines.map((l) => l.text).join('\n');
   saveProject();
   editor.stageKey = ''; // заставляем предпросмотр перерисоваться
@@ -2608,6 +2875,13 @@ document.addEventListener('pointerdown', () => {
 
 /* ---------- Клавиатура ---------- */
 document.addEventListener('keydown', (e) => {
+  // Разметка слов забирает и пробел, и Esc — даже из полей ввода:
+  // иначе пробел уедет в текст строки вместо отметки
+  if (wordTap.active) {
+    if (e.code === 'Space') { e.preventDefault(); tapWord(); return; }
+    if (e.code === 'Escape') { e.preventDefault(); finishWordTap(false); return; }
+    if (e.code === 'Enter') { e.preventDefault(); finishWordTap(true); return; }
+  }
   if (e.code !== 'Space') return;
   const active = document.activeElement;
   const tag = active && active.tagName;

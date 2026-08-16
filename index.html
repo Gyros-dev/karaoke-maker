@@ -10,7 +10,7 @@
   <link rel="icon" href="icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="theme-color" content="#0a0a0f">
-  <link rel="stylesheet" href="style.css?v=1.5.0">
+  <link rel="stylesheet" href="style.css?v=1.6.0">
 </head>
 <body>
 
@@ -388,6 +388,7 @@
         <button class="btn btn-ghost" id="btn-back-3">← Редактор</button>
         <button class="btn btn-ghost" id="btn-sound-check">🔊 Проверить звук</button>
         <button class="btn btn-ghost" id="btn-export-lrc">⬇ Текст .lrc</button>
+        <button class="btn btn-ghost hidden" id="btn-export-lrc-words" title="Расширенный LRC: время каждого слова внутри строки">⬇ .lrc со словами</button>
         <button class="btn btn-ghost" id="btn-export-wav">⬇ Минусовка .wav</button>
         <label class="btn btn-ghost export-quality" for="video-quality">Качество
           <select id="video-quality">
@@ -415,6 +416,8 @@
       Слева — текст: его можно править прямо в списке, слушать построчно (▶) и двигать кнопками.
       Метка «до …» и кнопки «конец» задают точный момент окончания строки — так
       во время проигрыша не будет висеть предыдущий текст.
+      Кнопка «♪ слова» включает простукивание слов внутри строки: подсветка
+      пойдёт точно по словам, а не по их длине на глазок.
       Справа — предпросмотр караоке. Внизу — звуковая дорожка: клик перематывает,
       зелёный маркер строки можно тащить мышью.
     </p>
@@ -428,6 +431,18 @@
           <span>/</span>
           <span class="time" id="edit-total">0:00</span>
         </div>
+      </div>
+    </div>
+    <div class="word-tap hidden" id="word-tap">
+      <div class="word-tap-head">
+        <b>♪ Разметка слов</b>
+        <span class="word-tap-hint">Жми <kbd>пробел</kbd> в момент, когда начинается очередное слово. Esc — отменить.</span>
+      </div>
+      <div class="word-tap-line" id="word-tap-line"></div>
+      <div class="word-tap-actions">
+        <span class="word-tap-count" id="word-tap-count"></span>
+        <button class="btn btn-primary btn-small" id="btn-word-done">Сохранить</button>
+        <button class="btn btn-ghost btn-small" id="btn-word-cancel">Отменить</button>
       </div>
     </div>
     <div class="timeline-wrap">
@@ -487,6 +502,6 @@
   <span>Сделано с любовью к музыке · работает без серверов</span>
 </footer>
 
-<script src="app.js?v=1.5.0"></script>
+<script src="app.js?v=1.6.0"></script>
 </body>
 </html>

@@ -510,6 +510,67 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .edit-text:focus { background: rgba(255, 255, 255, 0.07); }
 .line-play { min-width: 30px; }
 
+/* --- Разметка слов внутри строки --- */
+.words-nudge { margin-left: auto; }
+.words-btn.marked {
+  border-color: #34d399;
+  color: #34d399;
+}
+.words-reset { min-width: 26px; }
+
+.word-tap {
+  border: 1px solid #34d399;
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0.8rem;
+}
+.word-tap-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.word-tap-hint { color: var(--text-dim); font-size: 0.85rem; }
+.word-tap-hint kbd {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 0.35rem;
+  font-family: inherit;
+}
+.word-tap-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  min-height: 1.8em;
+  transition: opacity 0.2s;
+}
+/* Пока играет вступление, отмечать ещё нечего */
+.word-tap.waiting .word-tap-line { opacity: 0.45; }
+.wt-word {
+  color: var(--text-dim);
+  padding: 0.05rem 0.3rem;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+.wt-word.done { color: #34d399; }
+.wt-word.next {
+  color: #0b0b10;
+  background: #34d399;
+}
+.word-tap-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+.word-tap-count { color: var(--text-dim); font-size: 0.85rem; margin-right: auto; }
+
 .editor-side { display: flex; flex-direction: column; }
 .edit-stage {
   flex: 1;
