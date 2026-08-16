@@ -670,12 +670,18 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .stage-line.current { opacity: 1; }
 /* Эффект «заливка» — классическое караоке */
-[data-effect="fill"] .stage-line.current {
-  background: linear-gradient(90deg, var(--st-effect) var(--fill, 0%), var(--st-active) var(--fill, 0%));
+/* Подсветка идёт по словам: каждое слово — свой элемент со своей
+   долей закраски. Так выделение переключается на границах слов,
+   а не ползёт сквозь них с постоянной скоростью. */
+[data-effect="fill"] .stage-line.current .w {
+  background: linear-gradient(90deg, var(--st-effect) var(--wfill, 0%), var(--st-active) var(--wfill, 0%));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
+[data-effect="highlight"] .stage-line.current .w.sung { color: var(--st-effect); }
+[data-effect="none"] .stage-line.current .w { color: var(--st-active); }
+.stage-line .w { white-space: pre; }
 /* Эффект «подсветка» — вся строка цветом */
 [data-effect="highlight"] .stage-line.current { color: var(--st-effect); }
 /* Без эффекта — просто активный цвет */

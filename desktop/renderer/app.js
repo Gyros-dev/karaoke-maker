@@ -966,6 +966,81 @@ function stagePhase(pos) {
   return { mode: 'line', cur, start, end };
 }
 
+/* ---------- Слова внутри строки ----------
+   Если слова размечены вручную или распознаванием, берём их метки.
+   Иначе делим время строки между словами пропорционально длине:
+   длинное слово поётся дольше короткого. Это грубее точной разметки,
+   но подсветка идёт по словам, а не ползёт сквозь них. */
+function splitWords(text) {
+  // Пробелы приклеиваем к предыдущему слову, чтобы подсветка шла сплошняком
+  const parts = text.match(/\S+\s*/g);
+  return parts ? parts : [];
+}
+
+function lineWords(line, start, end) {
+  if (line.words && line.words.length) {
+    return line.words.map((w, i, arr) => ({
+      text: w.text,
+      start: w.time,
+      end: w.end != null ? w.end : (i + 1 < arr.length ? arr[i + 1].time : end),
+    }));
+  }
+
+  const chunks = splitWords(line.text);
+  if (!chunks.length) return [];
+  // Вес слова — число букв без пробелов, минимум единица
+  const weights = chunks.map((c) => Math.max(1, c.trim().length));
+  const total = weights.reduce((a, b) => a + b, 0);
+  const span = Math.max(0.05, end - start);
+  const out = [];
+  let acc = start;
+  for (let i = 0; i < chunks.length; i++) {
+    const dur = span * (weights[i] / total);
+    out.push({ text: chunks[i], start: acc, end: acc + dur });
+    acc += dur;
+  }
+  return out;
+}
+
+/* Сколько слова уже спето: целые слова закрашены полностью,
+   текущее доезжает плавно внутри себя */
+function wordProgress(words, pos) {
+  const done = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (pos >= w.end) done.push(1);
+    else if (pos <= w.start) done.push(0);
+    else done.push((pos - w.start) / Math.max(0.03, w.end - w.start));
+  }
+  return done;
+}
+
+/* Строка собирается из слов: каждое слово — отдельный элемент,
+   чтобы подсветка переключалась на границах слов */
+function buildLineEl(text, cls) {
+  const div = document.createElement('div');
+  div.className = 'stage-line' + (cls ? ' ' + cls : '');
+  for (const chunk of splitWords(text)) {
+    const span = document.createElement('span');
+    span.className = 'w';
+    span.textContent = chunk;
+    div.appendChild(span);
+  }
+  if (!div.children.length) div.textContent = text;
+  return div;
+}
+
+function applyWordFill(el, line, start, end, pos) {
+  const words = lineWords(line, start, end);
+  const done = wordProgress(words, pos);
+  const spans = el.querySelectorAll('.w');
+  for (let i = 0; i < spans.length; i++) {
+    const p = done[i] != null ? done[i] : 0;
+    spans[i].style.setProperty('--wfill', `${(p * 100).toFixed(1)}%`);
+    spans[i].classList.toggle('sung', p >= 0.5);
+  }
+}
+
 function makeBreakLine() {
   const b = document.createElement('div');
   b.className = 'stage-line current break-line';
@@ -1021,7 +1096,12 @@ function renderFixedSlots(stage, lines, ph) {
     if (index >= lines.length) continue;
     if (active) div.classList.add('current');
     else if (index === nextIndex) div.classList.add('near');
-    div.textContent = lines[index].text;
+    for (const chunk of splitWords(lines[index].text)) {
+      const span = document.createElement('span');
+      span.className = 'w';
+      span.textContent = chunk;
+      div.appendChild(span);
+    }
     stage.appendChild(div);
   }
 
@@ -1065,11 +1145,10 @@ function renderStage() {
   const from = Math.max(0, cur - before);
   const to = Math.min(lines.length, from + total);
   for (let i = from; i < to; i++) {
-    const div = document.createElement('div');
-    div.className = 'stage-line';
-    if (i === cur && ph.mode === 'line') div.classList.add('current');
-    else if (i === cur + 1) div.classList.add('near');
-    div.textContent = lines[i].text;
+    let cls = '';
+    if (i === cur && ph.mode === 'line') cls = 'current';
+    else if (i === cur + 1) cls = 'near';
+    const div = buildLineEl(lines[i].text, cls);
     div.dataset.index = i;
     stage.appendChild(div);
     if (i === cur && ph.mode === 'break') stage.appendChild(makeBreakLine());
@@ -1096,8 +1175,14 @@ function updateStageFill() {
   if (!el) return;
   const start = ph.start;
   const end = ph.mode === 'break' ? ph.until : ph.end;
-  const fill = end > start ? ((pos - start) / (end - start)) * 100 : 100;
-  el.style.setProperty('--fill', `${Math.min(100, Math.max(0, fill)).toFixed(1)}%`);
+
+  if (ph.mode === 'break') {
+    // У нот нет слов — красим целиком
+    const fill = end > start ? ((pos - start) / (end - start)) * 100 : 100;
+    el.style.setProperty('--fill', `${Math.min(100, Math.max(0, fill)).toFixed(1)}%`);
+    return;
+  }
+  applyWordFill(el, lines[ph.cur], start, end, pos);
 }
 
 /* Пишем в DOM только при реальном изменении: обновление текста кнопки
@@ -1634,19 +1719,19 @@ function renderEditStage() {
     if (lines[cur + 1]) items.push([lines[cur + 1].text, 'near']);
   }
   for (const [text, cls] of items) {
-    const div = document.createElement('div');
-    div.className = 'stage-line' + (cls ? ' ' + cls : '');
-    if (cls.includes('current')) {
-      // Текущую строку набираем посимвольно: так подсветка работает
-      // и когда строка переносится, а длинный текст не приходится обрезать
-      for (const ch of text) {
-        const span = document.createElement('span');
-        span.textContent = ch;
-        div.appendChild(span);
-      }
-    } else {
-      div.textContent = text;
-    }
+    // Ноты проигрыша красим посимвольно, обычные строки — по словам
+    const div = cls.includes('break-line')
+      ? (() => {
+          const d = document.createElement('div');
+          d.className = 'stage-line ' + cls;
+          for (const ch of text) {
+            const sp = document.createElement('span');
+            sp.textContent = ch;
+            d.appendChild(sp);
+          }
+          return d;
+        })()
+      : buildLineEl(text, cls);
     el.appendChild(div);
   }
 
@@ -1668,13 +1753,15 @@ function updateEditStage() {
   if (!el) return;
   const start = ph.start;
   const end = ph.mode === 'break' ? ph.until : ph.end;
-  const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
-  // Красим символы по мере пения — работает и с перенесённой строкой
-  const spans = el.children;
-  const sung = Math.round(spans.length * p);
-  for (let i = 0; i < spans.length; i++) {
-    spans[i].classList.toggle('sung', i < sung);
+  if (ph.mode === 'break' || ph.cur < 0) {
+    const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
+    const spans = el.children;
+    const sung = Math.round(spans.length * p);
+    for (let i = 0; i < spans.length; i++) spans[i].classList.toggle('sung', i < sung);
+    return;
   }
+  // Подсветка по словам — как на большой сцене
+  applyWordFill(el, lines[ph.cur], start, end, pos);
 }
 
 /* --- Дорожка --- */
@@ -1920,6 +2007,53 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     Math.min(size, b.width > maxWidth ? baseSize * maxWidth / b.width : baseSize), baseSize);
   const blocks = rawBlocks.map((b) => ({ ...b, size: Math.max(14, fittedSize) }));
 
+  /* Рисуем строку по словам: целые слова закрашены, текущее доезжает.
+     Это то же поведение, что на экране, чтобы видео совпадало с ним. */
+  const drawWords = (line, text, size, cy, ph2) => {
+    g2d.font = font(size);
+    const words = line ? lineWords(line, ph2.start, ph2.mode === 'break' ? ph2.until : ph2.end) : null;
+    const widths = words ? words.map((w) => g2d.measureText(w.text).width) : null;
+    const totalW = widths ? widths.reduce((a, b) => a + b, 0) : g2d.measureText(text).width;
+    let x = (W - totalW) / 2;
+
+    if (!words) {
+      g2d.fillStyle = st.active;
+      g2d.fillText(text, W / 2, cy);
+      return;
+    }
+    const done = wordProgress(words, pos);
+    g2d.textAlign = 'left';
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      const wWidth = widths[i];
+      if (st.outline > 0) {
+        g2d.lineWidth = st.outline * 2;
+        g2d.strokeStyle = st.outlineColor;
+        g2d.lineJoin = 'round';
+        g2d.strokeText(w.text, x, cy);
+      }
+      if (st.effect === 'fill') {
+        g2d.fillStyle = st.active;
+        g2d.fillText(w.text, x, cy);
+        const p = done[i];
+        if (p > 0) {
+          g2d.save();
+          g2d.beginPath();
+          g2d.rect(x, cy - size, wWidth * p, size * 2);
+          g2d.clip();
+          g2d.fillStyle = st.accent;
+          g2d.fillText(w.text, x, cy);
+          g2d.restore();
+        }
+      } else {
+        g2d.fillStyle = (st.effect === 'highlight' && done[i] >= 0.5) ? st.accent : st.active;
+        g2d.fillText(w.text, x, cy);
+      }
+      x += wWidth;
+    }
+    g2d.textAlign = 'center';
+  };
+
   const strokeIfNeeded = (text, x, cy) => {
     if (st.outline > 0) {
       g2d.lineWidth = st.outline * 2;
@@ -1932,7 +2066,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   /* Закреплённые места: две строки рисуются каждая на своей высоте
      и не съезжают. Активна та, чья очередь петь. */
   if (!st.swapLines) {
-    const drawAt = (text, topPercent, isCur) => {
+    const drawAt = (text, topPercent, isCur, line) => {
       g2d.font = font(baseSize);
       let size = baseSize;
       const w = g2d.measureText(text).width;
@@ -1940,27 +2074,25 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       g2d.font = font(size);
       g2d.letterSpacing = `${st.letter}px`;
       const cy = H * (topPercent / 100);
-      strokeIfNeeded(text, W / 2, cy);
-      if (isCur) {
+      if (isCur && line) {
+        drawWords(line, text, size, cy, ph);
+      } else if (isCur) {
+        strokeIfNeeded(text, W / 2, cy);
         const start = ph.start;
         const end = ph.mode === 'break' ? ph.until : ph.end;
         const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
-        if (st.effect === 'fill') {
-          g2d.fillStyle = st.active;
-          g2d.fillText(text, W / 2, cy);
-          const textW = g2d.measureText(text).width;
-          g2d.save();
-          g2d.beginPath();
-          g2d.rect((W - textW) / 2, cy - size, textW * p, size * 2);
-          g2d.clip();
-          g2d.fillStyle = st.accent;
-          g2d.fillText(text, W / 2, cy);
-          g2d.restore();
-        } else {
-          g2d.fillStyle = st.effect === 'highlight' ? st.accent : st.active;
-          g2d.fillText(text, W / 2, cy);
-        }
+        g2d.fillStyle = st.active;
+        g2d.fillText(text, W / 2, cy);
+        const textW = g2d.measureText(text).width;
+        g2d.save();
+        g2d.beginPath();
+        g2d.rect((W - textW) / 2, cy - size, textW * p, size * 2);
+        g2d.clip();
+        g2d.fillStyle = st.accent;
+        g2d.fillText(text, W / 2, cy);
+        g2d.restore();
       } else {
+        strokeIfNeeded(text, W / 2, cy);
         g2d.fillStyle = st.inactive;
         g2d.fillText(text, W / 2, cy);
       }
@@ -1975,7 +2107,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       else if (slot === activeSlot) { index = cur; isCur = ph.mode !== 'break'; }
       else index = nextIndex;
       if (index >= lines.length) continue;
-      drawAt(lines[index].text, top, isCur);
+      drawAt(lines[index].text, top, isCur, isCur ? lines[index] : null);
     }
     if (ph.mode === 'break') {
       drawAt('♪   ♪   ♪', activeSlot === 0 ? st.posCurrent : st.posNext, true);
@@ -2005,28 +2137,25 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     g2d.letterSpacing = `${st.letter}px`;
     const rowH = b.size * lineGap;
     const cy = y + rowH / 2;
-    strokeIfNeeded(b.text, W / 2, cy);
-    if (b.isCur) {
+    if (b.isCur && b.index != null && ph.mode !== 'break') {
+      drawWords(lines[b.index], b.text, b.size, cy, ph);
+    } else if (b.isCur) {
+      strokeIfNeeded(b.text, W / 2, cy);
       const start = ph.start;
       const end = ph.mode === 'break' ? ph.until : ph.end;
       const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
-      if (st.effect === 'fill') {
-        g2d.fillStyle = st.active;
-        g2d.fillText(b.text, W / 2, cy);
-        // Заливка цветом эффекта слева направо по мере пения
-        const textW = g2d.measureText(b.text).width;
-        g2d.save();
-        g2d.beginPath();
-        g2d.rect((W - textW) / 2, y - 4, textW * p, rowH + 8);
-        g2d.clip();
-        g2d.fillStyle = st.accent;
-        g2d.fillText(b.text, W / 2, cy);
-        g2d.restore();
-      } else {
-        g2d.fillStyle = st.effect === 'highlight' ? st.accent : st.active;
-        g2d.fillText(b.text, W / 2, cy);
-      }
+      g2d.fillStyle = st.active;
+      g2d.fillText(b.text, W / 2, cy);
+      const textW = g2d.measureText(b.text).width;
+      g2d.save();
+      g2d.beginPath();
+      g2d.rect((W - textW) / 2, y - 4, textW * p, rowH + 8);
+      g2d.clip();
+      g2d.fillStyle = st.accent;
+      g2d.fillText(b.text, W / 2, cy);
+      g2d.restore();
     } else {
+      strokeIfNeeded(b.text, W / 2, cy);
       g2d.fillStyle = st.inactive;
       g2d.fillText(b.text, W / 2, cy);
     }
