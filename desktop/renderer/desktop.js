@@ -267,7 +267,7 @@
      Слушаем чистый вокал, если он уже посчитан: по нему заметно точнее.
      ============================================================ */
   const WHISPER_SR = 16000;   // Whisper работает только на этой частоте
-  const asr = { vocal: null, worker: null, busy: false };
+  const asr = { vocal: null, worker: null, busy: false, stop: null, percent: 0 };
 
   $('asr-block').classList.remove('hidden');
 
@@ -307,14 +307,17 @@
   async function fillAsrModels() {
     const st = await window.desktop.asrStatus();
     const sel = $('asr-model');
+    // Список перебираем целиком, поэтому выбор запоминаем: иначе после
+    // скачивания крупной модели список молча прыгает обратно на обычную
+    const was = sel.value;
     sel.innerHTML = '';
-    st.models.forEach((m, i) => {
+    st.models.forEach((m) => {
       const opt = document.createElement('option');
       opt.value = m.key;
       opt.textContent = m.ready ? `${m.label} — скачана` : m.label;
-      if (i === 0) opt.selected = true;
       sel.appendChild(opt);
     });
+    if (was && st.models.some((m) => m.key === was)) sel.value = was;
     return st;
   }
   fillAsrModels().catch(() => {});
@@ -359,24 +362,29 @@
 
   function runWhisper(modelId, pcm, language) {
     return new Promise((resolve) => {
+      const finish = (res) => {
+        asr.stop = null;
+        if (asr.worker) { asr.worker.terminate(); asr.worker = null; }
+        resolve(res);
+      };
+      // Отмена гасит поток и сама завершает ожидание: иначе распознавание
+      // «висит» недоделанным обещанием до конца работы приложения
+      asr.stop = () => finish({ ok: false, error: 'отменено' });
       // Модульный поток: transformers.js поставляется как ES-модуль
       asr.worker = new Worker('whisper-worker.js', { type: 'module' });
       asr.worker.onmessage = (e) => {
         const m = e.data;
         if (m.type === 'progress') {
+          asr.percent = m.percent;
           setAsrProgress(m.percent, m.text, m.eta || undefined);
         } else if (m.type === 'done') {
-          resolve({ ok: true, text: m.text, words: m.words });
-          asr.worker.terminate();
-          asr.worker = null;
+          finish({ ok: true, text: m.text, words: m.words });
         } else if (m.type === 'error') {
-          resolve({ ok: false, error: m.error });
-          asr.worker.terminate();
-          asr.worker = null;
+          finish({ ok: false, error: m.error });
         }
       };
       asr.worker.onerror = (err) => {
-        resolve({ ok: false, error: err.message || 'сбой в потоке распознавания' });
+        finish({ ok: false, error: err.message || 'сбой в потоке распознавания' });
       };
       const copy = pcm.slice();
       asr.worker.postMessage({ modelId, audio: copy.buffer, language }, [copy.buffer]);
@@ -503,10 +511,20 @@
       const mono = new Float32Array(buffer.length);
       for (let i = 0; i < buffer.length; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
       const pcm = await toWhisperPcm(mono, buffer.sampleRate);
+      asr.percent = 0;
       const res = await runWhisper(asrModelId(key),
         pcm, language || '');
       if (!res.ok) return { ok: false, error: res.error };
       const lines = wordsToLines(res.words || []);
+
+      /* Проходим тот же путь, что и пользователь: текст в поле,
+         разметка в window.__asrLines, кнопка «Дальше». Так проверяется
+         и applyRecognized — что времена доезжают до строк студии. */
+      $('lyrics-input').value = lines.map((l) => l.text).join('\n');
+      $('lyrics-input').dispatchEvent(new Event('input'));
+      window.__asrLines = lines;
+      $('btn-to-sync').click();
+
       return {
         ok: true,
         текст: res.text,
@@ -515,6 +533,13 @@
         строки: lines.map((l) => `${l.time.toFixed(2)}–${l.end.toFixed(2)} ${l.text}`),
         слова: (res.words || []).slice(0, 12)
           .map((w) => `${w.start.toFixed(2)} ${w.text}`),
+        // Полоса прогресса должна доехать дальше 10% — иначе счётчик
+        // разбора слов снова оторвался от библиотеки и молчит
+        прогрессДо: Math.round(asr.percent),
+        // Что получила студия после переноса в шаг «Синхронизация»
+        студияСтрок: state.lines.length,
+        студияВремена: state.lines.map((l) => (l.time == null ? null : +l.time.toFixed(2))),
+        студияСлов: state.lines.map((l) => (l.words ? l.words.length : 0)),
       };
     } catch (e) {
       return { ok: false, error: String((e && e.message) || e) };
@@ -523,11 +548,8 @@
 
   $('btn-asr-run').addEventListener('click', recognizeLyrics);
   $('btn-asr-cancel').addEventListener('click', () => {
-    if (asr.worker) {
-      asr.worker.postMessage({ cmd: 'cancel' });
-      asr.worker.terminate();
-      asr.worker = null;
-    }
+    if (asr.worker) asr.worker.postMessage({ cmd: 'cancel' });
+    if (asr.stop) asr.stop();
     window.desktop.asrCancel();
     showAsrOverlay(false);
     asr.busy = false;
