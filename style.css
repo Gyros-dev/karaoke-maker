@@ -1028,6 +1028,112 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-dim);
   font-size: 0.9rem;
 }
+.footer-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #34d399;
+  font-family: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.footer-link:hover { color: #84cc16; }
+
+/* ============ Что нового ============
+   Окно со списком изменений: показывается один раз после обновления
+   и по ссылке в подвале. Часть пунктов относится только к приложению —
+   их прячет пара классов only-desktop / only-web, а переключает
+   класс is-desktop на body (его ставит desktop.js). */
+.only-desktop { display: none; }
+body.is-desktop .only-desktop { display: revert; }
+body.is-desktop .only-web { display: none; }
+
+.whatsnew {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(5, 5, 10, 0.85);
+  backdrop-filter: blur(6px);
+}
+.whatsnew-box {
+  position: relative;
+  width: min(560px, 100%);
+  /* Ровно столько, сколько остаётся от экрана за вычетом полей подложки —
+     иначе на низком окне низ карточки уезжает за край */
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  animation: whatsnew-in 0.25s ease-out;
+}
+@keyframes whatsnew-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.whatsnew-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.9rem;
+  border-radius: 999px;
+  background: var(--grad-btn);
+  color: #f2f2f7;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.whatsnew-box h3 {
+  margin: 0.9rem 0 1.2rem;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+.whatsnew-list { list-style: none; display: grid; gap: 0.9rem; }
+.whatsnew-list li {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-soft);
+  padding: 0.9rem 1.1rem;
+  color: var(--text-dim);
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+.whatsnew-list b { color: var(--text); }
+.whatsnew-more {
+  margin-top: 1rem;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.whatsnew-more a { color: #34d399; }
+.whatsnew-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.4rem;
+}
+.whatsnew-close {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.whatsnew-close:hover { color: var(--text); border-color: var(--violet); }
 
 /* ============ Меньше движения ============
    Системная настройка «Уменьшить движение»: гасим анимации студии,
@@ -1036,7 +1142,8 @@ input[type="range"]::-moz-range-thumb {
   .stage-line,
   .stage-count,
   .stage-count i,
-  .edit-stage .stage-line {
+  .edit-stage .stage-line,
+  .whatsnew-box {
     animation: none !important;
     transition: none !important;
   }

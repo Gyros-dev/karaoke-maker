@@ -2977,6 +2977,82 @@ $('update-dismiss').addEventListener('click', () => {
   $('update-bar').classList.add('hidden');
 });
 
+/* ---------- Окно «Что нового» ----------
+   Показывается один раз после обновления и по кнопке в подвале.
+   NEWS_VERSION — версия, про которую написан список в index.html.
+   Она нарочно отдельна от APP_VERSION: мелкий выпуск без новостей
+   не должен показывать окно с прошлым списком. */
+const NEWS_VERSION = '1.7.0';
+const NEWS_KEY = 'karaoke-news-version';
+
+/* Сравнение номеров вида 1.7.0: −1, 0 или 1 */
+function cmpVersions(a, b) {
+  const pa = String(a).split('.').map((x) => parseInt(x, 10) || 0);
+  const pb = String(b).split('.').map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+/* Первый ли это визит: в хранилище нет ни одного нашего ключа.
+   Новичку список изменений не нужен — он только мешает начать. */
+function isFirstVisit() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('karaoke-')) return false;
+    }
+  } catch (e) { return true; } // хранилище недоступно — считаем первым визитом
+  return true;
+}
+
+function showWhatsNew() {
+  $('whatsnew').classList.remove('hidden');
+  // Окно длинное и прокручивается: открываем его всегда сверху,
+  // а фокус ставим без прокрутки, иначе список сразу уезжает в конец
+  document.querySelector('.whatsnew-box').scrollTop = 0;
+  $('whatsnew-ok').focus({ preventScroll: true });
+}
+
+function hideWhatsNew() {
+  $('whatsnew').classList.add('hidden');
+  try { localStorage.setItem(NEWS_KEY, NEWS_VERSION); } catch (e) { /* нет хранилища */ }
+}
+
+function maybeShowWhatsNew() {
+  let seen = null;
+  try { seen = localStorage.getItem(NEWS_KEY); } catch (e) { return; }
+  if (seen === null) {
+    // Либо новичок, либо тот, кто пользовался студией до появления окна.
+    // Первому ничего не показываем, но метку ставим — увидит следующее обновление.
+    if (isFirstVisit()) {
+      try { localStorage.setItem(NEWS_KEY, NEWS_VERSION); } catch (e) { /* нет хранилища */ }
+      return;
+    }
+    showWhatsNew();
+    return;
+  }
+  if (cmpVersions(NEWS_VERSION, seen) > 0) showWhatsNew();
+}
+
+$('btn-whatsnew').addEventListener('click', () => showWhatsNew());
+$('whatsnew-ok').addEventListener('click', hideWhatsNew);
+$('whatsnew-close').addEventListener('click', hideWhatsNew);
+// Клик мимо окна — по подложке, а не по самой карточке
+$('whatsnew').addEventListener('click', (e) => {
+  if (e.target === $('whatsnew')) hideWhatsNew();
+});
+// Ссылка на скачивание закрывает окно, иначе оно перекроет нужный раздел
+$('whatsnew-link').addEventListener('click', hideWhatsNew);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('whatsnew').classList.contains('hidden')) {
+    e.preventDefault();
+    hideWhatsNew();
+  }
+});
+
 /* ---------- Восстановление текста при загрузке страницы ---------- */
 (function init() {
   const saved = loadProject();
@@ -2990,4 +3066,8 @@ $('update-dismiss').addEventListener('click', () => {
   // Проверяем обновления при запуске и раз в полчаса
   setTimeout(checkWebUpdate, 1500);
   setInterval(checkWebUpdate, 30 * 60 * 1000);
+
+  /* «Что нового» — с задержкой: настольная версия успевает пометить body
+     классом is-desktop, и список сразу выходит правильным */
+  setTimeout(maybeShowWhatsNew, 400);
 })();

@@ -159,6 +159,14 @@ function createWindow() {
         шаговВсего: document.querySelectorAll('.step-tab').length,
         стильПрименён: !!document.getElementById('lyrics-stage').dataset.effect,
         отсчётЕсть: !!document.getElementById('st-countdown'),
+        // Окно «Что нового»: в приложении показываем пункты про нейросети
+        // и прячем сайтовую строку «а в приложении ещё…»
+        новостейВидно: [...document.querySelectorAll('.whatsnew-list li')]
+          .filter((li) => getComputedStyle(li).display !== 'none').length,
+        новостиПроНейросети: [...document.querySelectorAll('.whatsnew-list li.only-desktop')]
+          .every((li) => getComputedStyle(li).display !== 'none'),
+        сайтоваяСтрокаСкрыта: [...document.querySelectorAll('.only-web')]
+          .every((el) => getComputedStyle(el).display === 'none'),
         ошибок: window.__errors ? window.__errors.length : 0
       }))()`);
       console.log('SELFTEST', JSON.stringify(report));

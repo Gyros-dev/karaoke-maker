@@ -12,6 +12,11 @@
 
   $('ai-block').classList.remove('hidden');
 
+  /* Метка для общего интерфейса: по ней CSS показывает пункты с классом
+     only-desktop (нейросети) и прячет only-web (например, строку
+     «а в приложении ещё…» в окне «Что нового») */
+  document.body.classList.add('is-desktop');
+
   // Приложение уже установлено — предлагать его скачать незачем
   const cta = document.getElementById('desktop');
   if (cta) cta.remove();
