@@ -85,10 +85,11 @@ async function ensureSession(modelBytes) {
 async function separatePass(L, R, total, mean, std, weight, session, onSegment) {
   const instL = new Float64Array(total);
   const instR = new Float64Array(total);
-  // Чистый вокал (стем 3) раньше выбрасывался. Он нужен распознаванию
-  // текста: по голосу без музыки Whisper ошибается заметно реже.
-  const vocL = new Float64Array(total);
-  const vocR = new Float64Array(total);
+  /* Чистый вокал (стем 3) раньше выбрасывался. Он нужен распознаванию
+     текста: по голосу без музыки Whisper ошибается заметно реже.
+     Копим сразу в моно — стерео распознаванию не нужно, а на песне
+     в четыре минуты каждый лишний Float64Array это больше сотни мегабайт. */
+  const voc = new Float64Array(total);
   const wAcc = new Float64Array(total);
 
   const starts = [];
@@ -125,11 +126,17 @@ async function separatePass(L, R, total, mean, std, weight, session, onSegment) 
       const wl = specToWave(specOut, specBase);
       const wr = specToWave(specOut, specBase + 2 * FREQ * FRAMES);
       const tBase = src * 2 * SEG;
-      const dstL = src === SOURCES - 1 ? vocL : instL;
-      const dstR = src === SOURCES - 1 ? vocR : instR;
-      for (let i = 0; i < n; i++) {
-        dstL[start + i] += (wl[i] + waveOut[tBase + i]) * weight[i];
-        dstR[start + i] += (wr[i] + waveOut[tBase + SEG + i]) * weight[i];
+      if (src === SOURCES - 1) {
+        for (let i = 0; i < n; i++) {
+          const l = wl[i] + waveOut[tBase + i];
+          const r = wr[i] + waveOut[tBase + SEG + i];
+          voc[start + i] += (l + r) * 0.5 * weight[i];
+        }
+      } else {
+        for (let i = 0; i < n; i++) {
+          instL[start + i] += (wl[i] + waveOut[tBase + i]) * weight[i];
+          instR[start + i] += (wr[i] + waveOut[tBase + SEG + i]) * weight[i];
+        }
       }
     }
     for (let i = 0; i < n; i++) wAcc[start + i] += weight[i];
@@ -140,16 +147,14 @@ async function separatePass(L, R, total, mean, std, weight, session, onSegment) 
   // Нормируем на сумму весов — получаем готовую дорожку прохода
   const outL = new Float32Array(total);
   const outR = new Float32Array(total);
-  const vL = new Float32Array(total);
-  const vR = new Float32Array(total);
+  const outV = new Float32Array(total);
   for (let i = 0; i < total; i++) {
     const w = wAcc[i] || 1;
     outL[i] = instL[i] / w;
     outR[i] = instR[i] / w;
-    vL[i] = vocL[i] / w;
-    vR[i] = vocR[i] / w;
+    outV[i] = voc[i] / w;
   }
-  return { outL, outR, vL, vR };
+  return { outL, outR, outV };
 }
 
 async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
@@ -185,8 +190,7 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
   const MAX_SHIFT = Math.round(sampleRate * 0.5);
   const sumL = new Float64Array(total);
   const sumR = new Float64Array(total);
-  const sumVL = new Float64Array(total);
-  const sumVR = new Float64Array(total);
+  const sumV = new Float64Array(total);   // вокал, уже сведённый в моно
   const t0 = Date.now();
   let segmentsDone = 0;
   const segmentsTotal = passes * Math.ceil(total / STRIDE);
@@ -200,7 +204,7 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
     sL.set(L, shift);
     sR.set(R, shift);
 
-    const { outL, outR, vL, vR } = await separatePass(
+    const { outL, outR, outV } = await separatePass(
       sL, sR, padded, mean, std, weight, session,
       (done, all) => {
         segmentsDone++;
@@ -223,20 +227,18 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
     for (let i = 0; i < total; i++) {
       sumL[i] += outL[i + shift];
       sumR[i] += outR[i + shift];
-      sumVL[i] += vL[i + shift];
-      sumVR[i] += vR[i + shift];
+      sumV[i] += outV[i + shift];
     }
   }
 
   const outL = new Float32Array(total);
   const outR = new Float32Array(total);
-  // Вокал отдаём одним каналом: распознаванию стерео не нужно,
-  // а памяти на длинной песне это экономит прилично
   const voc = new Float32Array(total);
   for (let i = 0; i < total; i++) {
     outL[i] = (sumL[i] / passes) * std + mean;
     outR[i] = (sumR[i] / passes) * std + mean;
-    voc[i] = ((sumVL[i] + sumVR[i]) / (2 * passes)) * std;
+    // Постоянную составляющую к отдельному стему не возвращаем: она от микса
+    voc[i] = (sumV[i] / passes) * std;
   }
   return { left: outL, right: outR, vocal: voc, sampleRate };
 }
