@@ -13,6 +13,15 @@ contextBridge.exposeInMainWorld('desktop', {
     ipcRenderer.on('model-progress', (_e, data) => cb(data));
   },
 
+  // Распознавание текста песни
+  asrStatus: () => ipcRenderer.invoke('asr-status'),
+  asrDownload: (key) => ipcRenderer.invoke('asr-download', key),
+  asrCancel: () => ipcRenderer.invoke('asr-cancel'),
+  onAsrProgress: (cb) => {
+    ipcRenderer.removeAllListeners('asr-progress');
+    ipcRenderer.on('asr-progress', (_e, data) => cb(data));
+  },
+
   saveFile: (name, data) => ipcRenderer.invoke('save-file', { name, data }),
 
   appVersion: () => ipcRenderer.invoke('app-version'),

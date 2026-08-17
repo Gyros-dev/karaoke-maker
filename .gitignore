@@ -8,3 +8,6 @@ desktop/node_modules/
 desktop/dist/
 
 # Иконки собираются из logo.png скриптом make-icons.js
+
+# Служебное
+.claude/

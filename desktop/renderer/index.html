@@ -190,6 +190,37 @@
   <!-- Шаг 2: текст -->
   <div class="step-panel" id="step-2">
     <p class="panel-hint">Вставь текст песни. Одна строка текста — одна строка караоке. Пустые строки не считаются.</p>
+    <div class="asr-block hidden" id="asr-block">
+      <div class="asr-head">
+        <b>🗣 Распознать текст нейросетью</b>
+        <span class="asr-source" id="asr-source"></span>
+      </div>
+      <p class="asr-warning">
+        Честно: распознавание <b>пения</b> работает заметно хуже, чем распознавание речи.
+        Гласные тянутся, мешают бэк-вокал и музыка, рифмы модель не знает — править
+        придётся значительную часть строк. Считайте это черновиком, который экономит
+        набор текста, а не готовым результатом. Заметно лучше получается, если сначала
+        убрать вокал нейросетью на первом шаге: тогда распознавание слушает чистый голос.
+      </p>
+      <div class="asr-controls">
+        <label class="btn btn-ghost btn-small export-quality" for="asr-lang">Язык
+          <select id="asr-lang">
+            <option value="">Определить сам</option>
+            <option value="russian" selected>Русский</option>
+            <option value="english">Английский</option>
+            <option value="ukrainian">Украинский</option>
+            <option value="german">Немецкий</option>
+            <option value="french">Французский</option>
+            <option value="spanish">Испанский</option>
+            <option value="italian">Итальянский</option>
+          </select>
+        </label>
+        <label class="btn btn-ghost btn-small export-quality" for="asr-model">Модель
+          <select id="asr-model"></select>
+        </label>
+        <button class="btn btn-primary btn-small" id="btn-asr-run">Распознать</button>
+      </div>
+    </div>
     <textarea id="lyrics-input" placeholder="Вставь сюда текст песни…&#10;&#10;Каждая строка —&#10;отдельная строка караоке"></textarea>
     <div class="panel-actions">
       <button class="btn btn-ghost" id="btn-back-1">← Назад</button>
@@ -515,6 +546,15 @@
     <div class="export-bar"><div id="ai-fill"></div></div>
     <p class="export-hint" id="ai-hint">Считает на твоём компьютере, ничего не отправляется в интернет.</p>
     <button class="btn btn-ghost" id="btn-ai-cancel">Отменить</button>
+  </div>
+</div>
+
+<div class="export-overlay hidden" id="asr-overlay">
+  <div class="export-box">
+    <p id="asr-status">Готовим модель…</p>
+    <div class="export-bar"><div id="asr-fill"></div></div>
+    <p class="export-hint" id="asr-hint">Считает на твоём компьютере, ничего не отправляется в интернет.</p>
+    <button class="btn btn-ghost" id="btn-asr-cancel">Отменить</button>
   </div>
 </div>
 

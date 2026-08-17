@@ -64,6 +64,52 @@ const AI_OVERLAY = `<div class="export-overlay hidden" id="ai-overlay">
 
 `;
 
+/* Распознавание текста песни — только в приложении: модель весит
+   десятки мегабайт и в браузере не потянется */
+const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
+      <div class="asr-head">
+        <b>🗣 Распознать текст нейросетью</b>
+        <span class="asr-source" id="asr-source"></span>
+      </div>
+      <p class="asr-warning">
+        Честно: распознавание <b>пения</b> работает заметно хуже, чем распознавание речи.
+        Гласные тянутся, мешают бэк-вокал и музыка, рифмы модель не знает — править
+        придётся значительную часть строк. Считайте это черновиком, который экономит
+        набор текста, а не готовым результатом. Заметно лучше получается, если сначала
+        убрать вокал нейросетью на первом шаге: тогда распознавание слушает чистый голос.
+      </p>
+      <div class="asr-controls">
+        <label class="btn btn-ghost btn-small export-quality" for="asr-lang">Язык
+          <select id="asr-lang">
+            <option value="">Определить сам</option>
+            <option value="russian" selected>Русский</option>
+            <option value="english">Английский</option>
+            <option value="ukrainian">Украинский</option>
+            <option value="german">Немецкий</option>
+            <option value="french">Французский</option>
+            <option value="spanish">Испанский</option>
+            <option value="italian">Итальянский</option>
+          </select>
+        </label>
+        <label class="btn btn-ghost btn-small export-quality" for="asr-model">Модель
+          <select id="asr-model"></select>
+        </label>
+        <button class="btn btn-primary btn-small" id="btn-asr-run">Распознать</button>
+      </div>
+    </div>
+`;
+
+const ASR_OVERLAY = `<div class="export-overlay hidden" id="asr-overlay">
+  <div class="export-box">
+    <p id="asr-status">Готовим модель…</p>
+    <div class="export-bar"><div id="asr-fill"></div></div>
+    <p class="export-hint" id="asr-hint">Считает на твоём компьютере, ничего не отправляется в интернет.</p>
+    <button class="btn btn-ghost" id="btn-asr-cancel">Отменить</button>
+  </div>
+</div>
+
+`;
+
 function patchHtml(src) {
   let s = src;
 
@@ -85,11 +131,17 @@ function patchHtml(src) {
   if (!s.includes(anchor)) throw new Error('не нашёл блок «Своя минусовка»');
   s = s.replace(anchor, anchor + AI_BLOCK);
 
-  // 5. Окно прогресса и подключение скриптов
+  // 5. Блок распознавания текста — перед полем текста песни
+  const textAnchor = '    <textarea id="lyrics-input"';
+  if (!s.includes(textAnchor)) throw new Error('не нашёл поле текста песни');
+  s = s.replace(textAnchor, ASR_BLOCK + textAnchor);
+
+  // 6. Окна прогресса и подключение скриптов
   const scriptTag = '<script src="app.js"></script>';
   if (!s.includes(scriptTag)) throw new Error('не нашёл подключение app.js');
   s = s.replace(scriptTag,
     AI_OVERLAY +
+    ASR_OVERLAY +
     '<script src="ort/ort.min.js"></script>\n' +
     scriptTag +
     '\n<script src="desktop.js"></script>' +
@@ -98,11 +150,38 @@ function patchHtml(src) {
   return s;
 }
 
+const ASR_CSS = `
+/* --- Распознавание текста песни (только в приложении) --- */
+.asr-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  padding: 1rem 1.2rem;
+  margin-bottom: 0.9rem;
+}
+.asr-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.asr-source { color: #34d399; font-size: 0.85rem; font-weight: 600; }
+.asr-warning {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-bottom: 0.8rem;
+}
+.asr-warning b { color: var(--text); }
+.asr-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+`;
+
 function patchCss(src) {
-  // Полоса прогресса нейросети красится так же, как полоса экспорта
+  // Полосы прогресса нейросетей красятся так же, как полоса экспорта
   return src.replace(
     /#export-fill \{/,
-    '#export-fill, #ai-fill {');
+    '#export-fill, #ai-fill, #asr-fill {') + ASR_CSS;
 }
 
 try {

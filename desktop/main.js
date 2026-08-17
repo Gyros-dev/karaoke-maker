@@ -14,16 +14,29 @@ const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
   '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json',
   '.png': 'image/png', '.svg': 'image/svg+xml',
+  '.onnx': 'application/octet-stream', '.txt': 'text/plain',
 };
 
 function registerAppProtocol() {
   protocol.handle('app', async (request) => {
     const url = new URL(request.url);
     const rel = decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html';
-    const file = path.join(__dirname, 'renderer', rel);
-    // Не выпускаем за пределы папки интерфейса
-    if (!file.startsWith(path.join(__dirname, 'renderer'))) {
-      return new Response('forbidden', { status: 403 });
+
+    /* Модели распознавания лежат в папке настроек, а не в приложении:
+       они качаются при первом использовании. Отдаём их по тому же
+       адресу, чтобы transformers.js читал их как обычные файлы. */
+    let file;
+    if (rel === 'models' || rel.startsWith('models/')) {
+      const inside = rel.slice('models'.length).replace(/^\/+/, '');
+      const root = asrRoot();
+      file = path.join(root, inside);
+      if (!file.startsWith(root)) return new Response('forbidden', { status: 403 });
+    } else {
+      file = path.join(__dirname, 'renderer', rel);
+      // Не выпускаем за пределы папки интерфейса
+      if (!file.startsWith(path.join(__dirname, 'renderer'))) {
+        return new Response('forbidden', { status: 403 });
+      }
     }
     try {
       const data = await fs.promises.readFile(file);
@@ -44,10 +57,61 @@ function registerAppProtocol() {
 const MODEL_URL = 'https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx';
 const MODEL_BYTES = 180534758;
 
+/* ---------- Модели распознавания текста (Whisper) ----------
+   Лежат в папке настроек, качаются при первом использовании — так же,
+   как модель разделения вокала. Имена файлов те, которые ищет
+   transformers.js: onnx/<часть>_quantized.onnx плюс словарь и настройки. */
+const ASR_COMMON = [
+  'config.json', 'generation_config.json', 'preprocessor_config.json',
+  'tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json',
+  'added_tokens.json', 'normalizer.json', 'vocab.json', 'merges.txt',
+  'onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx',
+];
+
+/* Нужны сборки «_timestamped»: обычные экспортированы без внимания
+   декодера к кодировщику, а без него меток по словам не получить. */
+const ASR_MODELS = {
+  base: {
+    id: 'whisper-base_timestamped',
+    repo: 'onnx-community/whisper-base_timestamped',
+    label: 'Обычная (78 МБ)',
+    bytes: 82 * 1024 * 1024,
+    files: ASR_COMMON,
+  },
+  small: {
+    id: 'whisper-small_timestamped',
+    repo: 'onnx-community/whisper-small_timestamped',
+    label: 'Крупная, точнее (242 МБ)',
+    bytes: 254 * 1024 * 1024,
+    files: ASR_COMMON,
+  },
+};
+
 let win = null;
 
 function modelPath() {
   return path.join(app.getPath('userData'), 'htdemucs.onnx');
+}
+
+function asrRoot() {
+  return path.join(app.getPath('userData'), 'models');
+}
+
+function asrDir(key) {
+  const m = ASR_MODELS[key];
+  return m ? path.join(asrRoot(), m.id) : null;
+}
+
+/* Модель готова, если на месте оба веса: словарь без них бесполезен,
+   а недокачанный файл лучше считать отсутствующим */
+function asrReady(key) {
+  const dir = asrDir(key);
+  if (!dir) return false;
+  return ['onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx']
+    .every((f) => {
+      const p = path.join(dir, f);
+      return fs.existsSync(p) && fs.statSync(p).size > 1024 * 1024;
+    });
 }
 
 function createWindow() {
@@ -88,12 +152,17 @@ function createWindow() {
       const report = await win.webContents.executeJavaScript(`(() => ({
         аиБлокВиден: !document.getElementById('ai-block').classList.contains('hidden'),
         кнопкаЕсть: !!document.getElementById('btn-ai-run'),
+        распознаваниеВидно: !document.getElementById('asr-block').classList.contains('hidden'),
+        кнопкаРаспознавания: !!document.getElementById('btn-asr-run'),
+        моделейРаспознавания: document.getElementById('asr-model').options.length,
         мостПодключён: !!(window.desktop && window.desktop.isDesktop),
         шаговВсего: document.querySelectorAll('.step-tab').length,
         стильПрименён: !!document.getElementById('lyrics-stage').dataset.effect,
+        отсчётЕсть: !!document.getElementById('st-countdown'),
         ошибок: window.__errors ? window.__errors.length : 0
       }))()`);
       console.log('SELFTEST', JSON.stringify(report));
+      console.log('ASR', JSON.stringify(await win.webContents.executeJavaScript('window.desktop.asrStatus()')));
       const st = await win.webContents.executeJavaScript('window.desktop.modelStatus()');
       console.log('MODEL', JSON.stringify(st));
 
@@ -127,6 +196,30 @@ function createWindow() {
         })()`);
         console.log('E2E', JSON.stringify(e2e));
       }
+
+      /* Полная проверка распознавания: KARAOKE_ASR_E2E=путь-к-wav.
+         Файл читаем прямо здесь и отдаём странице как байты. */
+      const asrFile = process.env.KARAOKE_ASR_E2E;
+      if (asrFile && fs.existsSync(asrFile)) {
+        const bytes = fs.readFileSync(asrFile);
+        const lang = process.env.KARAOKE_ASR_LANG || 'russian';
+        const key = process.env.KARAOKE_ASR_MODEL || 'base';
+        const dl = await win.webContents.executeJavaScript(
+          `window.desktop.asrDownload(${JSON.stringify(key)})`);
+        console.log('ASR-DOWNLOAD', JSON.stringify(dl));
+        if (dl.ok) {
+          const arr = Array.from(bytes);
+          const res = await win.webContents.executeJavaScript(`(async () => {
+            try {
+              const t0 = Date.now();
+              const buf = await audio.ensureCtx().decodeAudioData(new Uint8Array(${JSON.stringify(arr)}).buffer);
+              const out = await window.__runAsrTest(buf, ${JSON.stringify(lang)}, ${JSON.stringify(key)});
+              return { ...out, секунд: ((Date.now() - t0) / 1000).toFixed(1) };
+            } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+          })()`, true);
+          console.log('ASR-E2E', JSON.stringify(res));
+        }
+      }
       app.quit();
     });
   }
@@ -159,7 +252,8 @@ function downloadModel(dest) {
       https.get(url, { headers: { 'User-Agent': 'benengskaya' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
-          return get(res.headers.location, redirects + 1);
+          // Адрес может быть относительным — достраиваем от текущего
+          return get(new URL(res.headers.location, url).href, redirects + 1);
         }
         if (res.statusCode !== 200) {
           res.resume();
@@ -190,6 +284,94 @@ ipcMain.handle('model-bytes', () => {
   const buf = fs.readFileSync(p);
   // Отдаём копию именно как ArrayBuffer, иначе на той стороне будет Buffer
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+});
+
+/* ---------- Скачивание модели распознавания ----------
+   Файлов много и они разного размера, поэтому прогресс считаем по
+   суммарным байтам. Отмена рвёт текущий запрос и удаляет недокачанное. */
+let asrAbort = null;
+
+function fetchTo(url, dest, onChunk) {
+  return new Promise((resolve, reject) => {
+    const tmp = dest + '.part';
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    const file = fs.createWriteStream(tmp);
+    const cleanup = (err) => { file.destroy(); fs.unlink(tmp, () => reject(err)); };
+    const get = (u, redirects = 0) => {
+      if (redirects > 8) return cleanup(new Error('Слишком много перенаправлений'));
+      const req = https.get(u, { headers: { 'User-Agent': 'benengskaya' }, timeout: 30000 }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          // HuggingFace отвечает относительным адресом — достраиваем его
+          // от текущего, иначе запрос уходит в никуда и всё зависает
+          return get(new URL(res.headers.location, u).href, redirects + 1);
+        }
+        if (res.statusCode === 404) {
+          // Необязательный файл: у части моделей его просто нет
+          res.resume();
+          file.destroy();
+          return fs.unlink(tmp, () => resolve({ skipped: true }));
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          return cleanup(new Error('Сервер ответил ' + res.statusCode));
+        }
+        res.on('data', (chunk) => onChunk(chunk.length));
+        res.pipe(file);
+        file.on('finish', () => file.close(() => {
+          try { fs.renameSync(tmp, dest); resolve({ skipped: false }); }
+          catch (e) { reject(e); }
+        }));
+      });
+      req.on('error', cleanup);
+      req.on('timeout', () => req.destroy(new Error('сервер не отвечает')));
+      if (asrAbort) asrAbort.reqs.push(req);
+    };
+    get(url);
+  });
+}
+
+ipcMain.handle('asr-status', () => {
+  const models = Object.entries(ASR_MODELS).map(([key, m]) => ({
+    key, label: m.label, bytes: m.bytes, ready: asrReady(key),
+  }));
+  return { models, root: asrRoot() };
+});
+
+ipcMain.handle('asr-download', async (_evt, key) => {
+  const m = ASR_MODELS[key];
+  if (!m) return { ok: false, error: 'неизвестная модель' };
+  if (asrReady(key)) return { ok: true };
+
+  const dir = asrDir(key);
+  asrAbort = { cancelled: false, reqs: [] };
+  const total = m.bytes;
+  let done = 0;
+  try {
+    for (const rel of m.files) {
+      if (asrAbort.cancelled) throw new Error('отменено');
+      const dest = path.join(dir, rel);
+      if (fs.existsSync(dest)) { continue; }
+      const url = `https://huggingface.co/${m.repo}/resolve/main/${rel}`;
+      await fetchTo(url, dest, (n) => {
+        done += n;
+        send('asr-progress', { done, total: Math.max(total, done) });
+      });
+    }
+    asrAbort = null;
+    return { ok: true };
+  } catch (err) {
+    const cancelled = asrAbort && asrAbort.cancelled;
+    asrAbort = null;
+    return { ok: false, error: cancelled ? 'отменено' : String(err.message || err) };
+  }
+});
+
+ipcMain.handle('asr-cancel', () => {
+  if (!asrAbort) return false;
+  asrAbort.cancelled = true;
+  asrAbort.reqs.forEach((r) => { try { r.destroy(); } catch (e) { /* уже закрыт */ } });
+  return true;
 });
 
 ipcMain.handle('model-status', () => {

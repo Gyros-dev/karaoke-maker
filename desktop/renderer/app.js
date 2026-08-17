@@ -685,12 +685,30 @@ $('btn-to-sync').addEventListener('click', () => {
     });
   }
 
+  applyRecognized(state.lines);
   saveProject();
   updateWordExportBtn();
   renderSyncList();
   updateSyncButtons();
   goToStep(3);
 });
+
+/* Настольная версия умеет распознавать текст песни нейросетью и кладёт
+   рядом с текстом времена строк и слов. Забираем их для тех строк,
+   текст которых пользователь не переписал, и больше к ним не возвращаемся:
+   ручные правки важнее машинных догадок. */
+function applyRecognized(lines) {
+  const src = window.__asrLines;
+  if (!src || !src.length) return;
+  lines.forEach((line, i) => {
+    const r = src[i];
+    if (!r || r.text !== line.text) return;
+    line.time = r.time;
+    line.end = r.end;
+    if (r.words && r.words.length) line.words = r.words.map((w) => ({ ...w }));
+  });
+  window.__asrLines = null;
+}
 
 /* ============================================================
    Шаг 3 — синхронизация
