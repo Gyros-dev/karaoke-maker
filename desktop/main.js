@@ -186,12 +186,19 @@ function createWindow() {
             let bad = 0, e = 0;
             for (const v of out) { if (!Number.isFinite(v)) bad++; e += v*v; }
             let ein = 0; for (const v of L) ein += v*v;
+            // Чистый вокал — отдельная дорожка для распознавания текста
+            const voc = res.vocal ? new Float32Array(res.vocal) : null;
+            let ev = 0, badV = 0;
+            if (voc) for (const v of voc) { if (!Number.isFinite(v)) badV++; ev += v*v; }
             return { ok: true,
               секунд: ((Date.now()-t0)/1000).toFixed(1),
               звукаСек: (n/SR).toFixed(0),
               сэмплов: out.length, NaN: bad,
               RMSвход: Math.sqrt(ein/n).toFixed(4),
-              RMSвыход: Math.sqrt(e/out.length).toFixed(4) };
+              RMSвыход: Math.sqrt(e/out.length).toFixed(4),
+              вокалСэмплов: voc ? voc.length : 0,
+              вокалNaN: badV,
+              RMSвокал: voc ? Math.sqrt(ev/voc.length).toFixed(4) : null };
           } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
         })()`);
         console.log('E2E', JSON.stringify(e2e));

@@ -6,7 +6,7 @@ window.__runSeparationTest = function (modelBytes, L, R) {
     w.onmessage = (e) => {
       const m = e.data;
       if (m.type === 'progress') { console.log('прогресс', m.percent, m.text); return; }
-      if (m.type === 'done') resolve({ ok: true, left: m.left, right: m.right });
+      if (m.type === 'done') resolve({ ok: true, left: m.left, right: m.right, vocal: m.vocal });
       else resolve({ ok: false, error: m.error });
       w.terminate();
     };
