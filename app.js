@@ -382,6 +382,189 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+/* ============================================================
+   Голос: где он звучит на самом деле
+
+   Настольная версия отделяет чистый вокал нейросетью — по этой дорожке
+   прямо видно, где поют, а где нет. Держать её целиком незачем: сцене
+   хватает огибающей громкости, сто отсчётов в секунду по байту на
+   отсчёт. Три минуты песни укладываются в семнадцать килобайт — столько
+   не жалко сохранить и вместе с проектом, чтобы после перезагрузки
+   караоке не поехало.
+
+   Отсюда сцена узнаёт три вещи: настоящий конец строки (пока тянется
+   распев, строка не спета), настоящее вступление голоса и настоящие
+   проигрыши.
+
+   Дорожки может и не быть — на сайте её нет никогда, а в приложении
+   она появляется только после удаления вокала нейросетью. Тогда всё
+   считается по временам слов, как раньше.
+   ============================================================ */
+
+const VOICE_RATE = 100;      // отсчётов огибающей в секунду
+const VOICE_DB_RANGE = 60;   // тише этого от опоры — уже тишина
+
+/* Пороги речевой активности — в децибелах от опорной громкости дорожки.
+   Порога два, а не один, чтобы на границе не дребезжало: голос
+   «включается» на VOICE_ON_DB и «выключается», только упав ниже
+   VOICE_OFF_DB. Цифры подобраны на живом пении, см. README. */
+const VOICE_ON_DB = -25;
+const VOICE_OFF_DB = -35;
+const VOICE_MIN_RUN = 0.18;  // короче — это не пение, а призвук
+const VOICE_MIN_GAP = 0.30;  // короче — вдох между словами, а не тишина
+
+const voice = { level: null, runs: null };
+
+function voiceReady() { return !!(voice.runs && voice.runs.length); }
+
+/* Громкость в децибелах от опоры, ужатая в байт: 255 — опорный уровень,
+   0 — тишина на VOICE_DB_RANGE децибел ниже неё */
+function voiceDbCode(db) {
+  return Math.max(0, Math.min(255,
+    Math.round((db + VOICE_DB_RANGE) * (255 / VOICE_DB_RANGE))));
+}
+
+/* Огибающая: среднеквадратичная громкость в окне 20 мс с шагом 10 мс */
+function buildVoiceLevel(samples, sampleRate) {
+  const hop = Math.max(1, Math.round(sampleRate / VOICE_RATE));
+  const n = Math.floor(samples.length / hop);
+  if (n < 2) return null;
+  const rms = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const from = i * hop;
+    const to = Math.min(samples.length, from + hop * 2);
+    let sum = 0;
+    for (let j = from; j < to; j++) sum += samples[j] * samples[j];
+    rms[i] = Math.sqrt(sum / Math.max(1, to - from));
+  }
+  /* Опора — 95-й процентиль громкости: на него не влияют ни редкие
+     всплески, ни длинные куски тишины, поэтому пороги ниже получаются
+     одинаково осмысленными и для тихой записи, и для громкой. */
+  const sorted = Float32Array.from(rms).sort();
+  const ref = sorted[Math.floor(n * 0.95)] || 1e-6;
+  const level = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    level[i] = voiceDbCode(20 * Math.log10(Math.max(1e-9, rms[i]) / ref));
+  }
+  return level;
+}
+
+/* Куски пения: порог с гистерезисом, потом склейка вдохов и отсев щелчков */
+function buildVoiceRuns(level) {
+  if (!level || !level.length) return null;
+  const on = voiceDbCode(VOICE_ON_DB);
+  const off = voiceDbCode(VOICE_OFF_DB);
+  const raw = [];
+  let from = -1;
+  for (let i = 0; i < level.length; i++) {
+    if (from < 0) {
+      if (level[i] >= on) {
+        // Начало отматываем назад до нижнего порога: атака звука тише
+        // вершины, а строка должна начинаться с первого призвука
+        let s = i;
+        while (s > 0 && level[s - 1] >= off) s--;
+        from = s;
+      }
+    } else if (level[i] < off) {
+      raw.push([from, i]);
+      from = -1;
+    }
+  }
+  if (from >= 0) raw.push([from, level.length]);
+
+  const merged = [];
+  for (const r of raw) {
+    const last = merged[merged.length - 1];
+    if (last && (r[0] - last[1]) / VOICE_RATE < VOICE_MIN_GAP) last[1] = r[1];
+    else merged.push([r[0], r[1]]);
+  }
+  return merged
+    .filter((r) => (r[1] - r[0]) / VOICE_RATE >= VOICE_MIN_RUN)
+    .map((r) => ({ start: r[0] / VOICE_RATE, end: r[1] / VOICE_RATE }));
+}
+
+function clearVoiceTrack() {
+  voice.level = null;
+  voice.runs = null;
+}
+
+/* Вызывает настольная часть после разделения — с чистым вокалом на руках */
+function setVoiceTrack(samples, sampleRate) {
+  try {
+    voice.level = buildVoiceLevel(samples, sampleRate);
+    voice.runs = buildVoiceRuns(voice.level);
+  } catch (e) {
+    clearVoiceTrack();
+  }
+  saveProject();
+}
+
+/* Огибающая в текст и обратно — чтобы уместилась в localStorage */
+function voiceToText(level) {
+  let s = '';
+  const CHUNK = 0x8000;   // длинные списки аргументов ломают apply
+  for (let i = 0; i < level.length; i += CHUNK) {
+    s += String.fromCharCode.apply(null, level.subarray(i, i + CHUNK));
+  }
+  return btoa(s);
+}
+
+function restoreVoiceTrack(text, duration) {
+  clearVoiceTrack();
+  try {
+    const bin = atob(text);
+    const level = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) level[i] = bin.charCodeAt(i);
+    // Огибающая от другой песни (или обрезанной) только всё испортит
+    if (Math.abs(level.length / VOICE_RATE - duration) > 2) return;
+    voice.level = level;
+    voice.runs = buildVoiceRuns(level);
+  } catch (e) {
+    clearVoiceTrack();
+  }
+}
+
+/* ---------- Что спрашивает у огибающей сцена ---------- */
+
+// Последний кусок пения, начавшийся не позже t (или -1)
+function voiceRunIndex(t) {
+  const runs = voice.runs;
+  let lo = 0;
+  let hi = runs.length - 1;
+  let best = -1;
+  while (lo <= hi) {
+    const m = (lo + hi) >> 1;
+    if (runs[m].start <= t) { best = m; lo = m + 1; } else hi = m - 1;
+  }
+  return best;
+}
+
+/* Докуда тянется пение, идущее в момент t. Если в этот момент тихо,
+   но голос вступает в ближайшие look секунд — берём его. null — рядом
+   с t голоса нет. */
+function voiceEndFrom(t, look) {
+  if (!voiceReady()) return null;
+  const runs = voice.runs;
+  const i = voiceRunIndex(t);
+  if (i >= 0 && t < runs[i].end) return runs[i].end;
+  const j = i + 1;
+  if (j < runs.length && runs[j].start - t <= look) return runs[j].end;
+  return null;
+}
+
+// Ближайшее к t вступление голоса в окне [lo, hi]
+function voiceOnsetNear(t, lo, hi) {
+  if (!voiceReady()) return null;
+  let best = null;
+  for (let i = Math.max(0, voiceRunIndex(lo)); i < voice.runs.length; i++) {
+    const s = voice.runs[i].start;
+    if (s > hi) break;
+    if (s < lo) continue;
+    if (best == null || Math.abs(s - t) < Math.abs(best - t)) best = s;
+  }
+  return best;
+}
+
 /* ---------- Сохранение проекта (текст, разметка, фон) ---------- */
 function saveProject() {
   // Пока строки ещё не разобраны (например, сразу после загрузки файла),
@@ -395,6 +578,9 @@ function saveProject() {
       : (keepPrev && prev.times) || [],
     ends: state.lines.length ? state.lines.map((l) => l.end ?? null)
       : (keepPrev && prev.ends) || [],
+    // Концы, выставленные руками: только они переживают пересчёт разметки
+    handEnds: state.lines.length ? state.lines.map((l) => !!l.ручнойКонец)
+      : (keepPrev && prev.handEnds) || [],
     // Ручная разметка слов: [{text, time, end}] или null для строк без неё
     words: state.lines.length ? state.lines.map((l) => l.words || null)
       : (keepPrev && prev.words) || [],
@@ -402,6 +588,8 @@ function saveProject() {
     guess: state.lines.length ? state.lines.map((l) => !!l.сомнительная)
       : (keepPrev && prev.guess) || [],
     bg: state.bgImage,
+    // Огибающая голоса: по ней сцена знает конец строки и проигрыши
+    voice: voice.level ? voiceToText(voice.level) : ((keepPrev && prev.voice) || null),
     eq: { ...state.eq },
     style: { ...state.style },
   };
@@ -411,6 +599,7 @@ function saveProject() {
     // Скорее всего не влезла картинка — сохраняем хотя бы текст и разметку
     try {
       delete data.bg;
+      delete data.voice;
       localStorage.setItem('karaoke-project', JSON.stringify(data));
     } catch (e2) { /* localStorage недоступен */ }
   }
@@ -495,6 +684,7 @@ async function handleFile(file) {
     state.originalBuffer = buffer;
     state.instrumentalBuffer = instrumental;
     editor.peaks = null; // волна пересчитается для нового трека
+    clearVoiceTrack();   // чужая огибающая новой песне не годится
 
     $('track-name').textContent = file.name.replace(/\.[^.]+$/, '');
     $('track-meta').textContent =
@@ -508,6 +698,8 @@ async function handleFile(file) {
     if (saved && saved.name === file.name) {
       if (saved.lyrics) $('lyrics-input').value = saved.lyrics;
       if (saved.bg) setBgImage(saved.bg);
+      // Огибающая голоса от прошлого разделения этой же песни
+      if (saved.voice) restoreVoiceTrack(saved.voice, buffer.duration);
       if (saved.eq) {
         state.eq = { low: +saved.eq.low || 0, mid: +saved.eq.mid || 0, high: +saved.eq.high || 0 };
         updateEqUI();
@@ -677,6 +869,11 @@ $('btn-to-sync').addEventListener('click', () => {
         time: savedTimes && savedTimes.length === texts.length ? savedTimes[i] : null,
         end: mine && mine.ends && mine.ends.length === texts.length ? mine.ends[i] : null,
       };
+      /* Конец считается поставленным руками, только если так и записано.
+         В проектах постарше пометки нет — там концы пришли от распознавания,
+         и пересчитать их заново будет только лучше. */
+      line.ручнойКонец = !!(mine && mine.handEnds
+        && mine.handEnds.length === texts.length && mine.handEnds[i]);
       // Метки слов годятся, пока число слов в строке то же самое:
       // поправленную орфографию переживают, переписанную строку — нет
       const w = savedWords ? savedWords[i] : null;
@@ -716,6 +913,7 @@ function applyRecognized(lines) {
     if (!r || r.text !== line.text) return;
     line.time = r.time;
     line.end = r.end;
+    line.ручнойКонец = false;
     line.сомнительная = !!r.сомнительная;
     if (r.words && r.words.length) line.words = r.words.map((w) => ({ ...w }));
   });
@@ -843,12 +1041,15 @@ function setLineEnd(i, t) {
   const next = state.lines.slice(i + 1).find((l) => l.time != null);
   const max = next ? next.time - 0.05 : audio.duration;
   line.end = Math.min(Math.max(t, line.time + 0.05), max);
+  // Дальше этот конец не пересчитывается: человек сказал своё слово
+  line.ручнойКонец = true;
 }
 
 function nudgeLineEnd(i, delta) {
   const line = state.lines[i];
   if (!line || line.time == null) return;
-  setLineEnd(i, (line.end ?? lineEnd(syncedLines(), syncedLines().indexOf(line))) + delta);
+  // Считаем от того конца, который человек видит на сцене
+  setLineEnd(i, lineEnd(syncedLines(), syncedLines().indexOf(line)) + delta);
   refreshTimes();
   saveProject();
   editor.stageKey = '';
@@ -905,7 +1106,9 @@ function startSync(from = sync.selected) {
   const resumeAt = state.lines[from].time;
   // Всё до выбранной строки оставляем нетронутым. Выбранная и последующие
   // метки будут записаны заново, поэтому ошибку не нужно переделывать с нуля.
-  state.lines.slice(from).forEach((l) => { l.time = null; l.end = null; l.сомнительная = false; });
+  state.lines.slice(from).forEach((l) => {
+    l.time = null; l.end = null; l.ручнойКонец = false; l.сомнительная = false;
+  });
   sync.active = true;
   sync.index = from;
   sync.selected = from;
@@ -983,7 +1186,9 @@ $('btn-sync-start').addEventListener('click', startSync);
 $('btn-sync-stop').addEventListener('click', finishSync);
 $('btn-sync-reset').addEventListener('click', () => {
   sync.selected = 0;
-  state.lines.forEach((l) => { l.time = null; l.end = null; l.сомнительная = false; });
+  state.lines.forEach((l) => {
+    l.time = null; l.end = null; l.ручнойКонец = false; l.сомнительная = false;
+  });
   saveProject();
   renderSyncList();
   updateSyncButtons();
@@ -1006,23 +1211,118 @@ function currentLineIndex(pos) {
   const lines = syncedLines();
   let idx = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (pos >= lines[i].time) idx = i; else break;
+    if (pos >= lineStart(lines, i)) idx = i; else break;
   }
   return idx;
 }
 
-/* Если конец задан в редакторе, он всегда важнее эвристики. Иначе используем
-   следующую строку или короткую длительность по умолчанию. */
-const BREAK_GAP = 6;
-const SING_DUR = 4;
+/* ============================================================
+   Размах строки: где она начинается и где кончается
+
+   Раньше конец строки был выдуман: если до следующей строки больше
+   шести секунд, строка объявлялась спетой ровно за четыре, а всё
+   остальное — проигрышем. На распеве вроде «пропада-да-да-да-даю»
+   подсветка обрывалась на полуслове, а коротких проигрышей набегало
+   столько, что петь было сумбурно.
+
+   Теперь конец берётся из настоящих источников, в таком порядке:
+   1) конец, выставленный руками в редакторе, — он главнее всего;
+   2) конец последнего слова строки (разметка слов или распознавание);
+   3) следующая строка, если она идёт сразу за этой;
+   4) и только когда не известно ничего — привычная длина строки
+      в этой песне.
+   И поверх всего: если на этом месте голос ещё звучит, строка тянется,
+   пока он не смолкнет. Про голос знает огибающая вокальной дорожки.
+   ============================================================ */
+
+/* Порог проигрыша. Пауза короче — просто вдох между строками, ноты на
+   ней только сбивают: для таких пауз есть отсчёт из трёх точек. Ноты
+   ставим лишь на настоящие инструментальные куски. Восемь секунд — то,
+   что получилось на живой песне: см. README, раздел про проигрыши. */
+const BREAK_MIN = 8;
+const SING_DUR = 4;        // длина строки, когда не известно вообще ничего
+const SNAP_WINDOW = 0.7;   // насколько строка вправе подтянуться к голосу
+const SNAP_WINDOW_WEAK = 1.5;  // столько же для строки со знаком «≈»
+const VOICE_TAIL_MAX = 4;  // насколько голос вправе продлить строку
+const VOICE_HOLD = 0.35;   // пауза, в которую голос ещё считается звучащим
+
+/* Начало строки подтягиваем к настоящему вступлению голоса: расчётное
+   время бывает раньше, чем певец открыл рот, и подсветка убегает вперёд.
+   Окно намеренно узкое — строка поправляется, но никуда не уезжает.
+   Строке со знаком «≈» окно шире: подгонка сама призналась, что её время
+   подобрано на глазок, и ошибаться она там может куда сильнее. */
+function lineStart(lines, index) {
+  const line = lines[index];
+  const t = line.time;
+  if (!voiceReady()) return t;
+  const prev = index > 0 ? lines[index - 1].time : -Infinity;
+  const next = index + 1 < lines.length ? lines[index + 1].time : Infinity;
+  /* Окно не шире половины расстояния до соседей: иначе две соседние
+     строки могли бы подтянуться к одному и тому же вступлению
+     и налезть друг на друга. */
+  const w = Math.min(line.сомнительная ? SNAP_WINDOW_WEAK : SNAP_WINDOW,
+    (t - prev) * 0.45, (next - t) * 0.45);
+  if (!(w > 0.05)) return t;
+  const onset = voiceOnsetNear(t, t - w, t + w);
+  return onset == null ? t : onset;
+}
+
+/* Привычная длина строки в этой песне — на случай, когда о строке
+   не известно ничего: ни слов, ни голоса, а следующая строка далеко.
+   Медиана лучше среднего: её не портит одна затянутая строка. */
+function typicalLineDur(lines) {
+  const gaps = [];
+  for (let i = 0; i + 1 < lines.length; i++) {
+    const g = lines[i + 1].time - lines[i].time;
+    if (g > 0.5 && g <= BREAK_MIN) gaps.push(g);
+  }
+  if (!gaps.length) return SING_DUR;
+  gaps.sort((a, b) => a - b);
+  return Math.max(2, Math.min(8, gaps[gaps.length >> 1]));
+}
+
+/* Возвращает { start, core, end }:
+   core — докуда строка спета по словам, end — докуда её тянет голос.
+   Разница между ними достаётся последнему слову: на распеве тянется
+   именно оно, а не вся строка разом. */
+function lineSpan(lines, index) {
+  const line = lines[index];
+  const start = lineStart(lines, index);
+  const next = index + 1 < lines.length ? lineStart(lines, index + 1) : null;
+  const limit = next != null ? next - 0.02 : (audio.duration || start + SING_DUR);
+  const fit = (t) => Math.max(start + 0.05, Math.min(t, Math.max(start + 0.05, limit)));
+
+  /* Конец, выставленный руками в редакторе, важнее любой автоматики.
+     Именно руками: конец, пришедший от распознавания, — это всего лишь
+     конец последнего слова, и продлевать его голосом не только можно,
+     но и нужно, иначе распев так и будет обрываться. */
+  if (line.ручнойКонец && line.end != null) {
+    const e = fit(line.end);
+    return { start, core: e, end: e };
+  }
+
+  let core;
+  if (line.words && line.words.length) {
+    const last = line.words[line.words.length - 1];
+    const natEnd = last.end != null ? last.end : last.time + 0.3;
+    // Слова размечены абсолютным временем: если строка подтянулась
+    // к голосу, её конец едет вместе с началом
+    core = fit(natEnd + (start - line.time));
+  } else if (next != null && next - start <= BREAK_MIN) {
+    core = limit;                                  // строки идут подряд
+  } else {
+    core = fit(start + typicalLineDur(lines));
+  }
+
+  // Голос ещё звучит — строка не спета, тянем её до конца пения
+  let end = core;
+  const heard = voiceEndFrom(core, VOICE_HOLD);
+  if (heard != null) end = fit(Math.max(core, Math.min(heard, core + VOICE_TAIL_MAX)));
+  return { start, core, end };
+}
 
 function lineEnd(lines, index) {
-  const line = lines[index];
-  const next = index + 1 < lines.length ? lines[index + 1].time : null;
-  const limit = next != null ? next - 0.02 : audio.duration;
-  if (line.end != null) return Math.max(line.time + 0.05, Math.min(line.end, limit));
-  return next != null && next - line.time <= BREAK_GAP
-    ? next : Math.min(line.time + SING_DUR, limit);
+  return lineSpan(lines, index).end;
 }
 
 function stagePhase(pos) {
@@ -1032,25 +1332,27 @@ function stagePhase(pos) {
 
   if (cur === -1) {
     // Вступление до первой строки
-    if (lines[0].time >= BREAK_GAP) {
-      return { mode: 'break', cur, start: 0, until: lines[0].time };
-    }
-    return { mode: 'intro', cur };
+    const first = lineStart(lines, 0);
+    if (first >= BREAK_MIN) return { mode: 'break', cur, start: 0, until: first };
+    return { mode: 'intro', cur, next: first };
   }
 
-  const start = lines[cur].time;
-  const end = lineEnd(lines, cur);
-  const next = cur + 1 < lines.length ? lines[cur + 1].time : null;
-  if (next != null && end < next - 0.02 && pos >= end) {
-    return { mode: 'break', cur, start: end, until: next };
+  const sp = lineSpan(lines, cur);
+  const next = cur + 1 < lines.length ? lineStart(lines, cur + 1) : null;
+  /* Ноты — только там, где голоса нет достаточно долго. Пауза покороче
+     остаётся за текущей строкой: она просто стоит допетая, а о вступлении
+     следующей предупреждает отсчёт. */
+  if (next != null && next - sp.end >= BREAK_MIN && pos >= sp.end) {
+    return { mode: 'break', cur, start: sp.end, until: next };
   }
-  return { mode: 'line', cur, start, end };
+  return { mode: 'line', cur, start: sp.start, core: sp.core, end: sp.end, next };
 }
 
 /* ---------- Отсчёт перед вступлением строки ----------
    Три точки гаснут по одной за COUNT_LEAD секунд до начала строки.
    Показываем только там, где перед строкой действительно есть пауза:
-   после проигрыша и перед самым первым куплетом. */
+   после проигрыша, перед самым первым куплетом и в паузе между строками,
+   которая для нот проигрыша коротка, а для певца всё же ощутима. */
 const COUNT_LEAD = 3;      // за сколько секунд начинается отсчёт
 const COUNT_MIN_GAP = 2.2; // короче этой паузы отсчёт только мешает
 const COUNT_DOTS = 3;
@@ -1063,8 +1365,12 @@ function countdownState(pos, ph) {
   let next = null;
   let from = null;
   if (ph.mode === 'break') { next = ph.until; from = ph.start; }
-  else if (ph.mode === 'intro') { next = lines[0].time; from = 0; }
-  else return null;
+  else if (ph.mode === 'intro') { next = ph.next != null ? ph.next : lines[0].time; from = 0; }
+  // Строка допета, следующая ещё не началась — та самая короткая пауза
+  else if (ph.mode === 'line' && ph.next != null && pos >= ph.end) {
+    next = ph.next;
+    from = ph.end;
+  } else return null;
   if (next == null || next - from < COUNT_MIN_GAP) return null;
 
   const left = next - pos;
@@ -1123,12 +1429,32 @@ function splitWords(text) {
   return parts ? parts : [];
 }
 
-function lineWords(line, start, end) {
+function lineWords(line, span) {
+  const start = span.start;
+  const end = span.end;
+  const core = span.core != null ? span.core : end;
+
   if (line.words && line.words.length) {
-    return line.words.map((w, i, arr) => ({
+    const arr = line.words;
+    const last = arr[arr.length - 1];
+    const natEnd = last.end != null ? last.end : last.time + 0.3;
+    /* Метки слов заданы абсолютным временем. Строку могло подтянуть
+       к настоящему вступлению голоса — тогда метки едут за ней ровно
+       на ту же величину, иначе подсветка бежала бы впереди певца.
+       И только если сдвинутая строка налезает на следующую, она ужимается.
+       Без голосовой дорожки сдвиг нулевой, ужимать нечего, и метки
+       остаются ровно теми, что размечены. */
+    const delta = start - line.time;
+    const shifted = natEnd + delta;
+    const k = shifted > start ? Math.min(1, (core - start) / (shifted - start)) : 1;
+    const at = (t) => start + (t + delta - start) * k;
+    return arr.map((w, i) => ({
       text: w.text,
-      start: w.time,
-      end: w.end != null ? w.end : (i + 1 < arr.length ? arr[i + 1].time : end),
+      start: at(w.time),
+      end: i === arr.length - 1
+        // Последнее слово тянется, пока звучит голос: это и есть распев
+        ? Math.max(at(natEnd), end)
+        : at(w.end != null ? w.end : arr[i + 1].time),
     }));
   }
 
@@ -1137,14 +1463,16 @@ function lineWords(line, start, end) {
   // Вес слова — число букв без пробелов, минимум единица
   const weights = chunks.map((c) => Math.max(1, c.trim().length));
   const total = weights.reduce((a, b) => a + b, 0);
-  const span = Math.max(0.05, end - start);
+  const width = Math.max(0.05, core - start);
   const out = [];
   let acc = start;
   for (let i = 0; i < chunks.length; i++) {
-    const dur = span * (weights[i] / total);
+    const dur = width * (weights[i] / total);
     out.push({ text: chunks[i], start: acc, end: acc + dur });
     acc += dur;
   }
+  // Хвост распева достаётся последнему слову, а не всей строке разом
+  out[out.length - 1].end = Math.max(out[out.length - 1].end, end);
   return out;
 }
 
@@ -1176,8 +1504,8 @@ function buildLineEl(text, cls) {
   return div;
 }
 
-function applyWordFill(el, line, start, end, pos) {
-  const words = lineWords(line, start, end);
+function applyWordFill(el, line, span, pos) {
+  const words = lineWords(line, span);
   const done = wordProgress(words, pos);
   const spans = el.querySelectorAll('.w');
   for (let i = 0; i < spans.length; i++) {
@@ -1440,11 +1768,11 @@ function updateStageFill() {
   const el = stage.querySelector(
     ph.mode === 'break' ? '.break-line' : '.stage-line.current');
   if (!el) return;
-  const start = ph.start;
-  const end = ph.mode === 'break' ? ph.until : ph.end;
 
   if (ph.mode === 'break') {
     // Ноты — три «слова»: закрашиваем их по ходу проигрыша
+    const start = ph.start;
+    const end = ph.until;
     const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
     const spans = el.querySelectorAll('.w');
     for (let i = 0; i < spans.length; i++) {
@@ -1454,7 +1782,7 @@ function updateStageFill() {
     }
     return;
   }
-  applyWordFill(el, lines[ph.cur], start, end, pos);
+  applyWordFill(el, lines[ph.cur], ph, pos);
 }
 
 /* Пишем в DOM только при реальном изменении: обновление текста кнопки
@@ -1819,13 +2147,14 @@ $('btn-export-lrc-words').addEventListener('click', () => {
   if (!lines.length) { alert('Сначала синхронизируй текст.'); return; }
   const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
   const body = lines.map((l, i) => {
-    const words = lineWords(l, l.time, lineEnd(lines, i));
+    const span = lineSpan(lines, i);
+    const words = lineWords(l, span);
     const inner = words
       .map((w) => `<${fmtLrcTime(w.start)}>${w.text}`)
       .join('')
       .replace(/\s+$/, '');
     // Метка конца строки — чтобы плеер знал, когда гасить подсветку
-    return `[${fmtLrcTime(l.time)}]${inner}<${fmtLrcTime(lineEnd(lines, i))}>`;
+    return `[${fmtLrcTime(span.start)}]${inner}<${fmtLrcTime(span.end)}>`;
   });
   const lrc = [
     `[ti:${name}]`,
@@ -1946,7 +2275,7 @@ function renderEditList() {
     ts.textContent = line.time == null ? '–:––' : fmtTime(line.time);
 
     const end = document.createElement('span');
-    end.className = 'ts end-ts' + (line.end == null ? ' empty' : '');
+    end.className = 'ts end-ts' + (line.ручнойКонец ? '' : ' empty');
     end.textContent = line.time == null ? '–:––' : `до ${fmtTime(lineEnd(syncedLines(), syncedLines().indexOf(line)))}`;
 
     const text = document.createElement('div');
@@ -2284,7 +2613,7 @@ function updateEditStage() {
     return;
   }
   // Подсветка по словам — как на большой сцене
-  applyWordFill(el, lines[ph.cur], start, end, pos);
+  applyWordFill(el, lines[ph.cur], ph, pos);
 }
 
 /* --- Дорожка --- */
@@ -2546,7 +2875,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
      Это то же поведение, что на экране, чтобы видео совпадало с ним. */
   const drawWords = (line, text, size, cy, ph2) => {
     g2d.font = font(size);
-    const words = line ? lineWords(line, ph2.start, ph2.mode === 'break' ? ph2.until : ph2.end) : null;
+    const words = line ? lineWords(line, ph2) : null;
     const widths = words ? words.map((w) => g2d.measureText(w.text).width) : null;
     const totalW = widths ? widths.reduce((a, b) => a + b, 0) : g2d.measureText(text).width;
     let x = (W - totalW) / 2;

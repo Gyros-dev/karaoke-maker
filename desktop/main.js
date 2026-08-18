@@ -303,11 +303,18 @@ function createWindow() {
         const alignFile = process.env.KARAOKE_ASR_ALIGN;
         const dumpFile = process.env.KARAOKE_ASR_DUMP;
         const wordsFile = process.env.KARAOKE_ASR_WORDS;
+        /* Огибающая голоса — то же самое, но для сцены: один раз выгрузить
+           после разделения и дальше подставлять готовую, не слушая песню
+           заново. Пороги проигрыша тогда подбираются за секунды. */
+        const voiceDumpFile = process.env.KARAOKE_VOICE_DUMP;
+        const voiceFile = process.env.KARAOKE_VOICE;
 
         const lyrics = alignFile && fs.existsSync(alignFile)
           ? fs.readFileSync(alignFile, 'utf8') : null;
         const words = wordsFile && fs.existsSync(wordsFile)
           ? JSON.parse(fs.readFileSync(wordsFile, 'utf8')) : null;
+        const voiceText = voiceFile && fs.existsSync(voiceFile)
+          ? fs.readFileSync(voiceFile, 'utf8').trim() : null;
 
         // Готовые слова нейросети не требуют — модель качать незачем
         const dl = words ? { ok: true } : await win.webContents.executeJavaScript(
@@ -325,18 +332,26 @@ function createWindow() {
               const raw = new Uint8Array(bin.length);
               for (let i = 0; i < bin.length; i++) raw[i] = bin.charCodeAt(i);
               const buf = await audio.ensureCtx().decodeAudioData(raw.buffer);
+              const голос = ${voiceText ? JSON.stringify(voiceText) : 'null'};
+              if (голос) window.__voiceLoad(голос, buf.duration);
               const опции = { separate: ${sep ? 'true' : 'false'},
                 words: ${words ? JSON.stringify(words) : 'null'} };
               const t0 = Date.now();
               const out = await ${call};
-              return { ...out, секунд: ((Date.now() - t0) / 1000).toFixed(1) };
+              return { ...out, огибающая: window.__voiceDump(),
+                секунд: ((Date.now() - t0) / 1000).toFixed(1) };
             } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
           })()`, true);
           if (dumpFile && res.всеСлова) {
             fs.writeFileSync(dumpFile, JSON.stringify(res.всеСлова));
             console.log('ASR-DUMP', dumpFile, res.всеСлова.length, 'слов');
           }
+          if (voiceDumpFile && res.огибающая) {
+            fs.writeFileSync(voiceDumpFile, res.огибающая);
+            console.log('VOICE-DUMP', voiceDumpFile, res.огибающая.length, 'байт base64');
+          }
           delete res.всеСлова;
+          delete res.огибающая;
           console.log(lyrics ? 'FIT-E2E' : 'ASR-E2E', JSON.stringify(res));
         }
       }

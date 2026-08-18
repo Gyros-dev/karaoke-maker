@@ -213,8 +213,10 @@
       setProgress(100, 'Почти готово…', 'Возвращаем исходное качество звука.');
 
       // Чистый вокал не выбрасываем: распознавание текста по нему
-      // ошибается заметно реже, чем по полному миксу
+      // ошибается заметно реже, чем по полному миксу, а огибающая его
+      // громкости говорит сцене, где на самом деле поют, а где проигрыш
       if (res.vocal) {
+        try { setVoiceTrack(new Float32Array(res.vocal), MODEL_SR); } catch (e) { /* не беда */ }
         try {
           asr.vocal = await toWhisperPcm(new Float32Array(res.vocal), MODEL_SR);
           updateAsrSource();
@@ -619,6 +621,7 @@
       const sepRes = await runSeparation(modelBytes, left, right, 1);
       if (!sepRes.ok) throw new Error('разделение: ' + sepRes.error);
       if (!sepRes.vocal) throw new Error('разделение не отдало вокал');
+      setVoiceTrack(new Float32Array(sepRes.vocal), MODEL_SR);
       return {
         pcm: await toWhisperPcm(new Float32Array(sepRes.vocal), MODEL_SR),
         источник: 'чистый вокал',
@@ -641,6 +644,55 @@
     const res = await runWhisper(asrModelId(key), pcm, language || '');
     return { ...res, источник };
   }
+
+  /* Огибающая голоса для проверок: сохранить в файл и подставить обратно.
+     Разделение трёхминутной песни идёт пару минут, а пороги сцены хочется
+     подбирать за секунды — поэтому огибающую можно один раз выгрузить
+     и дальше гонять проверки уже с ней. */
+  window.__voiceDump = () => (voice.level ? voiceToText(voice.level) : null);
+  window.__voiceLoad = (text, duration) => {
+    restoreVoiceTrack(text, duration);
+    return voiceReady();
+  };
+
+  /* Что получилось на сцене: размах каждой строки, проигрыши и паузы.
+     Считается теми же самыми lineSpan и stagePhase, что рисуют караоке
+     и видео, — иначе цифры проверки ничего бы не значили. */
+  window.__sceneReport = () => {
+    const lines = syncedLines();
+    const spans = lines.map((l, i) => lineSpan(lines, i));
+    const проигрыши = [];
+    const first = spans.length ? spans[0].start : 0;
+    if (first >= BREAK_MIN) проигрыши.push({ от: 0, до: +first.toFixed(2), длина: +first.toFixed(2), после: 'вступление' });
+    for (let i = 0; i + 1 < lines.length; i++) {
+      const пауза = spans[i + 1].start - spans[i].end;
+      if (пауза >= BREAK_MIN) {
+        проигрыши.push({
+          от: +spans[i].end.toFixed(2), до: +spans[i + 1].start.toFixed(2),
+          длина: +пауза.toFixed(2), после: lines[i].text.slice(0, 30),
+        });
+      }
+    }
+    return {
+      голосЕсть: voiceReady(),
+      кусковГолоса: voice.runs ? voice.runs.length : 0,
+      куски: (voice.runs || []).map((r) => `${r.start.toFixed(2)}–${r.end.toFixed(2)}`),
+      порогПроигрыша: BREAK_MIN,
+      проигрышей: проигрыши.length,
+      проигрыши,
+      // Все паузы между строками — по ним видно, каким мог бы быть порог
+      паузы: lines.slice(0, -1).map((l, i) => +(spans[i + 1].start - spans[i].end).toFixed(2)),
+      строки: lines.map((l, i) => ({
+        i,
+        сырое: +l.time.toFixed(2),
+        старт: +spans[i].start.toFixed(2),
+        сдвиг: +(spans[i].start - l.time).toFixed(2),
+        конец: +spans[i].end.toFixed(2),
+        длина: +(spans[i].end - spans[i].start).toFixed(2),
+        текст: l.text,
+      })),
+    };
+  };
 
   window.__runAsrTest = async (buffer, language, key, opts) => {
     try {
@@ -685,6 +737,8 @@
      готовый текст. Отдаём цифры, по которым видно, получилось или нет. */
   window.__runFitTest = async (buffer, text, language, key, opts) => {
     try {
+      // Без песни в студии сцена не знает длины трека и обрежет последнюю строку
+      state.originalBuffer = buffer;
       const res = await testListen(buffer, language, key, opts);
       if (!res.ok) return { ok: false, error: res.error };
 
@@ -717,6 +771,7 @@
         строки: state.lines.map((l, i) =>
           `${(l.time == null ? 0 : l.time).toFixed(2)} ${fit.lines[i] && fit.lines[i].сомнительная ? '≈' : ' '} ${l.text}`),
         опорыПоСтрокам: fit.lines.map((l) => `${l.опор}/${l.слов}`),
+        сцена: window.__sceneReport(),
         всеСлова: res.words || [],
       };
     } catch (e) {
