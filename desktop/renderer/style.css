@@ -747,7 +747,10 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .lyrics-stage.has-bg .stage-line:not(.current) { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
 .stage-line {
   font-family: var(--st-font);
-  font-size: var(--st-size);
+  /* --st-fit — единый кегль на всю песню: множитель, подобранный
+     по самой длинной строке (см. stageFit в app.js). Он один для всех
+     строк, поэтому размер не прыгает от строки к строке. */
+  font-size: calc(var(--st-size) * var(--st-fit, 1));
   font-weight: var(--st-weight);
   letter-spacing: var(--st-ls);
   -webkit-text-stroke: var(--st-outline) var(--st-outline-c);
@@ -766,6 +769,12 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   overflow: visible;
   text-overflow: clip;
 }
+/* Строка, которая не влезает даже на самом мелком едином кегле,
+   переносится на несколько рядов — так делают в нынешних караоке:
+   лучше перенести, чем ужать до нечитаемого. Словам нужен pre-wrap:
+   при обычном pre браузеру негде разорвать строку между словами. */
+.stage-line.wrap { white-space: normal; }
+.stage-line.wrap .w { white-space: pre-wrap; }
 .stage-line.current { opacity: 1; filter: none; }
 /* Эффект «заливка» — классическое караоке */
 /* Подсветка идёт по словам: каждое слово — свой элемент со своей

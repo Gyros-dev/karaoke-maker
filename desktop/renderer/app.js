@@ -53,6 +53,38 @@ function defaultStyle() {
 }
 state.style = defaultStyle();
 
+/* ---------- Перенос старых проектов ----------
+   Беда, которую это лечит: настройка, записанная в проект автосохранением,
+   навсегда перебивала новое умолчание. Человек галку не трогал — она просто
+   была умолчанием и молча уехала в проект, — а после обновления студии
+   старое значение продолжало применяться, и новое умолчание не доходило
+   ни до кого.
+
+   Поэтому проект хранит поколение оформления. Меняем какое-нибудь
+   УМОЛЧАНИЕ — поднимаем STYLE_GEN и дописываем сюда запись: какие ключи
+   и с каким прежним умолчанием надо забыть у проектов старее этого
+   поколения. Забываем только значения, в точности равные прежнему
+   умолчанию: их человек не выбирал. Всё, что он менял осознанно (цвета,
+   шрифт, размеры, места строк), не равно умолчанию и переезжает как есть. */
+const STYLE_GEN = 1;
+const STYLE_MIGRATIONS = [
+  // Поколение 1: «Строки меняются местами» перестала быть умолчанием
+  { поколение: 1, прежниеУмолчания: { swapLines: true } },
+];
+
+/* Оформление из сохранённого проекта: сначала перенос, потом умолчания */
+function styleFromSaved(saved) {
+  const style = { ...(saved && saved.style) };
+  const gen = +(saved && saved.styleGen) || 0;
+  for (const m of STYLE_MIGRATIONS) {
+    if (gen >= m.поколение) continue;   // это поколение проект уже пережил
+    for (const [key, было] of Object.entries(m.прежниеУмолчания)) {
+      if (style[key] === было) delete style[key];
+    }
+  }
+  return { ...defaultStyle(), ...style };
+}
+
 /* Шрифты: только системные, чтобы сайт остался автономным */
 const FONTS = {
   system: { label: 'Системный', css: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif' },
@@ -592,6 +624,9 @@ function saveProject() {
     voice: voice.level ? voiceToText(voice.level) : ((keepPrev && prev.voice) || null),
     eq: { ...state.eq },
     style: { ...state.style },
+    // Поколение оформления: по нему при загрузке видно, какие умолчания
+    // проект ещё не переживал (см. styleFromSaved)
+    styleGen: STYLE_GEN,
   };
   try {
     localStorage.setItem('karaoke-project', JSON.stringify(data));
@@ -705,7 +740,7 @@ async function handleFile(file) {
         updateEqUI();
       }
       if (saved.style) {
-        state.style = { ...defaultStyle(), ...saved.style };
+        state.style = styleFromSaved(saved);
         updateStyleUI();
         applyStyle();
       }
@@ -1494,6 +1529,8 @@ function wordProgress(words, pos) {
 function buildLineEl(text, cls) {
   const div = document.createElement('div');
   div.className = 'stage-line' + (cls ? ' ' + cls : '');
+  // Текст помним на самом узле: по нему решается, переносить ли строку
+  div.dataset.text = text;
   for (const chunk of splitWords(text)) {
     const span = document.createElement('span');
     span.className = 'w';
@@ -1516,6 +1553,9 @@ function applyWordFill(el, line, span, pos) {
 }
 
 const BREAK_TEXT = '♪ ♪ ♪';
+/* В кадре видео нет разрядки из CSS, поэтому там ноты разводим пробелами —
+   чтобы выглядели так же, как на экране */
+const BREAK_TEXT_FRAME = '♪   ♪   ♪';
 
 /* ---------- Сборка сцены с переиспользованием строк ----------
    Раньше сцена собиралась заново на каждой строке, поэтому смена строк
@@ -1614,49 +1654,98 @@ function updateCountdown(stage, cd) {
   }
 }
 
-/* Ширина самого текста строки, а не её коробки.
-   Мерить коробку (scrollWidth) нельзя: она никогда не бывает уже сцены.
-   У строки на закреплённом месте коробка вообще шире полей — абсолютный
-   элемент считает свои left/right от области с полями родителя, а не от
-   текста, — из-за чего строки ужимались до предела на ровном месте.
-   Слова лежат в отдельных span'ах, поэтому берём охват их прямоугольников:
-   для строки в одну строку это ровно ширина текста, а для переносимой
-   (превью редактора) — ширина самой длинной её части. */
-function lineTextWidth(el) {
-  const spans = el.querySelectorAll('.w');
-  if (!spans.length) return el.scrollWidth;
-  let left = Infinity;
-  let right = -Infinity;
-  spans.forEach((s) => {
-    const r = s.getBoundingClientRect();
-    if (!r.width && !r.height) return;   // пустой span ширины не даёт
-    left = Math.min(left, r.left);
-    right = Math.max(right, r.right);
-  });
-  return right > left ? right - left : 0;
+/* ---------- Единый кегль на всю песню ----------
+   Раньше каждая строка ужималась под ширину сама по себе: короткие
+   выходили крупными, длинные мелкими, и размер прыгал от строки к строке.
+   Теперь кегль один на всю песню: подбираем его по самой длинной строке
+   и применяем ко всем одинаково. Ползунок «Размер» остаётся множителем
+   к нему.
+
+   Считаем в кадровых единицах — в том же кадре 16:9, в котором пишется
+   видео (ширина кадра = FIT_FRAME_COLS базовых кеглей). Поэтому решение
+   получается одно и то же для караоке, предпросмотра редактора и видео,
+   а не своё у каждой поверхности. Ширину меряем холстом: коробки строк
+   в DOM врут (у закреплённой строки коробка шире полей сцены), а холст
+   даёт ровно ширину текста тем же шрифтом.
+
+   Если самая длинная строка настолько длинна, что единый кегль стал бы
+   нечитаемо мелким, дальше не ужимаем: с FIT_MIN такие строки переносим
+   на два ряда — как принято в нынешних караоке. */
+const FIT_FRAME_W = 1280;      // ширина опорного кадра, px
+const FIT_FRAME_H = 720;       // высота опорного кадра, px
+const FIT_BASE = 40;           // базовый кегль в этом кадре при «Размер 100%»
+const FIT_FRAME_COLS = FIT_FRAME_W / FIT_BASE;  // ширина кадра в кеглях
+const FIT_MIN = 0.6;           // мельче 60% базового не ужимаем, а переносим
+
+const stageFitCache = { key: null, value: null };
+
+function fitCanvasCtx() {
+  if (!stageFitCache.ctx) {
+    stageFitCache.ctx = document.createElement('canvas').getContext('2d');
+  }
+  return stageFitCache.ctx;
 }
 
-/* Строки не переносятся — если строка шире сцены,
-   уменьшаем её шрифт так, чтобы она поместилась целиком */
+/* Единый кегль и список строк, которые придётся перенести.
+   Пересчитывается при смене текста, шрифта, начертания, разрядки,
+   полей и ползунка размера — всё это входит в ключ. */
+function stageFit() {
+  const s = state.style;
+  const texts = syncedLines().map((l) => l.text);
+  const key = [s.font, s.weight, s.letter, s.pad, texts.length,
+    texts.join('')].join('|');
+  if (stageFitCache.key === key) return stageFitCache.value;
+
+  const g = fitCanvasCtx();
+  const family = (FONTS[s.font] || FONTS.system).css;
+  g.font = `${s.weight} ${FIT_BASE}px ${family}`;
+  // Разрядку холст умеет не везде; где не умеет — добавляем её сами
+  const hasLS = 'letterSpacing' in g;
+  if (hasLS) g.letterSpacing = `${s.letter}px`;
+  const width = (t) => g.measureText(t).width
+    + (hasLS ? 0 : (s.letter || 0) * t.length);
+
+  const avail = FIT_FRAME_W * (1 - (s.pad / 100) * 2);
+  let maxW = 0;
+  const widths = texts.map((t) => {
+    const w = width(t);
+    if (w > maxW) maxW = w;
+    return w;
+  });
+  const need = maxW > 0 && avail > 0 ? avail / maxW : 1;
+  // Крупнее заданного не делаем — только ужимаем при нужде
+  const scale = Math.min(1, Math.max(FIT_MIN, need));
+  const wrap = new Set();
+  texts.forEach((t, i) => { if (widths[i] * scale > avail + 0.5) wrap.add(t); });
+
+  stageFitCache.key = key;
+  stageFitCache.value = { scale, wrap, avail, need };
+  return stageFitCache.value;
+}
+
+/* Применяем единый кегль к сцене. Множитель кладём в --st-fit,
+   поштучных размеров у строк больше нет. */
 function fitStageLines(container) {
+  if (!container) return;
+  const fit = stageFit();
   const cs = getComputedStyle(container);
   const avail = container.clientWidth
-    - parseFloat(cs.paddingLeft)
-    - parseFloat(cs.paddingRight);
-  if (avail <= 0) return;
+    - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const base = parseFloat(cs.getPropertyValue('--st-size')) * rem;
+  /* Подстраховка для узкого окна: если сцена на экране уже опорного кадра
+     (меньше FIT_FRAME_COLS своих кеглей), ужимаем ещё на ту же долю —
+     иначе длинная строка вылезет за край. На обычном экране сцена шире
+     кадра, и множитель равен единице, то есть кегль тот же, что в видео. */
+  let extra = 1;
+  if (avail > 0 && base > 0) {
+    extra = Math.min(1, (avail / base) / FIT_FRAME_COLS * 0.99);
+  }
+  container.style.setProperty('--st-fit', (fit.scale * extra).toFixed(4));
   container.querySelectorAll('.stage-line').forEach((el) => {
-    el.style.fontSize = '';
-    // Несколько проходов: ширина текста меняется не строго пропорционально
-    // размеру шрифта (округления, кернинг), поэтому результат уточняем.
-    // Полпикселя запаса — чтобы не ужимать строку из-за округлений.
-    for (let pass = 0; pass < 3; pass++) {
-      const w = lineTextWidth(el);
-      if (w <= avail + 0.5) break;
-      const cur = parseFloat(getComputedStyle(el).fontSize);
-      const next = Math.max(10, cur * (avail / w) * 0.99);
-      el.style.fontSize = `${next}px`;
-      if (next <= 10) break;
-    }
+    el.style.fontSize = '';  // размер задаёт --st-fit, а не отдельная строка
+    const text = el.dataset.text != null ? el.dataset.text : el.textContent;
+    el.classList.toggle('wrap', fit.wrap.has(text));
   });
 }
 
@@ -1668,8 +1757,15 @@ function fixedSlotItems(lines, ph) {
   const activeSlot = cur < 0 ? 0 : cur % 2;   // 0 — первое место, 1 — второе
   const nextIndex = cur < 0 ? 0 : cur + 1;
   const items = [];
+  /* Проигрыш занимает целое место, а не рисуется поверх строки.
+     Место выбираем так, чтобы следующая строка осталась на виду:
+     ноты встают туда, где её нет. Строку с этого места убираем —
+     из-за неё ноты и налезали на текст. */
+  const nextSlot = cur < 0 ? 0 : 1 - activeSlot;
+  const breakSlot = 1 - nextSlot;
 
   for (const slot of [0, 1]) {
+    if (ph.mode === 'break' && slot === breakSlot) continue;
     let index;
     let active = false;
     if (cur < 0) {
@@ -1695,7 +1791,7 @@ function fixedSlotItems(lines, ph) {
   if (ph.mode === 'break') {
     items.push({
       key: 'break', text: BREAK_TEXT, cls: 'slot current break-line',
-      top: activeSlot === 0 ? s.posCurrent : s.posNext,
+      top: breakSlot === 0 ? s.posCurrent : s.posNext,
     });
   }
   return items;
@@ -2587,6 +2683,9 @@ function renderEditStage() {
     el.appendChild(div);
   }
 
+  // Единый кегль — тот же, что на большой сцене и в видео
+  fitStageLines(el);
+
   // Подсветка текущей строки в списке
   const globalIdx = cur >= 0 ? state.lines.indexOf(lines[cur]) : -1;
   document.querySelectorAll('#edit-list .edit-row').forEach((row) => {
@@ -2841,81 +2940,59 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   const family = (FONTS[st.font] || FONTS.system).css;
   const font = (size) => `${st.weight} ${size}px ${family}`;
 
-  // Собираем блоки: все строки одного кадра получают один размер. Иначе
-  // длинная фраза визуально «проваливается» относительно остальных.
-  const baseSize = Math.round(40 * st.size / 100);
-  const rawBlocks = [];
-  // index — номер строки: без него подсветка по словам не включалась
-  const pushText = (text, isCur, index = null, isNear = false) => {
-    g2d.font = font(baseSize);
-    const w = g2d.measureText(text).width;
-    rawBlocks.push({ text, width: w, isCur, index, isNear });
+  /* Кегль — единый на всю песню, тот же множитель, что на экране:
+     stageFit подбирает его в кадровых единицах по самой длинной строке.
+     Базовый кегль привязан к высоте кадра, поэтому при любом качестве
+     записи текст занимает одну и ту же долю картинки. */
+  const fit = stageFit();
+  const baseSize = Math.max(1, Math.round(H * (FIT_BASE / FIT_FRAME_H) * st.size / 100));
+  const size = Math.max(10, baseSize * fit.scale);
+  const lineGap = st.line / 10;
+  const rowH = size * lineGap;
+
+  // Последний нарисованный кадр — для самопроверки (единый кегль,
+  // отсутствие наложений). Данные те же, по которым идёт отрисовка.
+  const layout = { size, baseSize, scale: fit.scale, rowH, items: [] };
+  drawVideoFrame.последнийКадр = layout;
+
+  /* Строка разбирается на куски: слово со своей долей закраски (p)
+     либо весь текст целиком, когда закраска идёт по всей строке
+     (ноты проигрыша). Одни и те же куски идут и в раскладку, и в отрисовку,
+     поэтому число рядов у них совпадает. */
+  const chunksFor = (text, kind, line) => {
+    if (kind === 'cur' && line) {
+      const words = lineWords(line, ph);
+      const done = wordProgress(words, pos);
+      return words.map((w, i) => ({ text: w.text, p: done[i] }));
+    }
+    if (kind === 'cur') {
+      const start = ph.start;
+      const end = ph.mode === 'break' ? ph.until : ph.end;
+      const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
+      return [{ text, p }];
+    }
+    return fit.wrap.has(text)
+      ? splitWords(text).map((t) => ({ text: t, p: null }))
+      : [{ text, p: null }];
   };
-  const total = st.lines;
-  const before = Math.min(2, Math.floor((total - 1) / 2));
-  if (ph.mode === 'break') {
-    for (let i = Math.max(0, cur - before + 1); i <= cur; i++) pushText(lines[i].text, false);
-    pushText('♪   ♪   ♪', true);
-    for (let i = cur + 1; i < Math.min(lines.length, cur + total - before); i++) {
-      pushText(lines[i].text, false, i, i === cur + 1);
-    }
-  } else {
-    const anchor = cur === -1 ? 0 : cur;
-    const first = Math.max(0, anchor - before);
-    for (let i = first; i < Math.min(lines.length, first + total); i++) {
-      pushText(lines[i].text, i === cur, i, i === cur + 1 || (cur === -1 && i === 0));
-    }
-  }
 
-  const fittedSize = rawBlocks.reduce((size, b) =>
-    Math.min(size, b.width > maxWidth ? baseSize * maxWidth / b.width : baseSize), baseSize);
-  const blocks = rawBlocks.map((b) => ({ ...b, size: Math.max(14, fittedSize) }));
-
-  /* Рисуем строку по словам: целые слова закрашены, текущее доезжает.
-     Это то же поведение, что на экране, чтобы видео совпадало с ним. */
-  const drawWords = (line, text, size, cy, ph2) => {
+  /* Ряды строки: обычно один. Строку, отмеченную к переносу (не влезла
+     даже на самом мелком едином кегле), раскладываем жадно по ширине —
+     так же, как её переносит браузер на экране. */
+  const rowsOf = (text, chunks) => {
+    if (!fit.wrap.has(text)) return [chunks];
     g2d.font = font(size);
-    const words = line ? lineWords(line, ph2) : null;
-    const widths = words ? words.map((w) => g2d.measureText(w.text).width) : null;
-    const totalW = widths ? widths.reduce((a, b) => a + b, 0) : g2d.measureText(text).width;
-    let x = (W - totalW) / 2;
-
-    if (!words) {
-      g2d.fillStyle = st.active;
-      g2d.fillText(text, W / 2, cy);
-      return;
+    const rows = [];
+    let row = [];
+    let w = 0;
+    for (const c of chunks) {
+      const cw = g2d.measureText(c.text).width;
+      if (row.length && w + cw > maxWidth) { rows.push(row); row = []; w = 0; }
+      row.push(c);
+      w += cw;
     }
-    const done = wordProgress(words, pos);
-    g2d.textAlign = 'left';
-    for (let i = 0; i < words.length; i++) {
-      const w = words[i];
-      const wWidth = widths[i];
-      if (st.outline > 0) {
-        g2d.lineWidth = st.outline * 2;
-        g2d.strokeStyle = st.outlineColor;
-        g2d.lineJoin = 'round';
-        g2d.strokeText(w.text, x, cy);
-      }
-      if (st.effect === 'fill') {
-        g2d.fillStyle = st.active;
-        g2d.fillText(w.text, x, cy);
-        const p = done[i];
-        if (p > 0) {
-          g2d.save();
-          g2d.beginPath();
-          g2d.rect(x, cy - size, wWidth * p, size * 2);
-          g2d.clip();
-          g2d.fillStyle = st.accent;
-          g2d.fillText(w.text, x, cy);
-          g2d.restore();
-        }
-      } else {
-        g2d.fillStyle = (st.effect === 'highlight' && done[i] >= 0.5) ? st.accent : st.active;
-        g2d.fillText(w.text, x, cy);
-      }
-      x += wWidth;
-    }
-    g2d.textAlign = 'center';
+    if (row.length) rows.push(row);
+    return rows;
   };
 
   const strokeIfNeeded = (text, x, cy) => {
@@ -2965,46 +3042,69 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     clearDim();
   };
 
+  /* Одна строка кадра: куски рисуются по очереди, каждый своим цветом
+     и со своей долей закраски. Длинная строка занимает несколько рядов,
+     они расходятся вверх и вниз от середины строки. Возвращает высоту,
+     которую строка заняла, — по ней считается раскладка. */
+  const drawLineAt = (text, cy, kind, line) => {
+    g2d.font = font(size);
+    g2d.letterSpacing = `${st.letter}px`;
+    const chunks = chunksFor(text, kind, line);
+    const rows = rowsOf(text, chunks);
+    layout.items.push({ text, cy, kind, rows: rows.length, size, height: rows.length * rowH });
+    setDim(kind);
+    g2d.textAlign = 'left';
+    rows.forEach((row, r) => {
+      const widths = row.map((c) => g2d.measureText(c.text).width);
+      const rowW = widths.reduce((a, b) => a + b, 0);
+      const y = cy + (r - (rows.length - 1) / 2) * rowH;
+      let x = (W - rowW) / 2;
+      row.forEach((c, i) => {
+        strokeIfNeeded(c.text, x, y);
+        if (kind !== 'cur' || c.p == null) {
+          g2d.fillStyle = kind === 'off' ? st.inactive : st.active;
+          g2d.fillText(c.text, x, y);
+        } else if (st.effect === 'fill') {
+          g2d.fillStyle = st.active;
+          g2d.fillText(c.text, x, y);
+          if (c.p > 0) {
+            g2d.save();
+            g2d.beginPath();
+            g2d.rect(x, y - size, widths[i] * c.p, size * 2);
+            g2d.clip();
+            g2d.fillStyle = st.accent;
+            g2d.fillText(c.text, x, y);
+            g2d.restore();
+          }
+        } else {
+          g2d.fillStyle = (st.effect === 'highlight' && c.p >= 0.5) ? st.accent : st.active;
+          g2d.fillText(c.text, x, y);
+        }
+        x += widths[i];
+      });
+    });
+    g2d.textAlign = 'center';
+    clearDim();
+    return rows.length * rowH;
+  };
+
+  /* Сколько места займёт строка, если её нарисовать, — нужно раскладке
+     до отрисовки. Считается теми же кусками, что и сама отрисовка. */
+  const heightOf = (text, kind, line) =>
+    rowsOf(text, chunksFor(text, kind, line)).length * rowH;
+
   /* Закреплённые места: две строки рисуются каждая на своей высоте
      и не съезжают. Активна та, чья очередь петь. */
   if (!st.swapLines) {
-    const drawAt = (text, topPercent, kind, line) => {
-      g2d.font = font(baseSize);
-      let size = baseSize;
-      const w = g2d.measureText(text).width;
-      if (w > maxWidth) size = Math.max(14, baseSize * maxWidth / w);
-      g2d.font = font(size);
-      g2d.letterSpacing = `${st.letter}px`;
-      const cy = H * (topPercent / 100);
-      setDim(kind);
-      if (kind === 'cur' && line) {
-        drawWords(line, text, size, cy, ph);
-      } else if (kind === 'cur') {
-        strokeIfNeeded(text, W / 2, cy);
-        const start = ph.start;
-        const end = ph.mode === 'break' ? ph.until : ph.end;
-        const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
-        g2d.fillStyle = st.active;
-        g2d.fillText(text, W / 2, cy);
-        const textW = g2d.measureText(text).width;
-        g2d.save();
-        g2d.beginPath();
-        g2d.rect((W - textW) / 2, cy - size, textW * p, size * 2);
-        g2d.clip();
-        g2d.fillStyle = st.accent;
-        g2d.fillText(text, W / 2, cy);
-        g2d.restore();
-      } else {
-        strokeIfNeeded(text, W / 2, cy);
-        g2d.fillStyle = kind === 'near' ? st.active : st.inactive;
-        g2d.fillText(text, W / 2, cy);
-      }
-      clearDim();
-    };
-
     const activeSlot = cur < 0 ? 0 : cur % 2;
     const nextIndex = cur < 0 ? 0 : cur + 1;
+    /* То же правило, что на сцене: ноты проигрыша занимают целое место,
+       строку оттуда убираем. Место выбираем так, чтобы следующая строка
+       осталась на виду: ноты встают туда, где её нет. */
+    const nextSlot = cur < 0 ? 0 : 1 - activeSlot;
+    const breakSlot = 1 - nextSlot;
     for (const slot of [0, 1]) {
+      if (ph.mode === 'break' && slot === breakSlot) continue;
       const top = slot === 0 ? st.posCurrent : st.posNext;
       let index;
       let kind = 'off';
@@ -3013,11 +3113,13 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       else index = nextIndex;
       if (index >= lines.length) continue;
       if (kind !== 'cur' && index === nextIndex) kind = 'near';
-      drawAt(lines[index].text, top, kind, kind === 'cur' ? lines[index] : null);
+      drawLineAt(lines[index].text, H * (top / 100), kind, kind === 'cur' ? lines[index] : null);
     }
-    const breakTop = activeSlot === 0 ? st.posCurrent : st.posNext;
+    const breakTop = breakSlot === 0 ? st.posCurrent : st.posNext;
     // Пока идёт отсчёт, точки занимают место нот проигрыша
-    if (ph.mode === 'break' && !cd) drawAt('♪   ♪   ♪', breakTop, 'cur');
+    if (ph.mode === 'break' && !cd) {
+      drawLineAt(BREAK_TEXT_FRAME, H * (breakTop / 100), 'cur', null);
+    }
     if (cd) {
       drawCountdown(ph.mode === 'break'
         ? H * (breakTop / 100)
@@ -3035,50 +3137,49 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     return;
   }
 
-  const lineGap = st.line / 10;
+  /* Прокрутка: строки идут столбиком, ноты проигрыша — отдельной строкой
+     между спетой и следующей. Каждая занимает своё место в столбце,
+     поэтому налезть друг на друга они не могут. */
+  const blocks = [];
+  const push = (text, kind, index = null) => {
+    const line = kind === 'cur' && index != null ? lines[index] : null;
+    blocks.push({ text, kind, line, height: heightOf(text, kind, line) });
+  };
+  const total = st.lines;
+  const before = Math.min(2, Math.floor((total - 1) / 2));
+  if (ph.mode === 'break') {
+    for (let i = Math.max(0, cur - before + 1); i <= cur; i++) push(lines[i].text, 'off');
+    push(BREAK_TEXT_FRAME, 'cur');
+    for (let i = cur + 1; i < Math.min(lines.length, cur + total - before); i++) {
+      push(lines[i].text, i === cur + 1 ? 'near' : 'off', i);
+    }
+  } else {
+    const anchor = cur === -1 ? 0 : cur;
+    const first = Math.max(0, anchor - before);
+    for (let i = first; i < Math.min(lines.length, first + total); i++) {
+      push(lines[i].text,
+        i === cur ? 'cur' : (i === cur + 1 || (cur === -1 && i === 0)) ? 'near' : 'off', i);
+    }
+  }
+
   const blockGap = Math.round(baseSize * 0.35);
-  const totalH = blocks.reduce((sum, b) => sum + b.size * lineGap + blockGap, -blockGap);
-  const pad = 40;
+  const totalH = blocks.reduce((sum, b) => sum + b.height + blockGap, -blockGap);
+  const pad = Math.round(H / 18);
   let y = st.valign === 'flex-start' ? pad
     : st.valign === 'flex-end' ? H - pad - totalH
     : H / 2 - totalH / 2;
 
   let countCy = null;
   for (const b of blocks) {
-    g2d.font = font(b.size);
-    g2d.letterSpacing = `${st.letter}px`;
-    const rowH = b.size * lineGap;
-    const cy = y + rowH / 2;
-    const isBreak = b.isCur && b.index == null && ph.mode === 'break';
+    const cy = y + b.height / 2;
+    const isBreak = b.kind === 'cur' && !b.line && ph.mode === 'break';
     // Отсчёт встаёт на место нот проигрыша, а до первого куплета — над строкой
-    if (cd && (isBreak || (countCy == null && b.isNear))) countCy = isBreak ? cy : cy - rowH * 0.85;
-    setDim(b.isCur ? 'cur' : b.isNear ? 'near' : 'off');
-    if (isBreak && cd) {
-      // ноты скрыты — вместо них отсчёт
-    } else if (b.isCur && b.index != null && ph.mode !== 'break') {
-      drawWords(lines[b.index], b.text, b.size, cy, ph);
-    } else if (b.isCur) {
-      strokeIfNeeded(b.text, W / 2, cy);
-      const start = ph.start;
-      const end = ph.mode === 'break' ? ph.until : ph.end;
-      const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
-      g2d.fillStyle = st.active;
-      g2d.fillText(b.text, W / 2, cy);
-      const textW = g2d.measureText(b.text).width;
-      g2d.save();
-      g2d.beginPath();
-      g2d.rect((W - textW) / 2, y - 4, textW * p, rowH + 8);
-      g2d.clip();
-      g2d.fillStyle = st.accent;
-      g2d.fillText(b.text, W / 2, cy);
-      g2d.restore();
-    } else {
-      strokeIfNeeded(b.text, W / 2, cy);
-      g2d.fillStyle = b.isNear ? st.active : st.inactive;
-      g2d.fillText(b.text, W / 2, cy);
+    if (cd && (isBreak || (countCy == null && b.kind === 'near'))) {
+      countCy = isBreak ? cy : y - rowH * 0.35;
     }
-    clearDim();
-    y += rowH + blockGap;
+    // Пока идёт отсчёт, ноты скрыты — вместо них точки
+    if (!(isBreak && cd)) drawLineAt(b.text, cy, b.kind, b.line);
+    y += b.height + blockGap;
   }
   g2d.letterSpacing = '0px';
   if (cd) drawCountdown(countCy != null ? countCy : H / 2);
@@ -3439,7 +3540,7 @@ document.addEventListener('keydown', (e) => {
 (function init() {
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
-  if (saved && saved.style) state.style = { ...defaultStyle(), ...saved.style };
+  if (saved && saved.style) state.style = styleFromSaved(saved);
   updateStyleUI();
   applyStyle();
   updateInstUI();
