@@ -464,6 +464,29 @@
     });
   }
 
+  /* Общая часть обоих режимов: проверить модель, приготовить звук
+     и послушать песню. Возвращает слова с метками времени. */
+  async function listenToSong(key) {
+    if (!(await ensureAsrModel(key))) return { ok: false, error: 'отменено' };
+
+    showAsrOverlay(true);
+    setAsrProgress(0, 'Готовим звук…', 'Считает на твоём компьютере, ничего не отправляется в интернет.');
+    audio.pause();
+
+    // Чистый вокал точнее, но если его нет — слушаем полный микс
+    let pcm = asr.vocal;
+    if (!pcm) {
+      const buf = state.originalBuffer;
+      const mono = new Float32Array(buf.length);
+      const ch0 = buf.getChannelData(0);
+      const ch1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0;
+      for (let i = 0; i < buf.length; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
+      pcm = await toWhisperPcm(mono, buf.sampleRate);
+    }
+
+    return runWhisper(asrModelId(key), pcm, $('asr-lang').value);
+  }
+
   async function recognizeLyrics() {
     if (asr.busy || busy) return;
     if (!state.originalBuffer) { alert('Сначала загрузи песню.'); return; }
@@ -471,25 +494,7 @@
     const key = $('asr-model').value || 'base';
     asr.busy = true;
     try {
-      if (!(await ensureAsrModel(key))) { asr.busy = false; showAsrOverlay(false); return; }
-
-      showAsrOverlay(true);
-      setAsrProgress(0, 'Готовим звук…', 'Считает на твоём компьютере, ничего не отправляется в интернет.');
-      audio.pause();
-
-      // Чистый вокал точнее, но если его нет — слушаем полный микс
-      let pcm = asr.vocal;
-      if (!pcm) {
-        const buf = state.originalBuffer;
-        const mono = new Float32Array(buf.length);
-        const ch0 = buf.getChannelData(0);
-        const ch1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0;
-        for (let i = 0; i < buf.length; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
-        pcm = await toWhisperPcm(mono, buf.sampleRate);
-      }
-
-      const modelId = asrModelId(key);
-      const res = await runWhisper(modelId, pcm, $('asr-lang').value);
+      const res = await listenToSong(key);
       if (!res.ok) {
         showAsrOverlay(false);
         asr.busy = false;
@@ -526,36 +531,120 @@
     }
   }
 
-  /* Крючок для самопроверки: прогоняет распознавание на готовом
-     звуковом буфере и отдаёт то, что получилось, без окон и диалогов.
+  /* ---------- Подгонка своего текста ----------
+     Главный способ работы: буквы берём у человека, времена — у
+     нейросети. Сама раскладка живёт в align.js. */
+  async function fitLyrics() {
+    if (asr.busy || busy) return;
+    if (!state.originalBuffer) { alert('Сначала загрузи песню.'); return; }
+    const text = $('lyrics-input').value;
+    if (!text.trim()) { alert('Сначала вставь текст песни в поле ниже.'); return; }
+
+    const key = $('asr-model').value || 'base';
+    asr.busy = true;
+    try {
+      const res = await listenToSong(key);
+      if (!res.ok) {
+        showAsrOverlay(false);
+        asr.busy = false;
+        if (res.error !== 'отменено') alert('Не получилось послушать песню: ' + res.error);
+        return;
+      }
+
+      setAsrProgress(99, 'Раскладываем твой текст по песне…', '');
+      const fit = Align.fit(text, res.words || [], { duration: state.originalBuffer.duration });
+      showAsrOverlay(false);
+      asr.busy = false;
+
+      if (!fit.ok) {
+        alert('Не получилось подогнать текст: ' + fit.error + '.\n\n' +
+          'Чаще всего дело в звуке: попробуй сначала убрать вокал нейросетью ' +
+          'на первом шаге и выбрать язык вручную. Ещё проверь, что в поле — ' +
+          'текст именно этой песни.');
+        return;
+      }
+
+      /* Текст пользователя не трогаем: подставляем только времена.
+         Дальше их заберёт applyRecognized при переходе к синхронизации. */
+      window.__asrLines = fit.lines;
+      $('lyrics-input').dispatchEvent(new Event('input'));
+
+      const с = fit.статистика;
+      const процент = Math.round(с.доляОпор * 100);
+      let итог = `Текст разложен по песне: ${с.строк} строк, ${с.словТекста} слов.\n\n` +
+        `Нейросеть точно расслышала ${процент}% слов — их время настоящее. ` +
+        'Остальные расставлены между ними по числу слогов.';
+      if (с.сомнительныхСтрок) {
+        итог += `\n\nСтрок, которые нейросеть почти не расслышала: ${с.сомнительныхСтрок}. ` +
+          'На следующем шаге они помечены знаком ≈ — их стоит проверить и поправить ' +
+          'кнопками сдвига.';
+      }
+      итог += '\n\nСинхронизацию можно пропустить и сразу идти в редактор.';
+      alert(итог);
+    } catch (err) {
+      showAsrOverlay(false);
+      asr.busy = false;
+      alert('Ошибка при подгонке текста: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  /* Поле пустое — распознаём с нуля, поле заполнено — подгоняем.
+     Кнопка и пояснение меняются вместе, чтобы человек видел заранее,
+     что произойдёт, и не затёр свой текст случайно. */
+  function updateAsrMode() {
+    const есть = !!$('lyrics-input').value.trim();
+    $('btn-asr-run').textContent = есть ? 'Подогнать мой текст' : 'Распознать текст';
+    $('btn-asr-fresh').classList.toggle('hidden', !есть);
+    $('asr-about-fit').classList.toggle('hidden', !есть);
+    $('asr-about-fresh').classList.toggle('hidden', есть);
+  }
+  $('lyrics-input').addEventListener('input', updateAsrMode);
+  updateAsrMode();
+
+  /* ---------- Крючки для самопроверки ----------
+     Прогоняют то же самое, что и кнопки, но без окон и диалогов.
 
      opts.separate — сначала выделить вокал нейросетью и слушать его,
-     как и задумано в приложении: по чистому голосу ошибок меньше. */
+     как и задумано в приложении: по чистому голосу ошибок меньше.
+     opts.words — готовые слова с метками из прошлого прогона: подгонку
+     тогда можно проверять за секунду, не гоняя нейросеть заново. */
+
+  // Звук для проверок: либо чистый вокал нейросети, либо полный микс
+  async function testPcm(buffer, opts) {
+    if (opts && opts.separate) {
+      const modelBytes = await window.desktop.modelBytes();
+      if (!modelBytes) throw new Error('модель разделения не скачана');
+      const src44 = await resample(buffer, MODEL_SR);
+      const { left, right } = toStereo(src44);
+      const sepRes = await runSeparation(modelBytes, left, right, 1);
+      if (!sepRes.ok) throw new Error('разделение: ' + sepRes.error);
+      if (!sepRes.vocal) throw new Error('разделение не отдало вокал');
+      return {
+        pcm: await toWhisperPcm(new Float32Array(sepRes.vocal), MODEL_SR),
+        источник: 'чистый вокал',
+      };
+    }
+    const ch0 = buffer.getChannelData(0);
+    const ch1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : ch0;
+    const mono = new Float32Array(buffer.length);
+    for (let i = 0; i < buffer.length; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
+    return { pcm: await toWhisperPcm(mono, buffer.sampleRate), источник: 'полный микс' };
+  }
+
+  // Послушать песню (или взять готовые слова из прошлого прогона)
+  async function testListen(buffer, language, key, opts) {
+    if (opts && opts.words && opts.words.length) {
+      return { ok: true, words: opts.words, готовое: true, источник: 'слова из файла' };
+    }
+    const { pcm, источник } = await testPcm(buffer, opts);
+    asr.percent = 0;
+    const res = await runWhisper(asrModelId(key), pcm, language || '');
+    return { ...res, источник };
+  }
+
   window.__runAsrTest = async (buffer, language, key, opts) => {
     try {
-      let pcm = null;
-      let источник = 'полный микс';
-
-      if (opts && opts.separate) {
-        const modelBytes = await window.desktop.modelBytes();
-        if (!modelBytes) return { ok: false, error: 'модель разделения не скачана' };
-        const src44 = await resample(buffer, MODEL_SR);
-        const { left, right } = toStereo(src44);
-        const sepRes = await runSeparation(modelBytes, left, right, 1);
-        if (!sepRes.ok) return { ok: false, error: 'разделение: ' + sepRes.error };
-        if (!sepRes.vocal) return { ok: false, error: 'разделение не отдало вокал' };
-        pcm = await toWhisperPcm(new Float32Array(sepRes.vocal), MODEL_SR);
-        источник = 'чистый вокал';
-      } else {
-        const ch0 = buffer.getChannelData(0);
-        const ch1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : ch0;
-        const mono = new Float32Array(buffer.length);
-        for (let i = 0; i < buffer.length; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
-        pcm = await toWhisperPcm(mono, buffer.sampleRate);
-      }
-      asr.percent = 0;
-      const res = await runWhisper(asrModelId(key),
-        pcm, language || '');
+      const res = await testListen(buffer, language, key, opts);
       if (!res.ok) return { ok: false, error: res.error };
       const lines = wordsToLines(res.words || []);
 
@@ -569,7 +658,7 @@
 
       return {
         ok: true,
-        источник,
+        источник: res.источник,
         откат: res.отладка,
         текст: res.text,
         слов: (res.words || []).length,
@@ -584,13 +673,73 @@
         студияСтрок: state.lines.length,
         студияВремена: state.lines.map((l) => (l.time == null ? null : +l.time.toFixed(2))),
         студияСлов: state.lines.map((l) => (l.words ? l.words.length : 0)),
+        // Чтобы сохранить слова и потом гонять подгонку без нейросети
+        всеСлова: res.words || [],
       };
     } catch (e) {
       return { ok: false, error: String((e && e.message) || e) };
     }
   };
 
-  $('btn-asr-run').addEventListener('click', recognizeLyrics);
+  /* Подгонка своего текста: слушаем песню и раскладываем по ней
+     готовый текст. Отдаём цифры, по которым видно, получилось или нет. */
+  window.__runFitTest = async (buffer, text, language, key, opts) => {
+    try {
+      const res = await testListen(buffer, language, key, opts);
+      if (!res.ok) return { ok: false, error: res.error };
+
+      const fit = Align.fit(text, res.words || [], { duration: buffer.duration });
+      if (!fit.ok) return { ok: false, error: fit.error, всеСлова: res.words || [] };
+
+      // Тот же путь, что у пользователя: текст в поле, времена рядом
+      $('lyrics-input').value = text;
+      $('lyrics-input').dispatchEvent(new Event('input'));
+      window.__asrLines = fit.lines;
+      $('btn-to-sync').click();
+
+      const времена = state.lines.map((l) => (l.time == null ? null : +l.time.toFixed(2)));
+      let порядок = true;
+      for (let i = 1; i < времена.length; i++) {
+        if (времена[i] == null || времена[i - 1] == null || времена[i] <= времена[i - 1]) порядок = false;
+      }
+
+      return {
+        ok: true,
+        источник: res.источник,
+        откат: res.отладка,
+        длина: +buffer.duration.toFixed(1),
+        ...fit.статистика,
+        // Что доехало до студии — там же проверяется applyRecognized
+        студияСтрок: state.lines.length,
+        студияБезВремени: state.lines.filter((l) => l.time == null).length,
+        студияПорядокСтрок: порядок,
+        студияСомнительных: state.lines.filter((l) => l.сомнительная).length,
+        строки: state.lines.map((l, i) =>
+          `${(l.time == null ? 0 : l.time).toFixed(2)} ${fit.lines[i] && fit.lines[i].сомнительная ? '≈' : ' '} ${l.text}`),
+        опорыПоСтрокам: fit.lines.map((l) => `${l.опор}/${l.слов}`),
+        всеСлова: res.words || [],
+      };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  };
+
+  $('btn-asr-run').addEventListener('click', () => {
+    if ($('lyrics-input').value.trim()) fitLyrics();
+    else recognizeLyrics();
+  });
+
+  /* Свободное распознавание при непустом поле затрёт чужую работу,
+     поэтому прячем его во вторую кнопку и переспрашиваем */
+  $('btn-asr-fresh').addEventListener('click', () => {
+    const ok = confirm(
+      'Распознать текст с нуля?\n\n' +
+      'Нейросеть напишет текст сама и заменит им то, что сейчас в поле. ' +
+      'Пение распознаётся хуже речи, так что это черновик — он нужен, ' +
+      'когда текста песни нет под рукой.\n\n' +
+      'Твой текст будет потерян. Продолжить?');
+    if (ok) recognizeLyrics();
+  });
   $('btn-asr-cancel').addEventListener('click', () => {
     if (asr.worker) asr.worker.postMessage({ cmd: 'cancel' });
     if (asr.stop) asr.stop();

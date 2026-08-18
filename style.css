@@ -443,6 +443,14 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .sync-list .ts.empty { color: var(--border); }
 .sync-list .line-text { flex: 1; }
+/* Строка, которую нейросеть не расслышала при подгонке текста:
+   время подобрано на глазок. Пометка тихая — не крик, а подсказка. */
+.guess-mark {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  cursor: help;
+  margin-left: -0.6rem;
+}
 .nudge { display: flex; gap: 0.25rem; }
 .nudge-btn {
   min-width: 34px;

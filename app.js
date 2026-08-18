@@ -398,6 +398,9 @@ function saveProject() {
     // Ручная разметка слов: [{text, time, end}] или null для строк без неё
     words: state.lines.length ? state.lines.map((l) => l.words || null)
       : (keepPrev && prev.words) || [],
+    // Строки, чьё время нейросеть подобрала на глазок при подгонке текста
+    guess: state.lines.length ? state.lines.map((l) => !!l.сомнительная)
+      : (keepPrev && prev.guess) || [],
     bg: state.bgImage,
     eq: { ...state.eq },
     style: { ...state.style },
@@ -681,6 +684,10 @@ $('btn-to-sync').addEventListener('click', () => {
       if (w && w.length && w.length === chunks.length) {
         line.words = w.map((x, k) => ({ ...x, text: chunks[k] }));
       }
+      // Пометка «время подобрано на глазок» переживает перезагрузку
+      if (mine && mine.guess && mine.guess.length === texts.length) {
+        line.сомнительная = !!mine.guess[i];
+      }
       return line;
     });
   }
@@ -693,10 +700,14 @@ $('btn-to-sync').addEventListener('click', () => {
   goToStep(3);
 });
 
-/* Настольная версия умеет распознавать текст песни нейросетью и кладёт
+/* Настольная версия умеет размечать текст песни нейросетью и кладёт
    рядом с текстом времена строк и слов. Забираем их для тех строк,
    текст которых пользователь не переписал, и больше к ним не возвращаемся:
-   ручные правки важнее машинных догадок. */
+   ручные правки важнее машинных догадок.
+
+   Пометка «сомнительная» приходит от подгонки своего текста: так помечены
+   строки, которых нейросеть почти не расслышала, — их время подобрано
+   на глазок, и человеку стоит их проверить. */
 function applyRecognized(lines) {
   const src = window.__asrLines;
   if (!src || !src.length) return;
@@ -705,6 +716,7 @@ function applyRecognized(lines) {
     if (!r || r.text !== line.text) return;
     line.time = r.time;
     line.end = r.end;
+    line.сомнительная = !!r.сомнительная;
     if (r.words && r.words.length) line.words = r.words.map((w) => ({ ...w }));
   });
   window.__asrLines = null;
@@ -730,6 +742,18 @@ function renderSyncList() {
     text.className = 'line-text';
     text.textContent = line.text;
     li.append(ts, text);
+
+    /* Строка, которую нейросеть не расслышала при подгонке текста:
+       время у неё подобрано на глазок. Тихая пометка, чтобы человек
+       знал, где именно стоит послушать и подвинуть. */
+    if (line.сомнительная) {
+      const mark = document.createElement('span');
+      mark.className = 'guess-mark';
+      mark.textContent = '≈';
+      mark.title = 'Нейросеть почти не расслышала эту строку — время подобрано ' +
+        'приблизительно. Послушай и поправь кнопками сдвига.';
+      li.insertBefore(mark, text);
+    }
 
     if (!sync.active) {
       const resume = document.createElement('button');
@@ -800,6 +824,8 @@ function setLineTime(i, t) {
     : audio.duration;
   const was = line.time;
   line.time = Math.min(Math.max(t, prev), Math.max(prev, next));
+  // Метку поправили руками — сомнений в ней больше нет
+  line.сомнительная = false;
   if (was != null) shiftWords(line, line.time - was);
 }
 
@@ -879,7 +905,7 @@ function startSync(from = sync.selected) {
   const resumeAt = state.lines[from].time;
   // Всё до выбранной строки оставляем нетронутым. Выбранная и последующие
   // метки будут записаны заново, поэтому ошибку не нужно переделывать с нуля.
-  state.lines.slice(from).forEach((l) => { l.time = null; l.end = null; });
+  state.lines.slice(from).forEach((l) => { l.time = null; l.end = null; l.сомнительная = false; });
   sync.active = true;
   sync.index = from;
   sync.selected = from;
@@ -921,6 +947,7 @@ function tickSync() {
 function tapLine() {
   if (!sync.active || sync.index >= state.lines.length) return;
   state.lines[sync.index].time = audio.position();
+  state.lines[sync.index].сомнительная = false;
   sync.index++;
   if (sync.index >= state.lines.length) {
     finishSync();
@@ -956,7 +983,7 @@ $('btn-sync-start').addEventListener('click', startSync);
 $('btn-sync-stop').addEventListener('click', finishSync);
 $('btn-sync-reset').addEventListener('click', () => {
   sync.selected = 0;
-  state.lines.forEach((l) => { l.time = null; l.end = null; });
+  state.lines.forEach((l) => { l.time = null; l.end = null; l.сомнительная = false; });
   saveProject();
   renderSyncList();
   updateSyncButtons();

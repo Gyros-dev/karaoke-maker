@@ -155,6 +155,28 @@ function createWindow() {
         распознаваниеВидно: !document.getElementById('asr-block').classList.contains('hidden'),
         кнопкаРаспознавания: !!document.getElementById('btn-asr-run'),
         моделейРаспознавания: document.getElementById('asr-model').options.length,
+        /* Два режима разметки текста: поле пустое — распознаём с нуля,
+           текст вставлен — подгоняем его под песню. Проверяем сам
+           переключатель: подпись кнопки, вторая кнопка и пояснения. */
+        разметкаТекста: (() => {
+          const поле = document.getElementById('lyrics-input');
+          const было = поле.value;
+          const снимок = () => ({
+            кнопка: document.getElementById('btn-asr-run').textContent,
+            сНуля: !document.getElementById('btn-asr-fresh').classList.contains('hidden'),
+            проПодгонку: !document.getElementById('asr-about-fit').classList.contains('hidden'),
+          });
+          поле.value = '';
+          поле.dispatchEvent(new Event('input'));
+          const пусто = снимок();
+          поле.value = 'строка раз\\nстрока два';
+          поле.dispatchEvent(new Event('input'));
+          const сТекстом = снимок();
+          поле.value = было;
+          поле.dispatchEvent(new Event('input'));
+          return { пусто, сТекстом };
+        })(),
+        подгонкаЕсть: !!(window.Align && window.Align.fit),
         мостПодключён: !!(window.desktop && window.desktop.isDesktop),
         шаговВсего: document.querySelectorAll('.step-tab').length,
         стильПрименён: !!document.getElementById('lyrics-stage').dataset.effect,
@@ -220,17 +242,38 @@ function createWindow() {
          страница разбирала бы дольше, чем считает нейросеть.
 
          KARAOKE_ASR_SEP=1 — сначала выделить чистый вокал нейросетью
-         и распознавать уже его, как задумано в приложении. */
+         и распознавать уже его, как задумано в приложении.
+
+         KARAOKE_ASR_ALIGN=путь-к-тексту — вместо свободного распознавания
+         подогнать под песню готовый текст: главный способ работы.
+
+         KARAOKE_ASR_WORDS / KARAOKE_ASR_DUMP — сохранить услышанные слова
+         с метками в файл и брать их оттуда в следующий раз. Подгонку тогда
+         можно проверять за секунду, не гоняя нейросеть по новой. */
       const asrFile = process.env.KARAOKE_ASR_E2E;
       if (asrFile && fs.existsSync(asrFile)) {
         const b64 = fs.readFileSync(asrFile).toString('base64');
         const lang = process.env.KARAOKE_ASR_LANG || 'russian';
         const key = process.env.KARAOKE_ASR_MODEL || 'base';
         const sep = process.env.KARAOKE_ASR_SEP === '1';
-        const dl = await win.webContents.executeJavaScript(
+        const alignFile = process.env.KARAOKE_ASR_ALIGN;
+        const dumpFile = process.env.KARAOKE_ASR_DUMP;
+        const wordsFile = process.env.KARAOKE_ASR_WORDS;
+
+        const lyrics = alignFile && fs.existsSync(alignFile)
+          ? fs.readFileSync(alignFile, 'utf8') : null;
+        const words = wordsFile && fs.existsSync(wordsFile)
+          ? JSON.parse(fs.readFileSync(wordsFile, 'utf8')) : null;
+
+        // Готовые слова нейросети не требуют — модель качать незачем
+        const dl = words ? { ok: true } : await win.webContents.executeJavaScript(
           `window.desktop.asrDownload(${JSON.stringify(key)})`);
-        console.log('ASR-DOWNLOAD', JSON.stringify(dl));
+        if (!words) console.log('ASR-DOWNLOAD', JSON.stringify(dl));
         if (dl.ok) {
+          const call = lyrics
+            ? `window.__runFitTest(buf, ${JSON.stringify(lyrics)}, ${JSON.stringify(lang)},
+                 ${JSON.stringify(key)}, опции)`
+            : `window.__runAsrTest(buf, ${JSON.stringify(lang)}, ${JSON.stringify(key)}, опции)`;
           const res = await win.webContents.executeJavaScript(`(async () => {
             try {
               window.__asrDebug = ${process.env.KARAOKE_ASR_DEBUG === '1'};
@@ -238,13 +281,19 @@ function createWindow() {
               const raw = new Uint8Array(bin.length);
               for (let i = 0; i < bin.length; i++) raw[i] = bin.charCodeAt(i);
               const buf = await audio.ensureCtx().decodeAudioData(raw.buffer);
+              const опции = { separate: ${sep ? 'true' : 'false'},
+                words: ${words ? JSON.stringify(words) : 'null'} };
               const t0 = Date.now();
-              const out = await window.__runAsrTest(buf, ${JSON.stringify(lang)},
-                ${JSON.stringify(key)}, { separate: ${sep ? 'true' : 'false'} });
+              const out = await ${call};
               return { ...out, секунд: ((Date.now() - t0) / 1000).toFixed(1) };
             } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
           })()`, true);
-          console.log('ASR-E2E', JSON.stringify(res));
+          if (dumpFile && res.всеСлова) {
+            fs.writeFileSync(dumpFile, JSON.stringify(res.всеСлова));
+            console.log('ASR-DUMP', dumpFile, res.всеСлова.length, 'слов');
+          }
+          delete res.всеСлова;
+          console.log(lyrics ? 'FIT-E2E' : 'ASR-E2E', JSON.stringify(res));
         }
       }
       app.quit();
