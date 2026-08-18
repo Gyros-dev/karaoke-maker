@@ -181,6 +181,50 @@ function createWindow() {
         шаговВсего: document.querySelectorAll('.step-tab').length,
         стильПрименён: !!document.getElementById('lyrics-stage').dataset.effect,
         отсчётЕсть: !!document.getElementById('st-countdown'),
+        /* Размер строк на сцене. Пока текст влезает по ширине, обе раскладки
+           («строки меняются местами» и закреплённые места) обязаны давать
+           один и тот же размер — базовый. Признак ловит дефект, из-за
+           которого закреплённые строки ужимались до предела: их коробка
+           шире полей сцены, и подгонка по ширине срабатывала впустую. */
+        размерСтрок: (() => {
+          const панель = document.getElementById('step-5');
+          const былаАктивна = панель.classList.contains('active');
+          панель.classList.add('active');   // скрытую сцену не измерить
+          const строкиБыли = state.lines;
+          const свапБыл = state.style.swapLines;
+          state.lines = [
+            { text: 'Короткая строка', time: 0, end: 3 },
+            { text: 'Ещё одна короткая', time: 3, end: 6 },
+          ];
+          const мера = (меняются) => {
+            state.style.swapLines = меняются;
+            applyStyle();
+            const сцена = document.getElementById('lyrics-stage');
+            const cs = getComputedStyle(сцена);
+            const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+            const базовый = parseFloat(cs.getPropertyValue('--st-size')) * rem;
+            const размеры = [...сцена.querySelectorAll('.stage-line')]
+              .map((el) => parseFloat(getComputedStyle(el).fontSize));
+            return {
+              базовый: +базовый.toFixed(2),
+              строк: размеры.length,
+              минимум: размеры.length ? +Math.min(...размеры).toFixed(2) : null,
+            };
+          };
+          const местами = мера(true);
+          const закреплённые = мера(false);
+          state.lines = строкиБыли;
+          state.style.swapLines = свапБыл;
+          applyStyle();
+          if (!былаАктивна) панель.classList.remove('active');
+          const вНорме = (м) => м.строк > 0 && м.базовый > 0
+            && Math.abs(м.минимум - м.базовый) < 0.6;
+          return {
+            местами,
+            закреплённые,
+            совпадает: вНорме(местами) && вНорме(закреплённые),
+          };
+        })(),
         // Окно «Что нового»: в приложении показываем пункты про нейросети
         // и прячем сайтовую строку «а в приложении ещё…»
         новостейВидно: [...document.querySelectorAll('.whatsnew-list li')]

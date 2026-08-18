@@ -40,7 +40,7 @@ function defaultStyle() {
     line: 13,           // ×0.1 — межстрочный интервал
     lines: 7,           // сколько строк видно
     pad: 8,             // поля по краям сцены, % — 0 растягивает текст во всю ширину
-    swapLines: true,    // строки поднимаются вверх по мере пения
+    swapLines: false,   // строки поднимаются вверх по мере пения
     posCurrent: 40,     // где стоит первая строка, % от верха (когда не меняются местами)
     posNext: 60,        // где стоит вторая строка
     anim: 'fade',       // fade | slide | none
@@ -1286,20 +1286,46 @@ function updateCountdown(stage, cd) {
   }
 }
 
+/* Ширина самого текста строки, а не её коробки.
+   Мерить коробку (scrollWidth) нельзя: она никогда не бывает уже сцены.
+   У строки на закреплённом месте коробка вообще шире полей — абсолютный
+   элемент считает свои left/right от области с полями родителя, а не от
+   текста, — из-за чего строки ужимались до предела на ровном месте.
+   Слова лежат в отдельных span'ах, поэтому берём охват их прямоугольников:
+   для строки в одну строку это ровно ширина текста, а для переносимой
+   (превью редактора) — ширина самой длинной её части. */
+function lineTextWidth(el) {
+  const spans = el.querySelectorAll('.w');
+  if (!spans.length) return el.scrollWidth;
+  let left = Infinity;
+  let right = -Infinity;
+  spans.forEach((s) => {
+    const r = s.getBoundingClientRect();
+    if (!r.width && !r.height) return;   // пустой span ширины не даёт
+    left = Math.min(left, r.left);
+    right = Math.max(right, r.right);
+  });
+  return right > left ? right - left : 0;
+}
+
 /* Строки не переносятся — если строка шире сцены,
    уменьшаем её шрифт так, чтобы она поместилась целиком */
 function fitStageLines(container) {
+  const cs = getComputedStyle(container);
   const avail = container.clientWidth
-    - parseFloat(getComputedStyle(container).paddingLeft)
-    - parseFloat(getComputedStyle(container).paddingRight);
+    - parseFloat(cs.paddingLeft)
+    - parseFloat(cs.paddingRight);
   if (avail <= 0) return;
   container.querySelectorAll('.stage-line').forEach((el) => {
     el.style.fontSize = '';
-    // Несколько проходов: ширина меряется в целых пикселях,
-    // поэтому одного пересчёта бывает мало
-    for (let pass = 0; pass < 4 && el.scrollWidth > avail; pass++) {
+    // Несколько проходов: ширина текста меняется не строго пропорционально
+    // размеру шрифта (округления, кернинг), поэтому результат уточняем.
+    // Полпикселя запаса — чтобы не ужимать строку из-за округлений.
+    for (let pass = 0; pass < 3; pass++) {
+      const w = lineTextWidth(el);
+      if (w <= avail + 0.5) break;
       const cur = parseFloat(getComputedStyle(el).fontSize);
-      const next = Math.max(10, cur * (avail / el.scrollWidth) * 0.98);
+      const next = Math.max(10, cur * (avail / w) * 0.99);
       el.style.fontSize = `${next}px`;
       if (next <= 10) break;
     }

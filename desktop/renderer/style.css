@@ -713,11 +713,15 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    и не съезжают вверх по мере пения */
 .lyrics-stage[data-slots="on"] { position: relative; display: block; }
 .lyrics-stage[data-slots="on"] .stage-line.slot {
-  /* Абсолютные потомки живут внутри области с полями родителя,
-     поэтому left/right в ноль — это и есть заданные поля */
+  /* Абсолютный элемент считает left/right от области ВМЕСТЕ с полями
+     родителя, поэтому одних нулей мало: поля повторяем на самой строке,
+     иначе её коробка шире полей сцены (и мерить по ней ширину нельзя —
+     см. lineTextWidth в app.js) */
   position: absolute;
   left: 0;
   right: 0;
+  padding-left: inherit;
+  padding-right: inherit;
   transform: translateY(-50%);
   margin: 0;
 }
