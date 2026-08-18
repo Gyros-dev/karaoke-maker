@@ -383,7 +383,7 @@
           asr.percent = m.percent;
           setAsrProgress(m.percent, m.text, m.eta || undefined);
         } else if (m.type === 'done') {
-          finish({ ok: true, text: m.text, words: m.words });
+          finish({ ok: true, text: m.text, words: m.words, отладка: m.отладка });
         } else if (m.type === 'error') {
           finish({ ok: false, error: m.error });
         }
@@ -392,7 +392,9 @@
         finish({ ok: false, error: err.message || 'сбой в потоке распознавания' });
       };
       const copy = pcm.slice();
-      asr.worker.postMessage({ modelId, audio: copy.buffer, language }, [copy.buffer]);
+      asr.worker.postMessage(
+        { modelId, audio: copy.buffer, language, debug: !!window.__asrDebug },
+        [copy.buffer]);
     });
   }
 
@@ -427,7 +429,24 @@
         cur.words.push(w);
       }
     }
-    return lines.map((l) => {
+    /* Последняя подстраховка от зацикливания: петлю ловит и рвёт сам
+       воркер, но если одна всё же просочилась, она даст вереницу
+       совершенно одинаковых строк — на сцене это выглядит хуже всего.
+       Три повтора подряд оставляем: и в припевах строки честно
+       повторяются, и длинный распев «да-да-да…» занимает пару строк. */
+    const REPEAT_LINES = 3;
+    const kept = [];
+    let sameKey = null;
+    let same = 0;
+    for (const l of lines) {
+      const key = l.text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+      if (key && key === sameKey) same++;
+      else { same = 1; sameKey = key; }
+      if (same > REPEAT_LINES) continue;
+      kept.push(l);
+    }
+
+    return kept.map((l) => {
       const last = l.words[l.words.length - 1];
       const end = last.end != null ? last.end : l.words[0].start + 1;
       return {
@@ -508,14 +527,32 @@
   }
 
   /* Крючок для самопроверки: прогоняет распознавание на готовом
-     звуковом буфере и отдаёт то, что получилось, без окон и диалогов */
-  window.__runAsrTest = async (buffer, language, key) => {
+     звуковом буфере и отдаёт то, что получилось, без окон и диалогов.
+
+     opts.separate — сначала выделить вокал нейросетью и слушать его,
+     как и задумано в приложении: по чистому голосу ошибок меньше. */
+  window.__runAsrTest = async (buffer, language, key, opts) => {
     try {
-      const ch0 = buffer.getChannelData(0);
-      const ch1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : ch0;
-      const mono = new Float32Array(buffer.length);
-      for (let i = 0; i < buffer.length; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
-      const pcm = await toWhisperPcm(mono, buffer.sampleRate);
+      let pcm = null;
+      let источник = 'полный микс';
+
+      if (opts && opts.separate) {
+        const modelBytes = await window.desktop.modelBytes();
+        if (!modelBytes) return { ok: false, error: 'модель разделения не скачана' };
+        const src44 = await resample(buffer, MODEL_SR);
+        const { left, right } = toStereo(src44);
+        const sepRes = await runSeparation(modelBytes, left, right, 1);
+        if (!sepRes.ok) return { ok: false, error: 'разделение: ' + sepRes.error };
+        if (!sepRes.vocal) return { ok: false, error: 'разделение не отдало вокал' };
+        pcm = await toWhisperPcm(new Float32Array(sepRes.vocal), MODEL_SR);
+        источник = 'чистый вокал';
+      } else {
+        const ch0 = buffer.getChannelData(0);
+        const ch1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : ch0;
+        const mono = new Float32Array(buffer.length);
+        for (let i = 0; i < buffer.length; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
+        pcm = await toWhisperPcm(mono, buffer.sampleRate);
+      }
       asr.percent = 0;
       const res = await runWhisper(asrModelId(key),
         pcm, language || '');
@@ -532,6 +569,8 @@
 
       return {
         ok: true,
+        источник,
+        откат: res.отладка,
         текст: res.text,
         слов: (res.words || []).length,
         строк: lines.length,

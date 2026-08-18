@@ -212,23 +212,35 @@ function createWindow() {
         console.log('E2E', JSON.stringify(e2e));
       }
 
-      /* Полная проверка распознавания: KARAOKE_ASR_E2E=путь-к-wav.
-         Файл читаем прямо здесь и отдаём странице как байты. */
+      /* Полная проверка распознавания: KARAOKE_ASR_E2E=путь-к-файлу.
+         Годится всё, что умеет открыть само приложение (mp3, wav, m4a…):
+         декодирует его тот же decodeAudioData, что и при обычной загрузке.
+
+         Байты передаём строкой base64: список из миллионов чисел
+         страница разбирала бы дольше, чем считает нейросеть.
+
+         KARAOKE_ASR_SEP=1 — сначала выделить чистый вокал нейросетью
+         и распознавать уже его, как задумано в приложении. */
       const asrFile = process.env.KARAOKE_ASR_E2E;
       if (asrFile && fs.existsSync(asrFile)) {
-        const bytes = fs.readFileSync(asrFile);
+        const b64 = fs.readFileSync(asrFile).toString('base64');
         const lang = process.env.KARAOKE_ASR_LANG || 'russian';
         const key = process.env.KARAOKE_ASR_MODEL || 'base';
+        const sep = process.env.KARAOKE_ASR_SEP === '1';
         const dl = await win.webContents.executeJavaScript(
           `window.desktop.asrDownload(${JSON.stringify(key)})`);
         console.log('ASR-DOWNLOAD', JSON.stringify(dl));
         if (dl.ok) {
-          const arr = Array.from(bytes);
           const res = await win.webContents.executeJavaScript(`(async () => {
             try {
+              window.__asrDebug = ${process.env.KARAOKE_ASR_DEBUG === '1'};
+              const bin = atob(${JSON.stringify(b64)});
+              const raw = new Uint8Array(bin.length);
+              for (let i = 0; i < bin.length; i++) raw[i] = bin.charCodeAt(i);
+              const buf = await audio.ensureCtx().decodeAudioData(raw.buffer);
               const t0 = Date.now();
-              const buf = await audio.ensureCtx().decodeAudioData(new Uint8Array(${JSON.stringify(arr)}).buffer);
-              const out = await window.__runAsrTest(buf, ${JSON.stringify(lang)}, ${JSON.stringify(key)});
+              const out = await window.__runAsrTest(buf, ${JSON.stringify(lang)},
+                ${JSON.stringify(key)}, { separate: ${sep ? 'true' : 'false'} });
               return { ...out, секунд: ((Date.now() - t0) / 1000).toFixed(1) };
             } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
           })()`, true);
