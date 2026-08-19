@@ -451,6 +451,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   cursor: help;
   margin-left: -0.6rem;
 }
+/* В списке редактора пометка стоит между временем и текстом,
+   поэтому подтягивать её влево не нужно */
+.edit-row .guess-mark { margin-left: 0; }
 .nudge { display: flex; gap: 0.25rem; }
 .nudge-btn {
   min-width: 34px;
@@ -504,7 +507,18 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .edit-row:last-child { border-bottom: none; }
 .edit-row.current-row { background: rgba(16, 185, 129, 0.1); }
+/* Выбранная строка — та, которой слушаются клавиши и дорожка */
+.edit-row.selected-row {
+  background: rgba(132, 204, 22, 0.13);
+  box-shadow: inset 3px 0 0 #84cc16;
+}
 .edit-row .ts { min-width: 3rem; }
+.edit-row .num {
+  min-width: 1.6rem;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-align: right;
+}
 .edit-text {
   flex: 1;
   min-width: 150px;
@@ -627,18 +641,71 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.6rem;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
   margin-bottom: 0.5rem;
   color: var(--text-dim);
   font-size: 0.8rem;
 }
+.timeline-tools .nudge-btn { white-space: nowrap; }
 .timeline-tools .tools-right { display: flex; align-items: center; gap: 0.4rem; }
+.timeline-tools .tl-group { display: flex; align-items: center; gap: 0.4rem; }
+/* Выбранная строка: подпись между кнопками, тянется на всё свободное место */
+.tl-sel {
+  flex: 1;
+  min-width: 8rem;
+  color: #34d399;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Включённый переключатель дорожки (по кругу, притягивание к голосу) */
+.nudge-btn.on {
+  border-color: #34d399;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.14);
+}
 #timeline {
   display: block;
   width: 100%;
   border-radius: 8px;
   cursor: pointer;
   touch-action: none;
+}
+/* Что каким цветом нарисовано на дорожке */
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin-top: 0.5rem;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+.tl-key { display: flex; align-items: center; gap: 0.35rem; }
+.tl-key b { color: var(--text-dim); font-weight: 400; opacity: 0.75; }
+.tl-key .sw {
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.sw-voice { background: rgba(56, 189, 248, 0.55); border: 1px solid #38bdf8; }
+.sw-line { background: rgba(16, 185, 129, 0.35); border: 1px solid #10b981; }
+.sw-guess { background: rgba(245, 158, 11, 0.3); border: 1px dashed #f59e0b; }
+.sw-word { background: rgba(132, 204, 22, 0.3); border: 1px solid #84cc16; }
+.sw-own { background: transparent; border-left: 2px dashed #38bdf8; border-radius: 0; width: 4px; }
+.timeline-keys {
+  margin-top: 0.35rem;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  line-height: 1.7;
+}
+.timeline-keys kbd {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 0.3rem;
+  font-family: inherit;
+  font-size: 0.95em;
 }
 
 /* --- Экспорт видео --- */

@@ -532,12 +532,12 @@
   <div class="step-panel" id="step-4">
     <p class="panel-hint">
       Слева — текст: его можно править прямо в списке, слушать построчно (▶) и двигать кнопками.
-      Метка «до …» и кнопки «конец» задают точный момент окончания строки — так
-      во время проигрыша не будет висеть предыдущий текст.
       Кнопка «♪ слова» включает простукивание слов внутри строки: подсветка
       пойдёт точно по словам, а не по их длине на глазок.
-      Справа — предпросмотр караоке. Внизу — звуковая дорожка: клик перематывает,
-      зелёный маркер строки можно тащить мышью.
+      Справа — предпросмотр караоке, один в один со сценой.
+      Внизу — дорожка: каждая строка нарисована блоком от начала до конца.
+      Тяни за края блока — сдвинется граница, тяни за середину — вся строка.
+      Клик по пустому месту перематывает.
     </p>
     <div class="editor-grid">
       <ul class="edit-list" id="edit-list"></ul>
@@ -565,14 +565,36 @@
     </div>
     <div class="timeline-wrap">
       <div class="timeline-tools">
-        <span>Дорожка: клик — перемотка, маркер строки можно перетащить</span>
-        <span class="tools-right">
-          <button class="nudge-btn" id="tl-zoom-out" title="Отдалить">−</button>
+        <span class="tl-group">
+          <button class="nudge-btn" id="tl-undo" title="Отменить последнее действие (Cmd+Z)" disabled>↶ отменить</button>
+          <button class="nudge-btn" id="tl-redo" title="Повторить отменённое (Cmd+Shift+Z)" disabled>↷ повторить</button>
+        </span>
+        <span class="tl-group">
+          <button class="nudge-btn" id="tl-loop" title="Играть выбранную строку по кругу (клавиша L)">↻ по кругу</button>
+          <button class="nudge-btn on" id="tl-snap" title="Притягивать границы к настоящему вступлению голоса (клавиша S)">⇥ к голосу</button>
+        </span>
+        <span class="tl-sel" id="tl-sel">Строка не выбрана</span>
+        <span class="tl-group tools-right">
+          <button class="nudge-btn" id="tl-zoom-out" title="Отдалить (клавиша −)">−</button>
           <span>масштаб</span>
-          <button class="nudge-btn" id="tl-zoom-in" title="Приблизить">+</button>
+          <button class="nudge-btn" id="tl-zoom-in" title="Приблизить (клавиша +)">+</button>
+          <button class="nudge-btn" id="tl-fit" title="Показать песню целиком">вся песня</button>
         </span>
       </div>
-      <canvas id="timeline" height="150"></canvas>
+      <canvas id="timeline" height="160"></canvas>
+      <div class="timeline-legend">
+        <span class="tl-key"><i class="sw sw-voice"></i> голос <b id="tl-voice-note">— только в приложении после удаления вокала</b></span>
+        <span class="tl-key"><i class="sw sw-line"></i> строка</span>
+        <span class="tl-key"><i class="sw sw-guess"></i> ≈ время на глазок</span>
+        <span class="tl-key"><i class="sw sw-word"></i> слова выбранной строки</span>
+        <span class="tl-key"><i class="sw sw-own"></i> своё время, если строку подтянуло к голосу</span>
+      </div>
+      <p class="timeline-keys">
+        <kbd>пробел</kbd> играть · <kbd>↑</kbd><kbd>↓</kbd> строка · <kbd>←</kbd><kbd>→</kbd> начало
+        · <kbd>[</kbd><kbd>]</kbd> конец · <kbd>Shift</kbd> точнее, <kbd>Alt</kbd> грубее
+        · <kbd>Enter</kbd> прослушать · <kbd>L</kbd> по кругу · <kbd>Cmd+Z</kbd> отменить
+        · колесо — прокрутка, с <kbd>Cmd</kbd> — масштаб
+      </p>
     </div>
     <div class="panel-actions">
       <button class="btn btn-ghost" id="btn-back-4">← Синхронизация</button>

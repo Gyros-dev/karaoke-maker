@@ -225,6 +225,93 @@ function createWindow() {
             совпадает: вНорме(местами) && вНорме(закреплённые),
           };
         })(),
+        /* Редактор: дорожка блоками, отмена действий и полоса голоса.
+           Подкладываем короткую «песню» и три строки, гоняем на них всё,
+           что должно работать, и возвращаем прежнее состояние. */
+        редактор: (() => {
+          const былиСтроки = state.lines;
+          const былБуфер = state.originalBuffer;
+          const былаДлина = audio.duration;
+          const былГолос = { level: voice.level, runs: voice.runs };
+          const панель = document.getElementById('step-4');
+          const былаАктивна = панель.classList.contains('active');
+          try {
+            const SR = 8000, dur = 30;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const buf = ctx.createBuffer(1, SR * dur, SR);
+            const d = buf.getChannelData(0);
+            for (let i = 0; i < d.length; i++) d[i] = 0.2 * Math.sin(i / 20);
+            state.originalBuffer = buf;
+            audio.duration = dur;
+            state.lines = [
+              { text: 'Раз строка', time: 2, end: null, ручнойКонец: false, сомнительная: false },
+              { text: 'Два строка', time: 10, end: null, ручнойКонец: false, сомнительная: true },
+              { text: 'Три строка', time: 18, end: null, ручнойКонец: false, сомнительная: false },
+            ];
+            clearVoiceTrack();
+            панель.classList.add('active');   // скрытую дорожку не измерить
+            editor.peaks = null;
+            openEditor();
+
+            const полосБезГолоса = Object.keys(timelineLanes()).length - 1;
+            const блоки = editorSpans().map((s) => +(s.end - s.start).toFixed(2));
+            const слов = lineWords(state.lines[0], editorSpans()[0]).length;
+
+            // Отмена и повтор: двигаем строку и возвращаем её на место
+            selectLine(0, {});
+            const было = state.lines[0].time;
+            pushHistory();
+            setLineTime(0, было + 1.5);
+            const сдвинулось = state.lines[0].time;
+            undoEdit();
+            const послеОтмены = state.lines[0].time;
+            redoEdit();
+            const послеПовтора = state.lines[0].time;
+            undoEdit();
+
+            /* Огибающая голоса: с ней у дорожки появляется своя полоса,
+               а границы притягиваются к настоящему вступлению пения */
+            const n = dur * VOICE_RATE;
+            const level = new Uint8Array(n);
+            for (let i = 0; i < n; i++) {
+              const t = i / VOICE_RATE;
+              const поют = state.lines.some((l) => t >= l.time && t <= l.time + 3);
+              level[i] = voiceDbCode(поют ? -5 : -50);
+            }
+            voice.level = level;
+            voice.runs = buildVoiceRuns(level);
+            editor.peaks = null;
+            openEditor();
+            const полосСГолосом = Object.keys(timelineLanes()).length - 1;
+            const вступление = voice.runs[0].start;
+            const притянулось = snapToVoice(вступление + 0.06);
+
+            return {
+              полосБезГолоса,          // линейка, волна, строки, слова
+              полосСГолосом,           // и ещё голос
+              блоки,                   // длины строк в секундах, все > 0
+              слов,
+              отменаРаботает: сдвинулось !== было && послеОтмены === было
+                && послеПовтора === сдвинулось,
+              притяжениеКГолосу: Math.abs(притянулось - вступление) < 1e-6,
+              кнопкиЕсть: !!(document.getElementById('tl-undo')
+                && document.getElementById('tl-loop') && document.getElementById('tl-fit')),
+              вНорме: полосБезГолоса === 4 && полосСГолосом === 5
+                && блоки.length === 3 && блоки.every((v) => v > 0),
+            };
+          } finally {
+            state.lines = былиСтроки;
+            state.originalBuffer = былБуфер;
+            audio.duration = былаДлина;
+            voice.level = былГолос.level;
+            voice.runs = былГолос.runs;
+            editor.peaks = null;
+            editor.sel = -1;
+            editor.spansKey = '';
+            clearHistory();
+            if (!былаАктивна) панель.classList.remove('active');
+          }
+        })(),
         // Окно «Что нового»: в приложении показываем пункты про нейросети
         // и прячем сайтовую строку «а в приложении ещё…»
         новостейВидно: [...document.querySelectorAll('.whatsnew-list li')]
