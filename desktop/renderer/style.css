@@ -1247,6 +1247,11 @@ body.is-desktop .only-web { display: none; }
      а не жёстким font-size — иначе ползунок размера перестаёт работать */
   .lyrics-stage { --st-narrow: 0.83; }
   .panel-actions { justify-content: center; }
+  /* Редактор на узком экране: предпросмотр уходит под список,
+     а подпись выбранной строки — на свою строку под кнопками */
+  .editor-grid { grid-template-columns: 1fr; }
+  .timeline-tools { font-size: 0.75rem; }
+  .tl-sel { flex-basis: 100%; order: 9; }
 }
 
 /* --- Распознавание текста песни (только в приложении) --- */

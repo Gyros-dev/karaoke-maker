@@ -2443,6 +2443,19 @@ function pushHistory() {
   updateHistoryButtons();
 }
 
+/* Снимок положили, а изменить ничего не изменили (взялись и отпустили,
+   сдвиг упёрся в соседнюю строку) — убираем его из стека, чтобы отмена
+   не срабатывала «вхолостую» */
+function dropEmptyHistory() {
+  const last = editor.history[editor.history.length - 1];
+  if (last && snapshotEqual(last, snapshotTimings())) {
+    editor.history.pop();
+    updateHistoryButtons();
+    return true;
+  }
+  return false;
+}
+
 function clearHistory() {
   editor.history.length = 0;
   editor.future.length = 0;
@@ -3488,19 +3501,14 @@ tl.addEventListener('pointermove', (e) => {
 
 function endDrag() {
   if (!editor.drag) return;
-  const moved = editor.drag.moved;
   editor.drag = null;
   editor.snapped = null;
-  if (moved) {
+  if (!dropEmptyHistory()) {
     saveProject();
     renderEditList();
     updateWordExportBtn();
     editor.stageKey = '';
     renderEditStage();
-  } else {
-    // Взялись и отпустили, ничего не сдвинув — лишний снимок в стеке не нужен
-    editor.history.pop();
-    updateHistoryButtons();
   }
   drawTimeline();
 }
@@ -3673,6 +3681,7 @@ function nudgeSelected(what, delta) {
   pushHistory();
   if (what === 'start') nudgeLine(editor.sel, delta);
   else nudgeLineEnd(editor.sel, delta);
+  dropEmptyHistory();   // сдвиг упёрся в соседнюю строку — отменять нечего
   renderEditList();
   editor.stageKey = '';
   renderEditStage();
