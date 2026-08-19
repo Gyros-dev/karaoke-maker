@@ -316,6 +316,10 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 
 .step-panel { display: none; max-width: 720px; margin: 0 auto; }
 .step-panel.active { display: block; }
+/* Редактор — самый плотный экран студии: сетка строк, предпросмотр,
+   панель выбранной строки и дорожка. В 720 пикселей он не помещается,
+   поэтому ему одному даётся вся ширина студии. */
+#step-3 { max-width: 1040px; }
 .panel-hint { color: var(--text-dim); margin-bottom: 1.2rem; text-align: center; }
 .panel-actions { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap; }
 
@@ -496,6 +500,8 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .sel-panel.empty { opacity: 0.75; }
 .sel-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 .sel-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+/* Подпись и её кнопки не разъезжаются по разным рядам при переносе */
+.sel-pair { display: flex; align-items: center; gap: 0.4rem; }
 .sel-label { color: var(--text-dim); font-size: 0.78rem; }
 .sel-vocal {
   display: flex;
@@ -1285,6 +1291,11 @@ body.is-desktop .only-web { display: none; }
      а подпись выбранной строки — на свою строку под кнопками */
   .editor-grid { grid-template-columns: 1fr; }
   .timeline-tools { font-size: 0.75rem; }
+  /* Сетка строк на узком экране: времена в одну строку, текст под ними
+     во всю ширину. Длительность прячем — на дорожке она и так видна. */
+  .edit-row { flex-wrap: wrap; row-gap: 0.1rem; padding: 0.45rem 0.7rem; }
+  .edit-row .edit-text { flex-basis: 100%; order: 9; }
+  .edit-row .dur-ts { display: none; }
   /* Панель выбранной строки на узком экране: подпись и «простучать
      заново» встают в две строки, а переключатель вокала — под кнопки */
   .sel-head { flex-direction: column; align-items: stretch; gap: 0.4rem; }

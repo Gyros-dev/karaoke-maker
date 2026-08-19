@@ -2788,6 +2788,7 @@ function finishWordTap(save) {
     saveProject();
   }
   renderEditList();
+  updateSelInfo();      // в панели зажигается «♪ слова ✓» и сброс
   editor.stageKey = '';
   renderEditStage();
   updateWordExportBtn();
@@ -2802,6 +2803,7 @@ function resetWords(i) {
   editor.spansKey = '';
   saveProject();
   renderEditList();
+  updateSelInfo();
   editor.stageKey = '';
   renderEditStage();
   updateWordExportBtn();
@@ -3687,6 +3689,7 @@ function endDrag() {
   if (!dropEmptyHistory()) {
     saveProject();
     renderEditList();
+    updateSelInfo();   // ручное деление слов могло появиться, см. ensureWords
     updateWordExportBtn();
     editor.stageKey = '';
     renderEditStage();

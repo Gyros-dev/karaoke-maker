@@ -467,13 +467,10 @@
   <!-- Шаг 3: редактор -->
   <div class="step-panel" id="step-3">
     <p class="panel-hint" id="editor-hint">
-      Слева — текст: его можно править прямо в списке, двойной клик по строке
-      перематывает песню на её начало. Под списком — панель выбранной строки:
-      начало, конец, разметка слов и кнопка «простучать заново».
-      Справа — предпросмотр караоке, один в один со сценой.
-      Внизу — дорожка: каждая строка нарисована блоком от начала до конца.
-      Тяни за края блока — сдвинется граница, тяни за середину — вся строка.
-      Клик по пустому месту перематывает.
+      Слева текст — правь прямо в списке, двойной клик перематывает на строку.
+      Справа предпросмотр. Внизу дорожка: тяни за края блока — сдвинется
+      граница, за середину — вся строка. Начала строк простукиваются пробелом:
+      кнопка «✎ простучать заново».
     </p>
 
     <!-- Режим простукивания: пока он включён, сетка строк, предпросмотр
@@ -519,19 +516,23 @@
         <button class="nudge-btn" id="btn-sel-tap" title="Простучать эту строку и следующие заново (пробелом)">✎ простучать заново</button>
       </div>
       <div class="sel-row">
-        <span class="sel-label">начало</span>
-        <span class="nudge">
-          <button class="nudge-btn" data-sel-start="-1">−1</button>
-          <button class="nudge-btn" data-sel-start="-0.1">−0,1</button>
-          <button class="nudge-btn" data-sel-start="0.1">+0,1</button>
-          <button class="nudge-btn" data-sel-start="1">+1</button>
+        <span class="sel-pair">
+          <span class="sel-label">начало</span>
+          <span class="nudge">
+            <button class="nudge-btn" data-sel-start="-1">−1</button>
+            <button class="nudge-btn" data-sel-start="-0.1">−0,1</button>
+            <button class="nudge-btn" data-sel-start="0.1">+0,1</button>
+            <button class="nudge-btn" data-sel-start="1">+1</button>
+          </span>
         </span>
-        <span class="sel-label">конец</span>
-        <span class="nudge">
-          <button class="nudge-btn" data-sel-end="-1">−1</button>
-          <button class="nudge-btn" data-sel-end="-0.1">−0,1</button>
-          <button class="nudge-btn" data-sel-end="0.1">+0,1</button>
-          <button class="nudge-btn" data-sel-end="1">+1</button>
+        <span class="sel-pair">
+          <span class="sel-label">конец</span>
+          <span class="nudge">
+            <button class="nudge-btn" data-sel-end="-1">−1</button>
+            <button class="nudge-btn" data-sel-end="-0.1">−0,1</button>
+            <button class="nudge-btn" data-sel-end="0.1">+0,1</button>
+            <button class="nudge-btn" data-sel-end="1">+1</button>
+          </span>
         </span>
       </div>
       <div class="sel-row">
