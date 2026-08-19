@@ -1,6 +1,6 @@
 /* Мостик для сквозной проверки: запускает тот же воркер,
    которым пользуется кнопка «Убрать вокал». */
-window.__runSeparationTest = function (modelBytes, L, R) {
+window.__runSeparationTest = function (modelBytes, L, R, shifts) {
   return new Promise((resolve) => {
     const w = new Worker('separator-worker.js');
     w.onmessage = (e) => {
@@ -12,7 +12,9 @@ window.__runSeparationTest = function (modelBytes, L, R) {
     };
     w.onerror = (err) => resolve({ ok: false, error: err.message || 'сбой воркера' });
     const l = L.slice(), r = R.slice();
-    w.postMessage({ modelBytes, left: l.buffer, right: r.buffer, sampleRate: 44100 },
+    // Проходов столько же, сколько выбрано в интерфейсе: так проверка
+    // гоняет ровно тот режим, который получит человек
+    w.postMessage({ modelBytes, left: l.buffer, right: r.buffer, sampleRate: 44100, shifts },
       [l.buffer, r.buffer]);
   });
 };

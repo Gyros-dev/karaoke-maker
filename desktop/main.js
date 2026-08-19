@@ -388,9 +388,15 @@ function createWindow() {
       const st = await win.webContents.executeJavaScript('window.desktop.modelStatus()');
       console.log('MODEL', JSON.stringify(st));
 
-      if (st.ready && process.env.KARAOKE_E2E === '1') {
+      /* Настоящее разделение на 25 секундах звука. KARAOKE_E2E=1 гоняет
+         режим, выбранный в интерфейсе (по умолчанию лучший, три прохода),
+         KARAOKE_E2E=быстро — быстрый: он спрятан в «Ещё вариантах», но
+         обязан работать, а не просто числиться в списке. */
+      if (st.ready && process.env.KARAOKE_E2E) {
+        const проходов = process.env.KARAOKE_E2E === 'быстро' ? 1 : null;
         const e2e = await win.webContents.executeJavaScript(`(async () => {
           try {
+            const выбор = ${проходов === null ? "Number(document.getElementById('ai-quality').value)" : проходов};
             const SR = 44100, n = SR * 25;
             const L = new Float32Array(n), R = new Float32Array(n);
             for (let i = 0; i < n; i++) {
@@ -402,7 +408,7 @@ function createWindow() {
             }
             const bytes = await window.desktop.modelBytes();
             const t0 = Date.now();
-            const res = await window.__runSeparationTest(new Uint8Array(bytes), L, R);
+            const res = await window.__runSeparationTest(new Uint8Array(bytes), L, R, выбор);
             if (!res.ok) return { ok: false, error: res.error };
             const out = new Float32Array(res.left);
             let bad = 0, e = 0;
@@ -413,6 +419,7 @@ function createWindow() {
             let ev = 0, badV = 0;
             if (voc) for (const v of voc) { if (!Number.isFinite(v)) badV++; ev += v*v; }
             return { ok: true,
+              проходов: выбор,
               секунд: ((Date.now()-t0)/1000).toFixed(1),
               звукаСек: (n/SR).toFixed(0),
               сэмплов: out.length, NaN: bad,
