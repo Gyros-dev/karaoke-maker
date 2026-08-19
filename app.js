@@ -3000,7 +3000,10 @@ function проверитьПорядокПослеЗахода() {
   }
 }
 
-$('tap-hit').addEventListener('click', tapHit);   // на телефоне пробела нет
+/* На телефоне пробела нет — вся большая плашка и есть кнопка удара.
+   Фокус на ней не оставляем: иначе следующий пробел браузер мог бы
+   засчитать и нам, и кнопке, то есть за два удара. */
+$('tap-hit').addEventListener('click', () => { $('tap-hit').blur(); tapHit(); });
 $('btn-tap-undo').addEventListener('click', undoLastTap);
 $('btn-tap-done').addEventListener('click', () => finishTapMode());
 
