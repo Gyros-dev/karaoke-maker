@@ -2987,13 +2987,14 @@ function timelineLanes() {
 
 function resizeTimeline() {
   const c = $('timeline');
-  const w = Math.max(120, c.parentElement.clientWidth - 2);
   const h = timelineLanes().total;
+  c.style.height = `${h}px`;
+  // Ширину задаёт вёрстка (width: 100%), мы только меряем: считать её
+  // от родителя нельзя — там своё поле, и канвас вылезал за край
+  const w = Math.max(120, Math.round(c.getBoundingClientRect().width));
   const dpr = window.devicePixelRatio || 1;
   c.width = Math.round(w * dpr);
   c.height = Math.round(h * dpr);
-  c.style.width = `${w}px`;
-  c.style.height = `${h}px`;
 }
 
 function timelineDims() {
@@ -3142,6 +3143,21 @@ function drawLineBlocks(g, lane, W) {
     g.fillStyle = sel ? '#a3e635' : guess ? '#f59e0b' : '#10b981';
     g.fillRect(x0, y, 2, h);
     g.fillRect(x1 - 2, y, 2, h);
+
+    /* Строку подтянуло к настоящему вступлению голоса — покажем, где
+       при этом стоит своя метка. Иначе непонятно, почему блок «не там,
+       куда положили»: это и есть работа огибающей. */
+    if (Math.abs(sp.start - sp.line.time) > 0.02) {
+      const xr = tToX(sp.line.time);
+      g.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+      g.lineWidth = 1;
+      g.setLineDash([2, 2]);
+      g.beginPath();
+      g.moveTo(xr, y);
+      g.lineTo(xr, y + h);
+      g.stroke();
+      g.setLineDash([]);
+    }
 
     const label = (guess ? '≈ ' : '') + sp.line.text;
     g.fillStyle = sel ? '#f2f7e6' : 'rgba(226, 245, 238, 0.92)';
@@ -3355,8 +3371,8 @@ function updateSelInfo() {
   const sp = spanOfRow(editor.sel);
   if (!sp) { el.textContent = 'Строка не выбрана'; return; }
   const dur = Math.max(0, sp.end - sp.start);
-  el.textContent = `Строка ${sp.row + 1}: ${fmtTime(sp.start)} — ${fmtTime(sp.end)} `
-    + `(${dur.toFixed(2)} с)${sp.line.сомнительная ? ' ≈' : ''}`;
+  el.textContent = `№${sp.row + 1}: ${sp.start.toFixed(2)} → ${sp.end.toFixed(2)} с`
+    + ` · ${dur.toFixed(2)} с${sp.line.сомнительная ? ' · ≈' : ''}`;
 }
 
 /* ---------- Перетаскивание ---------- */
@@ -3617,6 +3633,24 @@ const NUDGE_STEP = 0.1;
 const NUDGE_FINE = 0.02;
 const NUDGE_COARSE = 1;
 
+/* Клавиша по её месту на клавиатуре, а не по букве: у русской раскладки
+   Cmd+Z — это Cmd+я, и по букве такое не поймать. Обычно место называет
+   сам браузер в e.code; там, где его нет, выручает эта табличка. */
+const KEY_ALIASES = {
+  z: 'KeyZ', 'я': 'KeyZ', y: 'KeyY', 'н': 'KeyY',
+  l: 'KeyL', 'д': 'KeyL', s: 'KeyS', 'ы': 'KeyS',
+  '[': 'BracketLeft', 'х': 'BracketLeft',
+  ']': 'BracketRight', 'ъ': 'BracketRight',
+  '=': 'Equal', '+': 'Equal', '-': 'Minus', '_': 'Minus',
+  ' ': 'Space',
+};
+
+function keyCode(e) {
+  if (e.code) return e.code;
+  const k = e.key || '';
+  return KEY_ALIASES[k.toLowerCase()] || k;
+}
+
 function editorStep(e) {
   return e.shiftKey ? NUDGE_FINE : e.altKey ? NUDGE_COARSE : NUDGE_STEP;
 }
@@ -3650,18 +3684,19 @@ document.addEventListener('keydown', (e) => {
   const el = document.activeElement;
   const typing = el && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
   const cmd = e.metaKey || e.ctrlKey;
+  const code = keyCode(e);
 
   // Отмена и повтор работают всегда, кроме правки текста: там своя отмена
-  if (cmd && (e.code === 'KeyZ' || e.code === 'KeyY')) {
+  if (cmd && (code === 'KeyZ' || code === 'KeyY')) {
     if (typing) return;
     e.preventDefault();
-    if (e.code === 'KeyY' || e.shiftKey) redoEdit();
+    if (code === 'KeyY' || e.shiftKey) redoEdit();
     else undoEdit();
     return;
   }
   if (cmd || typing) return;
 
-  switch (e.code) {
+  switch (code) {
     case 'ArrowUp': e.preventDefault(); moveSelection(-1); break;
     case 'ArrowDown': e.preventDefault(); moveSelection(1); break;
     case 'ArrowLeft': e.preventDefault(); nudgeSelected('start', -editorStep(e)); break;
@@ -4167,12 +4202,13 @@ document.addEventListener('pointerdown', () => {
 document.addEventListener('keydown', (e) => {
   // Разметка слов забирает и пробел, и Esc — даже из полей ввода:
   // иначе пробел уедет в текст строки вместо отметки
+  const code = keyCode(e);
   if (wordTap.active) {
-    if (e.code === 'Space') { e.preventDefault(); tapWord(); return; }
-    if (e.code === 'Escape') { e.preventDefault(); finishWordTap(false); return; }
-    if (e.code === 'Enter') { e.preventDefault(); finishWordTap(true); return; }
+    if (code === 'Space') { e.preventDefault(); tapWord(); return; }
+    if (code === 'Escape') { e.preventDefault(); finishWordTap(false); return; }
+    if (code === 'Enter') { e.preventDefault(); finishWordTap(true); return; }
   }
-  if (e.code !== 'Space') return;
+  if (code !== 'Space') return;
   const active = document.activeElement;
   const tag = active && active.tagName;
   if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'BUTTON' || (active && active.isContentEditable)) {
