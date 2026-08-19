@@ -230,7 +230,7 @@ function createWindow() {
         })(),
         подгонкаЕсть: !!(window.Align && window.Align.fit),
         мостПодключён: !!(window.desktop && window.desktop.isDesktop),
-        шаговВсего: document.querySelectorAll('.step-tab').length,
+        шаговВсего: document.querySelectorAll('.step-tab').length,   // четыре: песня → текст → редактор → караоке
         стильПрименён: !!document.getElementById('lyrics-stage').dataset.effect,
         отсчётЕсть: !!document.getElementById('st-countdown'),
         /* Размер строк на сцене. Пока текст влезает по ширине, обе раскладки
@@ -239,7 +239,7 @@ function createWindow() {
            которого закреплённые строки ужимались до предела: их коробка
            шире полей сцены, и подгонка по ширине срабатывала впустую. */
         размерСтрок: (() => {
-          const панель = document.getElementById('step-5');
+          const панель = document.getElementById('step-4');
           const былаАктивна = панель.classList.contains('active');
           панель.classList.add('active');   // скрытую сцену не измерить
           const строкиБыли = state.lines;
@@ -294,7 +294,7 @@ function createWindow() {
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
           const былГолос = { level: voice.level, runs: voice.runs };
-          const панель = document.getElementById('step-4');
+          const панель = document.getElementById('step-3');
           const былаАктивна = панель.classList.contains('active');
           try {
             const SR = 8000, dur = 30;
@@ -366,6 +366,113 @@ function createWindow() {
             audio.duration = былаДлина;
             voice.level = былГолос.level;
             voice.runs = былГолос.runs;
+            editor.peaks = null;
+            editor.sel = -1;
+            editor.spansKey = '';
+            clearHistory();
+            if (!былаАктивна) панель.classList.remove('active');
+          }
+        })(),
+        /* Режим простукивания. Проверяем не наличие кнопок, а само
+           поведение: забирает ли режим экран себе и по каким правилам
+           переписываются метки. Стучим не вызовами tapHit, а пробелом
+           через общий обработчик — тем же путём, что и человек.
+
+           Правила, которые обязаны держаться:
+             • вход в режим ничего не стирает;
+             • метки раньше места входа не трогаются;
+             • строки, до которых не дошли, остаются как были;
+             • «отменить последнюю» возвращает один удар;
+             • Cmd+Z снимает весь заход целиком. */
+        простукивание: (() => {
+          const былиСтроки = state.lines;
+          const былБуфер = state.originalBuffer;
+          const былаДлина = audio.duration;
+          const панель = document.getElementById('step-3');
+          const былаАктивна = панель.classList.contains('active');
+          const былConfirm = window.confirm;
+          try {
+            const SR = 8000, dur = 30;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const buf = ctx.createBuffer(1, SR * dur, SR);
+            state.originalBuffer = buf;
+            audio.duration = dur;
+            state.lines = [1, 2, 3, 4, 5].map((n) => ({
+              text: 'Строка ' + n, time: n * 4, end: null,
+              ручнойКонец: false, сомнительная: false,
+            }));
+            панель.classList.add('active');
+            editor.peaks = null;
+            clearHistory();
+            openEditor();
+            window.confirm = () => false;   // вопрос про порядок здесь не проверяем
+
+            const времена = () => state.lines.map((l) => (l.time == null ? null : +l.time.toFixed(2)));
+            const пробел = (t) => {
+              audio.pause(); audio.offset = t;
+              document.dispatchEvent(new KeyboardEvent('keydown',
+                { code: 'Space', key: ' ', bubbles: true }));
+              audio.pause();
+            };
+            const доЗахода = времена();
+
+            // Заход с середины: строка №3
+            startTapMode(2); audio.pause();
+            const приВходе = времена();
+            const скрыто = {
+              сетка: document.getElementById('edit-list').offsetParent === null,
+              предпросмотр: document.getElementById('edit-stage').offsetParent === null,
+              панельСтроки: document.getElementById('sel-panel').offsetParent === null,
+              инструменты: document.querySelector('.timeline-tools').offsetParent === null,
+            };
+            const видно = {
+              строка: document.getElementById('tap-now').textContent,
+              следующая: document.getElementById('tap-next').textContent,
+              счётчик: document.getElementById('tap-count').textContent,
+              дорожка: document.getElementById('timeline').offsetParent !== null,
+              кнопок: document.querySelectorAll('#tap-mode .tap-actions button').length,
+            };
+            const блоковДоУдара = editorSpans().length;
+            пробел(13.5);
+            пробел(17.5);
+            const послеДвухУдаров = времена();
+            // Метки появляются на дорожке на глазах: блоков не убавилось
+            const блоковПослеУдара = editorSpans().length;
+            undoLastTap(); audio.pause();
+            const послеОтменыУдара = времена();
+            finishTapMode();
+            const послеЗахода = времена();
+            // Общая отмена снимает заход целиком
+            document.dispatchEvent(new KeyboardEvent('keydown',
+              { code: 'KeyZ', key: 'z', metaKey: true, bubbles: true }));
+            const послеCmdZ = времена();
+
+            const режимЗабралЭкран = скрыто.сетка && скрыто.предпросмотр
+              && скрыто.панельСтроки && скрыто.инструменты && видно.дорожка
+              && видно.кнопок === 2 && видно.строка === 'Строка 3'
+              && видно.следующая === 'Строка 4';
+            // Вход в режим не стирает ни одной метки
+            const входНеСтирает = приВходе.every((v, i) => v === доЗахода[i]);
+            // Ранние метки целы, недошедшие — тоже, переписано только простуканное
+            const раннихНеТронули = послеЗахода[0] === доЗахода[0] && послеЗахода[1] === доЗахода[1];
+            const недошедшихНеТронули = послеЗахода[4] === доЗахода[4];
+            const переписалиЧтоПростучали = послеДвухУдаров[2] === 13.5 && послеДвухУдаров[3] === 17.5;
+            const отменаУдара = послеОтменыУдара[3] === доЗахода[3] && послеОтменыУдара[2] === 13.5;
+            const заходСнимаетсяЦеликом = послеCmdZ.every((v, i) => v === доЗахода[i]);
+            return {
+              доЗахода, приВходе, послеДвухУдаров, послеОтменыУдара, послеЗахода, послеCmdZ,
+              видно, скрыто, блоковДоУдара, блоковПослеУдара,
+              режимЗабралЭкран, входНеСтирает, раннихНеТронули, недошедшихНеТронули,
+              переписалиЧтоПростучали, отменаУдара, заходСнимаетсяЦеликом,
+              вНорме: режимЗабралЭкран && входНеСтирает && раннихНеТронули
+                && недошедшихНеТронули && переписалиЧтоПростучали && отменаУдара
+                && заходСнимаетсяЦеликом && блоковПослеУдара >= блоковДоУдара,
+            };
+          } finally {
+            window.confirm = былConfirm;
+            state.lines = былиСтроки;
+            state.originalBuffer = былБуфер;
+            audio.duration = былаДлина;
             editor.peaks = null;
             editor.sel = -1;
             editor.spansKey = '';
