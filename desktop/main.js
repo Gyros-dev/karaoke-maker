@@ -491,6 +491,14 @@ function createWindow() {
         ошибок: window.__errors ? window.__errors.length : 0
       }))()`);
       console.log('SELFTEST', JSON.stringify(report));
+
+      /* Звук: проверка считает, а не слушает. Гоняет поддельную песню
+         с известным голосом через ту же цепь, что играет в колонки,
+         при вокале 0 и 100. Ловит то, на что жаловались: голос слышен
+         на нуле, вторая копия сигнала со сдвигом (эхо), перегруз. */
+      console.log('ЗВУК', JSON.stringify(
+        await win.webContents.executeJavaScript('самопроверкаЗвука()')));
+
       console.log('ASR', JSON.stringify(await win.webContents.executeJavaScript('window.desktop.asrStatus()')));
       const st = await win.webContents.executeJavaScript('window.desktop.modelStatus()');
       console.log('MODEL', JSON.stringify(st));

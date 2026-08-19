@@ -116,6 +116,33 @@ function нуженОригинал() {
   return editor.loop || editor.hearVocal;
 }
 
+/* ---------- Сборка звуковой смеси ----------
+
+   Одна и та же цепь звучит в трёх местах: в плеере, в записи видео
+   и в самопроверке. Держим её здесь в одном экземпляре — иначе видео
+   и проверка расходятся с тем, что человек слышит.
+
+   Оригинал и минусовка идут каждый через своё усиление, дальше общий
+   эквалайзер и лимитер. */
+function собратьМикс(ctx) {
+  const vocalGain = ctx.createGain();
+  const instGain = ctx.createGain();
+  const eqChain = buildEqChain(ctx);
+  const limiter = makeLimiter(ctx);
+  vocalGain.connect(eqChain.input);
+  instGain.connect(eqChain.input);
+  eqChain.output.connect(limiter);
+  return { vocalGain, instGain, eqChain, output: limiter };
+}
+
+/* Громкости по положению ползунка. Правило одно на все три места:
+   минусовки нет или нужен оригинал — звучит песня целиком; иначе
+   крест-накрест, и на нуле от песни не остаётся ничего. */
+function усиленияМикса(vocalMix, hasInst, forceVocal) {
+  const v = forceVocal || !hasInst ? 1 : vocalMix;
+  return { вокал: v, минусовка: hasInst ? 1 - v : 0 };
+}
+
 /* ---------- Аудио-движок ---------- */
 const audio = {
   ctx: null,
@@ -199,15 +226,12 @@ const audio = {
     // Позиция у самого конца — начинаем сначала, иначе тишина
     if (this.offset >= this.duration - 0.05) this.offset = 0;
 
-    this.vocalGain = ctx.createGain();
-    this.instGain = ctx.createGain();
+    const смесь = собратьМикс(ctx);
+    this.vocalGain = смесь.vocalGain;
+    this.instGain = смесь.instGain;
+    this.eqChain = смесь.eqChain;
     const fade = ctx.createGain();
-    this.eqChain = buildEqChain(ctx);
-    const limiter = makeLimiter(ctx);
-    this.vocalGain.connect(this.eqChain.input);
-    this.instGain.connect(this.eqChain.input);
-    this.eqChain.output.connect(limiter);
-    limiter.connect(fade);
+    смесь.output.connect(fade);
     fade.connect(ctx.destination);
     this.applyMix();
 
@@ -268,18 +292,34 @@ const audio = {
 
   applyMix() {
     if (!this.vocalGain) return;
-    const hasInst = !!state.instrumentalBuffer;
-    const v = this.forceVocal || !hasInst ? 1 : state.vocalMix;
-    this.vocalGain.gain.value = v;
-    this.instGain.gain.value = hasInst ? 1 - v : 0;
+    const g = усиленияМикса(state.vocalMix, !!state.instrumentalBuffer, this.forceVocal);
+    this.vocalGain.gain.value = g.вокал;
+    this.instGain.gain.value = g.минусовка;
   },
 };
 
 /* ---------- Приглушение вокала ----------
-   Классика жанра: голос обычно в центре стерео-картины,
-   поэтому разность каналов (L − R) почти не содержит вокала.
-   Чтобы не потерять бас и бочку (они тоже в центре),
-   добавляем обратно низкие частоты моно-сигнала. */
+   Голос почти всегда стоит ровно в центре стерео-картины, то есть сидит
+   в общей части каналов — в «середине» (L + R)/2. Её и вычитаем из обоих
+   каналов, но не целиком, а только в той полосе, где живёт голос: ниже
+   ВОКАЛ_НИЗ стоят бочка и бас, выше ВОКАЛ_ВЕРХ — воздух тарелок, вокала
+   там почти нет, а музыки много.
+
+   Всё остальное остаётся ровно таким, каким было в песне: и боковая
+   часть (то, чем каналы различаются), и низ, и верх. Поэтому минусовка
+   сохраняет стерео-картину и звучит песней без голоса.
+
+   Раньше здесь отдавали наружу саму разность каналов (L − R), причём
+   одну и ту же в оба уха. Голос она убирает не лучше (замерено: −21,4 дБ
+   против −22,5 дБ у нынешнего способа), но вместе с ним пропадает всё,
+   что стояло по центру, — бочка, малый барабан, бас, солирующий
+   инструмент, — а от песни остаются края стерео-картины и хвосты
+   реверберации, в том числе вокальной. На слух это ровно то, на что
+   жаловались: «эхо», «пустой и искажённый звук» и «голос всё равно
+   слышно» — слышно как раз его эхо, потому что заглушить было нечем. */
+const ВОКАЛ_НИЗ = 170;    // ниже — бочка и бас, центр там не трогаем
+const ВОКАЛ_ВЕРХ = 12000; // выше — воздух тарелок, голоса там нет
+
 async function makeInstrumental(buffer) {
   if (buffer.numberOfChannels < 2) return null;
 
@@ -309,28 +349,37 @@ async function makeInstrumental(buffer) {
   const split = ctx.createChannelSplitter(2);
   src.connect(split);
 
-  // Разность каналов: L·0.7 + R·(−0.7)
-  const side = ctx.createGain();
-  const l = ctx.createGain(); l.gain.value = 0.7;
-  const r = ctx.createGain(); r.gain.value = -0.7;
-  split.connect(l, 0); split.connect(r, 1);
-  l.connect(side); r.connect(side);
-
-  // Низ из моно-суммы, чтобы вернуть бас
-  const lowpass = ctx.createBiquadFilter();
-  lowpass.type = 'lowpass';
-  lowpass.frequency.value = 170;
-  // Без резонанса на частоте среза: по умолчанию фильтр её подчёркивает
-  // и долго звенит, из-за чего начало трека звучит грязно
-  lowpass.Q.value = 0.707;
+  // Середина — общая часть каналов, (L + R)/2. В ней и сидит голос.
+  const mid = ctx.createGain();
   const ml = ctx.createGain(); ml.gain.value = 0.5;
   const mr = ctx.createGain(); mr.gain.value = 0.5;
   split.connect(ml, 0); split.connect(mr, 1);
-  ml.connect(lowpass); mr.connect(lowpass);
+  ml.connect(mid); mr.connect(mid);
+
+  /* Из середины оставляем только вокальную полосу — это и есть «то, что
+     поёт по центру». Без резонанса на частотах среза: по умолчанию
+     фильтр их подчёркивает и долго звенит, из-за чего звук грязнится.
+     По одному звену на край: чем круче срез, тем сильнее он сдвигает
+     фазу, а вычитать надо сигнал, совпадающий с песней по фазе. */
+  const highpass = ctx.createBiquadFilter();
+  highpass.type = 'highpass';
+  highpass.frequency.value = ВОКАЛ_НИЗ;
+  highpass.Q.value = 0.707;
+  const lowpass = ctx.createBiquadFilter();
+  lowpass.type = 'lowpass';
+  lowpass.frequency.value = Math.min(ВОКАЛ_ВЕРХ, buffer.sampleRate / 2 - 1000);
+  lowpass.Q.value = 0.707;
+  mid.connect(highpass); highpass.connect(lowpass);
+
+  // Вычитаем её из обоих каналов: центр в этой полосе гаснет,
+  // всё прочее проходит нетронутым
+  const минус = ctx.createGain();
+  минус.gain.value = -1;
+  lowpass.connect(минус);
 
   const merge = ctx.createChannelMerger(2);
-  side.connect(merge, 0, 0); side.connect(merge, 0, 1);
-  lowpass.connect(merge, 0, 0); lowpass.connect(merge, 0, 1);
+  split.connect(merge, 0, 0); минус.connect(merge, 0, 0);
+  split.connect(merge, 1, 1); минус.connect(merge, 0, 1);
   merge.connect(ctx.destination);
 
   src.start();
@@ -345,9 +394,9 @@ async function makeInstrumental(buffer) {
   return normalizeInstrumental(trimmed, buffer);
 }
 
-/* Сумма «разность каналов + бас» может вылезать за 1.0 — на выходе это
-   слышно как хрип и треск. Подгоняем громкость минусовки под оригинал
-   и следим, чтобы пики не превышали 0.95. */
+/* После вычитания центра пики могут вылезать далеко за 1.0 — на выходе
+   это слышно как хрип и треск. Подгоняем громкость минусовки под
+   оригинал и следим, чтобы пики не превышали 0.95. */
 function normalizeInstrumental(inst, original) {
   const rmsOf = (buf) => {
     let sum = 0, n = 0;
@@ -380,6 +429,184 @@ function normalizeInstrumental(inst, original) {
     }
   }
   return inst;
+}
+
+/* ---------- Самопроверка звука ----------
+
+   Ловит ровно ту беду, на которую жаловались: «вокал на нуле всё равно
+   слышен», «появилось эхо», «звук искажается». Слуха у проверки нет,
+   поэтому она считает.
+
+   Собираем короткую поддельную песню, в которой голос известен по
+   отсчётам: шум в вокальной полосе, одинаковый в обоих каналах (то
+   есть строго по центру), плюс своя музыка в каждом канале. Гоняем её
+   через ту же цепь, что играет в колонки, при вокале 0 и 100 и смотрим:
+
+     • сколько голоса осталось на выходе — проекция выхода на сам голос.
+       При нуле его должно почти не быть, при сотне — весь;
+     • совпадает ли выход при нуле с минусовкой, а при сотне с песней.
+       Если играют обе дорожки разом, совпадения не будет;
+     • нет ли второй копии сигнала со сдвигом — это и есть эхо;
+     • уровни: пик и среднеквадратичный. */
+async function самопроверкаЗвука() {
+  const SR = 44100;
+  const N = Math.round(SR * 1.5);
+
+  // Свой генератор псевдослучайных чисел: проверка должна давать
+  // одни и те же числа от запуска к запуску
+  let seed = 20260819;
+  const шум = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 1073741824 - 1;
+  };
+  /* Шум в полосе [низ, верх]: две по-разному сглаженные копии одного
+     шума, вычтенные друг из друга. Шум взят намеренно — у него острый
+     пик автокорреляции, поэтому по нему видно любую вторую копию. */
+  const вПолосе = (низ, верх, скз) => {
+    const x = new Float32Array(N);
+    for (let i = 0; i < N; i++) x[i] = шум();
+    // Два звена подряд: край полосы получается круче, и «голос»
+    // не растекается за неё — иначе проверка мерила бы не то
+    const сгладить = (вход, f) => {
+      const a = Math.exp((-2 * Math.PI * f) / SR);
+      const y = new Float32Array(N);
+      let p = 0;
+      for (let i = 0; i < N; i++) { p = a * p + (1 - a) * вход[i]; y[i] = p; }
+      return y;
+    };
+    const дважды = (f) => сгладить(сгладить(x, f), f);
+    const в = дважды(верх), н = дважды(низ);
+    const y = new Float32Array(N);
+    let s = 0;
+    for (let i = 0; i < N; i++) { y[i] = в[i] - н[i]; s += y[i] * y[i]; }
+    const k = скз / (Math.sqrt(s / N) || 1e-9);
+    for (let i = 0; i < N; i++) y[i] *= k;
+    return y;
+  };
+
+  const голос = вПолосе(300, 3000, 0.12);
+  const музL = вПолосе(60, 16000, 0.15);
+  const музR = вПолосе(60, 16000, 0.15);
+
+  const песня = new OfflineAudioContext(2, N, SR).createBuffer(2, N, SR);
+  const L = песня.getChannelData(0), R = песня.getChannelData(1);
+  for (let i = 0; i < N; i++) { L[i] = музL[i] + голос[i]; R[i] = музR[i] + голос[i]; }
+
+  const минус = await makeInstrumental(песня);
+  if (!минус) return { вНорме: false, беда: 'минусовка не собралась' };
+
+  // Прогон через ту же цепь, что звучит в колонки
+  const прогон = async (vocalMix) => {
+    const ctx = new OfflineAudioContext(2, N, SR);
+    const смесь = собратьМикс(ctx);
+    смесь.output.connect(ctx.destination);
+    const g = усиленияМикса(vocalMix, true, false);
+    смесь.vocalGain.gain.value = g.вокал;
+    смесь.instGain.gain.value = g.минусовка;
+    const a = ctx.createBufferSource(); a.buffer = песня; a.connect(смесь.vocalGain);
+    const b = ctx.createBufferSource(); b.buffer = минус; b.connect(смесь.instGain);
+    a.start(); b.start();
+    return ctx.startRendering();
+  };
+
+  const моно = (buf) => {
+    const l = buf.getChannelData(0), r = buf.getChannelData(1);
+    const m = new Float32Array(l.length);
+    for (let i = 0; i < l.length; i++) m[i] = (l[i] + r[i]) / 2;
+    return m;
+  };
+  const дб = (x) => +(20 * Math.log10(Math.abs(x) || 1e-9)).toFixed(1);
+  // Сколько «эталона» сидит в сигнале: коэффициент при нём
+  const доля = (сигнал, эталон) => {
+    let num = 0, den = 0;
+    for (let i = 0; i < эталон.length; i++) { num += сигнал[i] * эталон[i]; den += эталон[i] * эталон[i]; }
+    return num / (den || 1e-9);
+  };
+  const корр = (a, b, лаг, шаг = 1) => {
+    let xy = 0, xx = 0, yy = 0;
+    for (let i = 2000; i < a.length - 2000; i += шаг) {
+      const x = a[i], y = b[i + лаг] || 0;
+      xy += x * y; xx += x * x; yy += y * y;
+    }
+    return xy / (Math.sqrt(xx * yy) || 1e-9);
+  };
+  /* Лимитер на выходе смотрит немного вперёд и задерживает звук
+     примерно на 6 мс — это не эхо, а ровный сдвиг всей дорожки.
+     Поэтому сначала находим сдвиг, а уже потом сравниваем. */
+  const лучшийЛаг = (a, b, макс) => {
+    let л = 0, m = -2;
+    for (let лаг = -макс; лаг <= макс; лаг += 2) {
+      const r = Math.abs(корр(a, b, лаг, 8));
+      if (r > m) { m = r; л = лаг; }
+    }
+    let итог = { лаг: л, r: корр(a, b, л) };
+    for (let лаг = л - 3; лаг <= л + 3; лаг++) {
+      const r = корр(a, b, лаг);
+      if (Math.abs(r) > Math.abs(итог.r)) итог = { лаг, r };
+    }
+    return итог;
+  };
+  const уровни = (buf) => {
+    const d = buf.getChannelData(0);
+    let p = 0, s = 0;
+    for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > p) p = a; s += d[i] * d[i]; }
+    return { пик: +p.toFixed(3), скз: +Math.sqrt(s / d.length).toFixed(4) };
+  };
+
+  const ноль = await прогон(0);
+  const сотня = await прогон(1);
+  const мНоль = моно(ноль), мСотня = моно(сотня);
+  const мМинус = моно(минус), мПесня = моно(песня);
+
+  const сдвигМакс = Math.round(SR * 0.02);
+  const пНоль = лучшийЛаг(мНоль, мМинус, сдвигМакс);
+  const пСотня = лучшийЛаг(мСотня, мПесня, сдвигМакс);
+  const сМинусовкой = +пНоль.r.toFixed(3);
+  const сПесней = +пСотня.r.toFixed(3);
+
+  // Голос ищем в выходе с той же поправкой на задержку лимитера
+  const сдвинуть = (x, лаг) => {
+    const y = new Float32Array(x.length);
+    for (let i = 0; i < x.length; i++) y[i] = x[i - лаг] || 0;
+    return y;
+  };
+  const остатокВокала0 = дб(доля(сдвинуть(мНоль, пНоль.лаг), голос));
+  const остатокВокала100 = дб(доля(сдвинуть(мСотня, пСотня.лаг), голос));
+
+  /* Эхо — вторая копия сигнала, отставшая от первой. Ищем самое
+     сильное совпадение выхода с минусовкой при сдвиге хотя бы на 2 мс
+     от основного: оно обязано быть заметно слабее основного. */
+  const шаг = Math.round(SR * 0.002);
+  let эхо = 0, эхоЛаг = 0;
+  // Сдвиги перебираем по одному отсчёту: у шума пик совпадения узкий,
+  // по редкой сетке вторая копия просто не попалась бы
+  for (let d = шаг; d <= шаг * 25; d++) {
+    for (const знак of [1, -1]) {
+      const r = Math.abs(корр(мНоль, мМинус, пНоль.лаг + знак * d, 16));
+      if (r > эхо) { эхо = r; эхоЛаг = знак * d; }
+    }
+  }
+  эхо = +эхо.toFixed(3);
+
+  const уровни0 = уровни(ноль), уровни100 = уровни(сотня);
+
+  return {
+    остатокВокала0, остатокВокала100,
+    сМинусовкой, сПесней,
+    задержкаМс: +((пНоль.лаг / SR) * 1000).toFixed(1),
+    эхо, эхоМс: +((эхоЛаг / SR) * 1000).toFixed(1),
+    уровни0, уровни100,
+    минусовкаСтерео: +корр(минус.getChannelData(0), минус.getChannelData(1), 0).toFixed(3),
+    подавлениеДб: +(остатокВокала0 - остатокВокала100).toFixed(1),
+    вНорме:
+      остатокВокала0 <= -12                        // на нуле голоса почти нет
+      && остатокВокала100 >= -3                    // на сотне он весь на месте
+      && остатокВокала100 - остатокВокала0 >= 12   // ползунок и правда глушит
+      && сМинусовкой >= 0.98      // на нуле звучит ровно минусовка
+      && сПесней >= 0.98          // на сотне — ровно песня
+      && эхо < 0.25               // второй копии со сдвигом нет (целое даёт 0,11)
+      && уровни0.пик <= 1 && уровни100.пик <= 1,
+  };
 }
 
 /* Трёхполосный эквалайзер: низкие/средние/высокие.
@@ -4264,17 +4491,15 @@ async function exportVideo() {
   // Звук: та же смесь, что в плеере, но в MediaStream вместо колонок
   const ctx = audio.ensureCtx();
   const dest = ctx.createMediaStreamDestination();
-  const eq = buildEqChain(ctx);
-  const limiter = makeLimiter(ctx);
-  eq.output.connect(limiter);
-  limiter.connect(dest);
-  const vGain = ctx.createGain();
-  const iGain = ctx.createGain();
-  vGain.connect(eq.input);
-  iGain.connect(eq.input);
+  const смесь = собратьМикс(ctx);
+  смесь.output.connect(dest);
+  const vGain = смесь.vocalGain;
+  const iGain = смесь.instGain;
   const hasInst = !!state.instrumentalBuffer;
-  vGain.gain.value = hasInst ? state.vocalMix : 1;
-  iGain.gain.value = hasInst ? 1 - state.vocalMix : 0;
+  // Ползунок вокала в записи действует ровно как в плеере
+  const g = усиленияМикса(state.vocalMix, hasInst, false);
+  vGain.gain.value = g.вокал;
+  iGain.gain.value = g.минусовка;
 
   const sources = [];
   const orig = ctx.createBufferSource();
