@@ -38,18 +38,35 @@ const CSP_DESKTOP =
   'media-src \'self\' blob:; connect-src \'self\' blob: data:; ' +
   'object-src \'none\'; base-uri \'none\'; form-action \'none\'">';
 
+/* Блок удаления вокала — только в приложении.
+
+   Выбора «быстро или хорошо» на виду больше нет: по умолчанию стоит
+   лучшее, что мы умеем (три прохода со случайным сдвигом). Быстрый
+   режим никуда не делся, но убран в свёрнутое «Ещё варианты» и честно
+   подписан — он быстрее втрое и хуже. Строку #ai-eta заполняет
+   desktop.js: там считается, сколько это займёт на этой песне. */
 const AI_BLOCK = `      <div class="bg-upload hidden" id="ai-block">
         <div class="bg-upload-text">
           <b>🧠 Убрать вокал нейросетью</b>
           <span>Локальная модель Demucs: тот же класс разделения, который поддерживает UVR5. Всё посчитается прямо на компьютере</span>
         </div>
-        <label class="btn btn-ghost btn-small export-quality" for="ai-quality">Режим
-          <select id="ai-quality">
-            <option value="1" selected>Быстро</option>
-            <option value="3">Точнее · дольше втрое</option>
-          </select>
-        </label>
         <button class="btn btn-primary btn-small" id="btn-ai-run">Убрать вокал</button>
+        <p class="ai-eta" id="ai-eta"></p>
+        <details class="ai-more">
+          <summary>Ещё варианты</summary>
+          <div class="ai-more-body">
+            <label class="btn btn-ghost btn-small export-quality" for="ai-quality">Качество
+              <select id="ai-quality">
+                <option value="3" selected>Лучшее — три прохода</option>
+                <option value="1">Быстрее втрое, но хуже — один проход</option>
+              </select>
+            </label>
+            <p>Лучший режим слушает песню трижды со случайным сдвигом и усредняет
+              результат: так почти пропадают «хвосты» голоса и металлический призвук
+              в минусовке. Быстрый проходит песню один раз — ждать втрое меньше,
+              но вокал вычищается заметно грубее.</p>
+          </div>
+        </details>
       </div>
 `;
 
@@ -106,13 +123,24 @@ const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
             <option value="italian">Итальянский</option>
           </select>
         </label>
-        <label class="btn btn-ghost btn-small export-quality" for="asr-model">Модель
-          <select id="asr-model"></select>
-        </label>
         <button class="btn btn-primary btn-small" id="btn-asr-run">Распознать текст</button>
         <button class="btn btn-ghost btn-small hidden" id="btn-asr-fresh"
           title="Нейросеть напишет текст сама и заменит им то, что в поле">Распознать с нуля</button>
       </div>
+      <p class="asr-eta" id="asr-eta"></p>
+      <details class="asr-more">
+        <summary>Ещё варианты</summary>
+        <div class="asr-more-body">
+          <label class="btn btn-ghost btn-small export-quality" for="asr-model">Модель
+            <select id="asr-model"></select>
+          </label>
+          <p>По умолчанию стоит крупная модель — она разбирает пение лучше всех,
+            что у нас есть, но считает примерно вдвое дольше обычной и весит втрое
+            больше. Обычную имеет смысл взять, если ждать некогда: для подгонки
+            своего текста ей чаще всего хватает, ведь от нейросети там нужны только
+            времена, а не буквы.</p>
+        </div>
+      </details>
     </div>
 `;
 
@@ -193,6 +221,53 @@ const ASR_CSS = `
 }
 .asr-warning b { color: var(--text); }
 .asr-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+
+/* --- Оценка времени и спрятанные быстрые варианты (только в приложении) ---
+
+   По умолчанию нейросети считают лучшим качеством, а оно небыстрое,
+   поэтому под каждым блоком идёт строка с ожидаемым временем. Быстрые
+   варианты остаются рабочими, но убраны в свёрнутое «Ещё варианты»:
+   они хуже, и предлагать их первым делом незачем.
+
+   Обе строки живут внутри флекс-рядов (.bg-upload и .asr-block), поэтому
+   flex-basis: 100% — чтобы они переносились на свою строку целиком. */
+.ai-eta, .asr-eta {
+  flex-basis: 100%;
+  width: 100%;
+  margin: 0.7rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.ai-eta b, .asr-eta b { color: #34d399; font-weight: 700; }
+.ai-more, .asr-more { flex-basis: 100%; width: 100%; margin-top: 0.6rem; }
+.ai-more > summary, .asr-more > summary {
+  display: inline-block;
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  user-select: none;
+}
+.ai-more > summary::-webkit-details-marker,
+.asr-more > summary::-webkit-details-marker { display: none; }
+.ai-more > summary::before, .asr-more > summary::before { content: '▸ '; }
+.ai-more[open] > summary::before, .asr-more[open] > summary::before { content: '▾ '; }
+.ai-more > summary:hover, .asr-more > summary:hover { color: var(--text); }
+.ai-more-body, .asr-more-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+.ai-more-body p, .asr-more-body p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
 `;
 
 function patchCss(src) {

@@ -69,20 +69,24 @@ const ASR_COMMON = [
 ];
 
 /* Нужны сборки «_timestamped»: обычные экспортированы без внимания
-   декодера к кодировщику, а без него меток по словам не получить. */
+   декодера к кодировщику, а без него меток по словам не получить.
+
+   Порядок важен: первой идёт лучшая модель — она же и выбрана по
+   умолчанию. Подписи говорят, чем платишь за скорость: обычная модель
+   считает примерно вдвое быстрее, но слышит хуже. */
 const ASR_MODELS = {
-  base: {
-    id: 'whisper-base_timestamped',
-    repo: 'onnx-community/whisper-base_timestamped',
-    label: 'Обычная (78 МБ)',
-    bytes: 82 * 1024 * 1024,
-    files: ASR_COMMON,
-  },
   small: {
     id: 'whisper-small_timestamped',
     repo: 'onnx-community/whisper-small_timestamped',
-    label: 'Крупная, точнее (242 МБ)',
+    label: 'Крупная, 242 МБ — слышит лучше всех',
     bytes: 254 * 1024 * 1024,
+    files: ASR_COMMON,
+  },
+  base: {
+    id: 'whisper-base_timestamped',
+    repo: 'onnx-community/whisper-base_timestamped',
+    label: 'Обычная, 78 МБ — вдвое быстрее, но хуже',
+    bytes: 82 * 1024 * 1024,
     files: ASR_COMMON,
   },
 };
@@ -394,7 +398,9 @@ function createWindow() {
       if (asrFile && fs.existsSync(asrFile)) {
         const b64 = fs.readFileSync(asrFile).toString('base64');
         const lang = process.env.KARAOKE_ASR_LANG || 'russian';
-        const key = process.env.KARAOKE_ASR_MODEL || 'base';
+        // По умолчанию проверяем то же, что получит человек, — крупную модель.
+        // Быстрый путь: KARAOKE_ASR_MODEL=base.
+        const key = process.env.KARAOKE_ASR_MODEL || 'small';
         const sep = process.env.KARAOKE_ASR_SEP === '1';
         const alignFile = process.env.KARAOKE_ASR_ALIGN;
         const dumpFile = process.env.KARAOKE_ASR_DUMP;

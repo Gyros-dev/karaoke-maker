@@ -1278,3 +1278,50 @@ body.is-desktop .only-web { display: none; }
 }
 .asr-warning b { color: var(--text); }
 .asr-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+
+/* --- Оценка времени и спрятанные быстрые варианты (только в приложении) ---
+
+   По умолчанию нейросети считают лучшим качеством, а оно небыстрое,
+   поэтому под каждым блоком идёт строка с ожидаемым временем. Быстрые
+   варианты остаются рабочими, но убраны в свёрнутое «Ещё варианты»:
+   они хуже, и предлагать их первым делом незачем.
+
+   Обе строки живут внутри флекс-рядов (.bg-upload и .asr-block), поэтому
+   flex-basis: 100% — чтобы они переносились на свою строку целиком. */
+.ai-eta, .asr-eta {
+  flex-basis: 100%;
+  width: 100%;
+  margin: 0.7rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.ai-eta b, .asr-eta b { color: #34d399; font-weight: 700; }
+.ai-more, .asr-more { flex-basis: 100%; width: 100%; margin-top: 0.6rem; }
+.ai-more > summary, .asr-more > summary {
+  display: inline-block;
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  user-select: none;
+}
+.ai-more > summary::-webkit-details-marker,
+.asr-more > summary::-webkit-details-marker { display: none; }
+.ai-more > summary::before, .asr-more > summary::before { content: '▸ '; }
+.ai-more[open] > summary::before, .asr-more[open] > summary::before { content: '▾ '; }
+.ai-more > summary:hover, .asr-more > summary:hover { color: var(--text); }
+.ai-more-body, .asr-more-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+}
+.ai-more-body p, .asr-more-body p {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
