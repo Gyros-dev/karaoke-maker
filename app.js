@@ -96,6 +96,26 @@ const FONTS = {
   courier: { label: 'Печатная машинка', css: '"Courier New", Courier, monospace' },
 };
 
+/* ---------- Где нужен оригинал с вокалом ----------
+
+   В редакторе разметка ставится на слух по голосу: без вокала человек
+   размечает вслепую, поэтому там по умолчанию звучит оригинал, а не
+   минусовка. Гасится переключателем «слышу оригинал» в панели выбранной
+   строки. Простукивание, разметка слов и кольцо требуют вокала всегда.
+
+   Уходя с редактора, флаг сам возвращается в исходное: он считается
+   заново при каждом запуске звука и при каждой смене шага. */
+function редакторОткрыт() {
+  const p = $('step-3');
+  return !!p && p.classList.contains('active');
+}
+
+function нуженОригинал() {
+  if (tap.active || wordTap.active) return true;
+  if (!редакторОткрыт()) return false;
+  return editor.loop || editor.hearVocal;
+}
+
 /* ---------- Аудио-движок ---------- */
 const audio = {
   ctx: null,
@@ -105,7 +125,7 @@ const audio = {
   startedAt: 0,
   offset: 0,
   playing: false,
-  forceVocal: false, // режим синхронизации: вокал всегда включён
+  forceVocal: false, // звучит оригинал с вокалом, а не минусовка
   stopAt: null,      // авто-пауза на этой секунде (прослушивание строки)
   onEnded: null,
 
@@ -154,18 +174,26 @@ const audio = {
   endSegment() {
     this.pause();
     this.stopAt = null;
-    if (this.forceVocal && !sync.active) {
-      this.forceVocal = false;
-      this.applyMix();
-    }
+    this.restoreVocal();
+  },
+
+  /* Вернуть громкость вокала к той, что положена сейчас: после
+     прослушивания отрывка, разметки слов или ухода с шага. Один вход
+     вместо разбросанных по коду «forceVocal = false» — из-за них флаг
+     раньше залипал и ползунок вокала в караоке будто не действовал. */
+  restoreVocal() {
+    const want = нуженОригинал();
+    if (this.forceVocal === want) return;
+    this.forceVocal = want;
+    this.applyMix();
   },
 
   play(fromOffset) {
     this.stopSources();
     this.stopAt = null;
-    // Вокал принудительно звучит только во время разметки; обычный запуск
-    // всегда возвращает громкость к той, что выставлена ползунком
-    this.forceVocal = sync.active;
+    // Громкость вокала при каждом запуске считаем заново: в редакторе
+    // положен оригинал, в караоке — то, что выставлено ползунком
+    this.forceVocal = нуженОригинал();
     const ctx = this.ensureCtx();
     this.offset = Math.max(0, Math.min(fromOffset ?? this.offset, this.duration));
     // Позиция у самого конца — начинаем сначала, иначе тишина
@@ -646,10 +674,12 @@ function loadProject() {
   } catch (e) { return null; }
 }
 
-/* ---------- Навигация по шагам ---------- */
+/* ---------- Навигация по шагам ----------
+   Шагов четыре: песня → текст → редактор → караоке. Простукивание
+   отдельным шагом больше не живёт, оно стало режимом внутри редактора. */
 function goToStep(n) {
   // Караоке готово — редактор тоже становится доступен
-  state.maxStep = Math.max(state.maxStep, n === 4 ? 5 : n);
+  state.maxStep = Math.max(state.maxStep, n === 3 ? 4 : n);
   document.querySelectorAll('.step-tab').forEach((tab) => {
     const step = +tab.dataset.step;
     tab.classList.toggle('active', step === n);
@@ -658,19 +688,17 @@ function goToStep(n) {
   document.querySelectorAll('.step-panel').forEach((p) => p.classList.remove('active'));
   $(`step-${n}`).classList.add('active');
 
-  stopSync();
+  // Заход простукивания и разметка слов живут только в редакторе
+  if (tap.active) finishTapMode();
   if (wordTap.active) finishWordTap(false);
   // Кольцо живёт только в редакторе: на других шагах оно бы дёргало плеер
-  if (n !== 4 && editor.loop) setLoop(false);
-  // Смена шага гасит режим принудительного вокала: иначе он остаётся
-  // от недослушанной строки и ползунок в караоке будто не действует
-  if (!sync.active && audio.forceVocal) {
-    audio.forceVocal = false;
-    audio.applyMix();
-  }
-  if (n !== 4 && n !== 5) { audio.pause(); updatePlayerUI(); }
-  if (n === 4) openEditor();
-  if (n === 5) renderStage();
+  if (n !== 3 && editor.loop) setLoop(false);
+  if (n !== 3 && n !== 4) { audio.pause(); updatePlayerUI(); }
+  if (n === 3) openEditor();
+  if (n === 4) renderStage();
+  // Громкость вокала считаем заново: в редакторе звучит оригинал,
+  // в караоке — то, что выставлено ползунком. Иначе флаг залипал.
+  audio.restoreVocal();
 }
 
 document.querySelectorAll('.step-tab').forEach((tab) => {
@@ -884,7 +912,7 @@ $('btn-to-lyrics').addEventListener('click', () => goToStep(2));
    ============================================================ */
 $('btn-back-1').addEventListener('click', () => goToStep(1));
 
-$('btn-to-sync').addEventListener('click', () => {
+$('btn-to-editor').addEventListener('click', () => {
   const raw = $('lyrics-input').value;
   const texts = raw.split('\n').map((s) => s.trim()).filter(Boolean);
   if (!texts.length) {
@@ -929,8 +957,6 @@ $('btn-to-sync').addEventListener('click', () => {
   applyRecognized(state.lines);
   saveProject();
   updateWordExportBtn();
-  renderSyncList();
-  updateSyncButtons();
   goToStep(3);
 });
 
@@ -958,77 +984,12 @@ function applyRecognized(lines) {
 }
 
 /* ============================================================
-   Шаг 3 — синхронизация
+   Времена строк: прослушивание, сдвиги, пересчёт подписей
+
+   Общая арифметика разметки. Ею пользуются и редактор, и режим
+   простукивания, и дорожка — поэтому она лежит отдельно от них.
    ============================================================ */
-const sync = { active: false, index: 0, selected: 0, raf: null };
 
-function renderSyncList() {
-  const ul = $('sync-list');
-  ul.innerHTML = '';
-  state.lines.forEach((line, i) => {
-    const li = document.createElement('li');
-    li.className = line.time != null ? 'done' : 'pending';
-    if (sync.active && i === sync.index) li.classList.add('next');
-    if (!sync.active && i === sync.selected) li.classList.add('next');
-    const ts = document.createElement('span');
-    ts.className = 'ts' + (line.time == null ? ' empty' : '');
-    ts.textContent = line.time == null ? '–:––' : fmtTime(line.time);
-    const text = document.createElement('span');
-    text.className = 'line-text';
-    text.textContent = line.text;
-    li.append(ts, text);
-
-    /* Строка, которую нейросеть не расслышала при подгонке текста:
-       время у неё подобрано на глазок. Тихая пометка, чтобы человек
-       знал, где именно стоит послушать и подвинуть. */
-    if (line.сомнительная) {
-      const mark = document.createElement('span');
-      mark.className = 'guess-mark';
-      mark.textContent = '≈';
-      mark.title = 'Нейросеть почти не расслышала эту строку — время подобрано ' +
-        'приблизительно. Послушай и поправь кнопками сдвига.';
-      li.insertBefore(mark, text);
-    }
-
-    if (!sync.active) {
-      const resume = document.createElement('button');
-      resume.className = 'nudge-btn';
-      resume.textContent = 'Продолжить отсюда';
-      resume.title = 'Стереть метки с этой строки и продолжить синхронизацию';
-      resume.dataset.resume = i;
-      li.appendChild(resume);
-    }
-
-    // Кнопки прослушивания и точной подстройки — только для отмеченных строк
-    if (line.time != null && !sync.active) {
-      const play = document.createElement('button');
-      play.className = 'nudge-btn line-play';
-      play.textContent = '▶';
-      play.title = 'Прослушать эту строку';
-      play.dataset.play = i;
-      li.insertBefore(play, ts);
-
-      const nudge = document.createElement('span');
-      nudge.className = 'nudge';
-      [[-1, '−1'], [-0.1, '−0,1'], [0.1, '+0,1'], [1, '+1']].forEach(([delta, label]) => {
-        const b = document.createElement('button');
-        b.className = 'nudge-btn';
-        b.textContent = label;
-        b.title = `Сдвинуть начало строки на ${label} с`;
-        b.dataset.i = i;
-        b.dataset.delta = delta;
-        nudge.appendChild(b);
-      });
-      li.appendChild(nudge);
-    }
-    ul.appendChild(li);
-  });
-  const anyDone = state.lines.some((l) => l.time != null);
-  $('shift-all').classList.toggle('hidden', sync.active || !anyDone);
-}
-
-/* Сдвиг одной строки с сохранением порядка: не раньше предыдущей
-   и не позже следующей */
 /* Прослушать одну строку: от её начала до начала следующей */
 function playLine(i) {
   const line = state.lines[i];
@@ -1051,6 +1012,8 @@ function shiftWords(line, delta) {
   }));
 }
 
+/* Сдвиг одной строки с сохранением порядка: не раньше предыдущей
+   и не позже следующей */
 function setLineTime(i, t) {
   const line = state.lines[i];
   const prev = i > 0 && state.lines[i - 1].time != null ? state.lines[i - 1].time + 0.05 : 0;
@@ -1104,17 +1067,16 @@ function shiftAllLines(delta) {
   saveProject();
 }
 
-/* Обновить отображение таймингов во всех списках.
-   Список редактора не пересобираем: там правят текст, и пересборка
-   узлов выбила бы курсор из поля. Меняем только подписи времени. */
+/* Обновить отображение таймингов в списке редактора.
+   Список не пересобираем: там правят текст, и пересборка узлов
+   выбила бы курсор из поля. Меняем только подписи времени. */
 function refreshTimes() {
-  renderSyncList();
+  editor.spansKey = '';   // времена поехали — раскладку дорожки пересчитать
+  const synced = syncedLines();
   document.querySelectorAll('#edit-list .ts[data-ts-i]').forEach((el) => {
     const line = state.lines[+el.dataset.tsI];
     if (line) el.textContent = line.time == null ? '–:––' : fmtTime(line.time);
   });
-  editor.spansKey = '';   // времена поехали — раскладку дорожки пересчитать
-  const synced = syncedLines();
   document.querySelectorAll('#edit-list .end-ts[data-end-ts-i]').forEach((el) => {
     const line = state.lines[+el.dataset.endTsI];
     if (!line) return;
@@ -1122,130 +1084,15 @@ function refreshTimes() {
     el.textContent = line.time == null
       ? '–:––' : `до ${fmtTime(lineEnd(synced, synced.indexOf(line)))}`;
   });
+  document.querySelectorAll('#edit-list .dur-ts[data-dur-i]').forEach((el) => {
+    const line = state.lines[+el.dataset.durI];
+    if (!line) return;
+    const i = synced.indexOf(line);
+    el.textContent = line.time == null
+      ? '' : `${(lineEnd(synced, i) - lineStart(synced, i)).toFixed(1)} с`;
+  });
   updateSelInfo();
 }
-
-$('sync-list').addEventListener('click', (e) => {
-  const resume = e.target.closest('[data-resume]');
-  if (resume) {
-    sync.selected = +resume.dataset.resume;
-    renderSyncList();
-    $('btn-sync-start').textContent = `▶ Продолжить с ${sync.selected + 1}-й строки`;
-    return;
-  }
-  const playBtn = e.target.closest('[data-play]');
-  if (playBtn) { playLine(+playBtn.dataset.play); return; }
-  const btn = e.target.closest('.nudge-btn');
-  if (btn) nudgeLine(+btn.dataset.i, +btn.dataset.delta);
-});
-
-$('shift-all').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-shift]');
-  if (btn) shiftAllLines(+btn.dataset.shift);
-});
-
-function updateSyncButtons() {
-  const allDone = state.lines.length > 0 && state.lines.every((l) => l.time != null);
-  $('btn-to-player').disabled = !allDone;
-}
-
-function startSync(from = sync.selected) {
-  if (typeof from !== 'number') from = sync.selected;
-  from = Math.max(0, Math.min(from, state.lines.length - 1));
-  const resumeAt = state.lines[from].time;
-  // Всё до выбранной строки оставляем нетронутым. Выбранная и последующие
-  // метки будут записаны заново, поэтому ошибку не нужно переделывать с нуля.
-  state.lines.slice(from).forEach((l) => {
-    l.time = null; l.end = null; l.ручнойКонец = false; l.сомнительная = false;
-  });
-  sync.active = true;
-  sync.index = from;
-  sync.selected = from;
-  audio.forceVocal = true;
-  audio.applyMix();
-  const prev = from > 0 ? state.lines[from - 1].time : 0;
-  audio.play(Math.max(0, (resumeAt ?? prev ?? 0) - 1));
-  audio.onEnded = finishSync;
-
-  $('btn-sync-start').classList.add('hidden');
-  $('btn-sync-stop').classList.remove('hidden');
-  $('tap-button').classList.remove('hidden');
-  $('tap-next').textContent = `Дальше: «${state.lines[from].text}»`;
-  renderSyncList();
-  updateSyncButtons();
-  // Если начали не с первой строки, список сам к ней не прокрутится
-  scrollSyncListTo(from);
-  tickSync();
-}
-
-/* Прокручиваем только сам список, не страницу.
-   scrollIntoView двигает все контейнеры сразу, и при отметке строк
-   разметка уезжает вверх — кнопка «Отметить» пропадает с экрана. */
-function scrollSyncListTo(index) {
-  const list = $('sync-list');
-  const li = list.children[index];
-  if (!li) return;
-  const listBox = list.getBoundingClientRect();
-  const liBox = li.getBoundingClientRect();
-  const delta = (liBox.top + liBox.height / 2) - (listBox.top + listBox.height / 2);
-  list.scrollTop = Math.max(0, list.scrollTop + delta);
-}
-
-function tickSync() {
-  setText('sync-time', fmtTime(audio.position()));
-  if (sync.active) sync.raf = requestAnimationFrame(tickSync);
-}
-
-function tapLine() {
-  if (!sync.active || sync.index >= state.lines.length) return;
-  state.lines[sync.index].time = audio.position();
-  state.lines[sync.index].сомнительная = false;
-  sync.index++;
-  if (sync.index >= state.lines.length) {
-    finishSync();
-  } else {
-    $('tap-next').textContent = `Дальше: «${state.lines[sync.index].text}»`;
-    renderSyncList();
-    scrollSyncListTo(sync.index);
-  }
-}
-
-function finishSync() {
-  sync.active = false;
-  cancelAnimationFrame(sync.raf);
-  audio.forceVocal = false;
-  audio.pause();
-  audio.offset = 0;
-  audio.applyMix();
-  sync.selected = Math.min(sync.index, Math.max(0, state.lines.length - 1));
-  $('btn-sync-start').classList.remove('hidden');
-  $('btn-sync-start').textContent = '▶ Продолжить';
-  $('btn-sync-stop').classList.add('hidden');
-  $('tap-button').classList.add('hidden');
-  renderSyncList();
-  updateSyncButtons();
-  saveProject();
-}
-
-function stopSync() {
-  if (sync.active) finishSync();
-}
-
-$('btn-sync-start').addEventListener('click', startSync);
-$('btn-sync-stop').addEventListener('click', finishSync);
-$('btn-sync-reset').addEventListener('click', () => {
-  sync.selected = 0;
-  state.lines.forEach((l) => {
-    l.time = null; l.end = null; l.ручнойКонец = false; l.сомнительная = false;
-  });
-  saveProject();
-  renderSyncList();
-  updateSyncButtons();
-  $('btn-sync-start').textContent = '▶ Начать';
-});
-$('tap-button').addEventListener('click', tapLine);
-$('btn-back-2').addEventListener('click', () => goToStep(2));
-$('btn-to-player').addEventListener('click', () => goToStep(4));
 
 /* ============================================================
    Шаг 4 — караоке-плеер
@@ -1928,11 +1775,13 @@ function tickPlayer() {
   if (wordTap.active) highlightWordTap();
 
   // Обновление редактора
-  if ($('step-4').classList.contains('active') && editor.peaks) {
+  if ($('step-3').classList.contains('active') && editor.peaks) {
     setText('edit-time', fmtTime(audio.position()));
     setText('btn-edit-play', audio.playing ? '⏸' : '▶');
     tickLoop();
-    updateEditStage();
+    // В режиме простукивания предпросмотр убран с глаз — считать его незачем
+    if (tap.active) setText('tap-time', fmtTime(audio.position()));
+    else updateEditStage();
     followPlayhead();
     drawTimeline();
   }
@@ -2136,7 +1985,7 @@ $('eq-reset').addEventListener('click', () => {
   saveProject();
 });
 
-$('btn-back-3').addEventListener('click', () => goToStep(4));
+$('btn-back-3').addEventListener('click', () => goToStep(3));
 
 /* ---------- Проверка звука ----------
    Меряет реальный сигнал на выходе и в самих буферах: это отличает
@@ -2323,7 +2172,15 @@ $('btn-export-wav').addEventListener('click', () => {
 });
 
 /* ============================================================
-   Шаг 5 — редактор: текст + предпросмотр + дорожка
+   Шаг 3 — редактор: сетка строк + предпросмотр + дорожка
+
+   Три поверхности, у каждой своя работа:
+     • сетка строк — навигация и правка текста. Никаких кнопок
+       подстройки в самой строке: они дублируют дорожку и клавиши;
+     • панель выбранной строки — одна на весь редактор: начало, конец,
+       слова, удаление, вокал и «простучать заново»;
+     • дорожка — весь тайминг.
+   Плюс предпросмотр караоке, один в один со сценой.
    ============================================================ */
 const editor = {
   pxPerSec: 40,
@@ -2336,6 +2193,7 @@ const editor = {
   loop: false,   // играть выбранную строку по кругу
   snap: true,    // притягивать границы к настоящему вступлению голоса
   snapped: null, // куда притянулось в этом перетаскивании — для подсветки
+  hearVocal: true, // в редакторе по умолчанию звучит оригинал с вокалом
 
   // Отмена и повтор: снимки времён, см. pushHistory
   history: [],
@@ -2405,6 +2263,10 @@ const HISTORY_MAX = 80;
 
 function snapshotTimings() {
   return state.lines.map((l) => ({
+    /* Текст в снимке лежит, но при обычной отмене не применяется —
+       он нужен только чтобы вернуть удалённую строку целиком.
+       См. applySnapshot: пока число строк не изменилось, текст не трогаем. */
+    text: l.text,
     time: l.time,
     end: l.end != null ? l.end : null,
     hand: !!l.ручнойКонец,
@@ -2472,16 +2334,37 @@ function updateHistoryButtons() {
 
 /* Разложить снимок обратно по строкам и обновить всё, что от них зависит */
 function applySnapshot(snap) {
-  snap.forEach((s, i) => {
-    const l = state.lines[i];
-    if (!l) return;
-    l.time = s.time;
-    l.end = s.end;
-    l.ручнойКонец = s.hand;
-    l.сомнительная = s.guess;
-    if (s.words) l.words = s.words.map((w) => ({ ...w }));
-    else delete l.words;
-  });
+  if (snap.length !== state.lines.length) {
+    /* Строку удалили (или возвращаем удалённую) — тогда список
+       восстанавливается целиком, вместе с текстом: вернуть удалённую
+       строку иначе было бы нечем. */
+    state.lines = snap.map((s) => {
+      const l = {
+        text: s.text,
+        time: s.time,
+        end: s.end,
+        ручнойКонец: s.hand,
+        сомнительная: s.guess,
+      };
+      if (s.words) l.words = s.words.map((w) => ({ ...w }));
+      return l;
+    });
+    editor.histLines = state.lines.length;
+    $('lyrics-input').value = state.lines.map((l) => l.text).join('\n');
+    if (editor.sel >= state.lines.length) editor.sel = state.lines.length - 1;
+  } else {
+    // Обычная отмена: текст правят прямо в поле, там своя отмена браузера
+    snap.forEach((s, i) => {
+      const l = state.lines[i];
+      if (!l) return;
+      l.time = s.time;
+      l.end = s.end;
+      l.ручнойКонец = s.hand;
+      l.сомнительная = s.guess;
+      if (s.words) l.words = s.words.map((w) => ({ ...w }));
+      else delete l.words;
+    });
+  }
   editor.spansKey = '';
   refreshTimes();
   renderEditList();
@@ -2493,14 +2376,14 @@ function applySnapshot(snap) {
 }
 
 function undoEdit() {
-  if (!editor.history.length || editor.histLines !== state.lines.length) return;
+  if (!editor.history.length) return;
   editor.future.push(snapshotTimings());
   applySnapshot(editor.history.pop());
   updateHistoryButtons();
 }
 
 function redoEdit() {
-  if (!editor.future.length || editor.histLines !== state.lines.length) return;
+  if (!editor.future.length) return;
   editor.history.push(snapshotTimings());
   applySnapshot(editor.future.pop());
   updateHistoryButtons();
@@ -2545,17 +2428,41 @@ function openEditor() {
   updateWordExportBtn();
   updateHistoryButtons();
   updateSelInfo();
+  /* Переключатель вокала имеет смысл, только если есть чем заменить
+     оригинал: у моно-файла минусовки нет, и звучит он всегда как есть */
+  const вокалЕсть = !!state.instrumentalBuffer;
+  const пер = $('sel-vocal');
+  пер.checked = editor.hearVocal;
+  пер.disabled = !вокалЕсть;
+  пер.parentElement.title = вокалЕсть
+    ? 'В редакторе по умолчанию звучит оригинал: размечать на слух без голоса невозможно'
+    : 'Файл моно — минусовки нет, оригинал звучит всегда';
   $('tl-voice-note').textContent = voiceReady()
     ? '— видно, где на самом деле поют'
     : '— появится, когда уберёшь вокал нейросетью';
   resizeTimeline();
   $('edit-total').textContent = fmtTime(audio.duration);
   drawTimeline();
+
+  /* На сайте простукивание — единственный способ разметки: нейросетей
+     там нет. Поэтому, когда времён нет вовсе, редактор открывается сразу
+     в режиме простукивания и прятать его за кнопкой не приходится.
+     В приложении после подгонки времена уже есть — открывается обычный вид. */
+  if (!tap.active && state.lines.length && state.lines.every((l) => l.time == null)) {
+    startTapMode(0);
+  }
 }
 
-/* --- Список строк с редактированием текста --- */
+/* --- Сетка строк ---
+
+   В строке только то, что помогает её найти и прочитать: номер, начало,
+   конец, длительность, текст и тихие пометки (≈ — время на глазок,
+   ♪ — слова размечены руками). Кнопок подстройки в строке нет: их было
+   по восемь на строку, и они дублировали дорожку, клавиши и панель
+   выбранной строки. Из-за них список было не прочитать. */
 function renderEditList() {
   const ul = $('edit-list');
+  const synced = syncedLines();
   ul.innerHTML = '';
   state.lines.forEach((line, i) => {
     const li = document.createElement('li');
@@ -2567,11 +2474,7 @@ function renderEditList() {
     num.className = 'num';
     num.textContent = String(i + 1);
 
-    const play = document.createElement('button');
-    play.className = 'nudge-btn line-play';
-    play.textContent = '▶';
-    play.title = 'Прослушать эту строку';
-    play.dataset.play = i;
+    const j = synced.indexOf(line);
 
     const ts = document.createElement('span');
     ts.className = 'ts' + (line.time == null ? ' empty' : '');
@@ -2581,10 +2484,17 @@ function renderEditList() {
     const end = document.createElement('span');
     end.className = 'ts end-ts' + (line.ручнойКонец ? '' : ' empty');
     end.dataset.endTsI = i;
-    end.textContent = line.time == null ? '–:––' : `до ${fmtTime(lineEnd(syncedLines(), syncedLines().indexOf(line)))}`;
+    end.textContent = line.time == null ? '–:––' : `до ${fmtTime(lineEnd(synced, j))}`;
 
-    /* Та же тихая пометка, что и в списке синхронизации: время этой строки
-       нейросеть подобрала на глазок. На дорожке такой блок тоже другой. */
+    // Длительность: по ней сразу видно строку, которой не хватило места
+    const dur = document.createElement('span');
+    dur.className = 'ts dur-ts';
+    dur.dataset.durI = i;
+    dur.textContent = line.time == null
+      ? '' : `${(lineEnd(synced, j) - lineStart(synced, j)).toFixed(1)} с`;
+
+    /* Тихая пометка: время этой строки нейросеть подобрала на глазок.
+       На дорожке такой блок тоже нарисован иначе. */
     let guess = null;
     if (line.сомнительная) {
       guess = document.createElement('span');
@@ -2600,84 +2510,147 @@ function renderEditList() {
     text.textContent = line.text;
     text.dataset.textI = i;
 
-    const nudge = document.createElement('span');
-    nudge.className = 'nudge';
-    [[-1, '−1'], [-0.1, '−0,1'], [0.1, '+0,1'], [1, '+1']].forEach(([delta, label]) => {
-      const b = document.createElement('button');
-      b.className = 'nudge-btn';
-      b.textContent = label;
-      b.title = `Сдвинуть начало строки на ${label} с`;
-      b.dataset.i = i;
-      b.dataset.delta = delta;
-      nudge.appendChild(b);
-    });
-
-    const endNudge = document.createElement('span');
-    endNudge.className = 'nudge end-nudge';
-    [[-1, 'конец −1'], [-0.1, '−0,1'], [0.1, '+0,1'], [1, 'конец +1']].forEach(([delta, label]) => {
-      const b = document.createElement('button');
-      b.className = 'nudge-btn'; b.textContent = label;
-      b.title = `Сдвинуть конец строки на ${label} с`;
-      b.dataset.endI = i; b.dataset.endDelta = delta;
-      endNudge.appendChild(b);
-    });
-
-    // Разметка слов: у размеченных строк кнопка светится и рядом появляется сброс
-    const marked = hasWords(line);
-    const wordsGroup = document.createElement('span');
-    wordsGroup.className = 'nudge words-nudge';
-    const wordsBtn = document.createElement('button');
-    wordsBtn.className = 'nudge-btn words-btn' + (marked ? ' marked' : '');
-    wordsBtn.textContent = marked ? '♪ слова ✓' : '♪ слова';
-    wordsBtn.title = marked
-      ? 'Строка размечена по словам. Нажми, чтобы простучать заново'
-      : 'Простучать слова внутри строки';
-    wordsBtn.dataset.words = i;
-    wordsGroup.appendChild(wordsBtn);
-    if (marked) {
-      const rst = document.createElement('button');
-      rst.className = 'nudge-btn words-reset';
-      rst.textContent = '⨯';
-      rst.title = 'Вернуть автоматическое деление слов';
-      rst.dataset.wordsReset = i;
-      wordsGroup.appendChild(rst);
+    // Строка размечена по словам — тоже тихой пометкой, а не кнопкой
+    let mark = null;
+    if (hasWords(line)) {
+      mark = document.createElement('span');
+      mark.className = 'word-mark';
+      mark.textContent = '♪';
+      mark.title = 'Слова этой строки размечены вручную';
     }
 
-    li.append(num, play, ts, end);
+    li.append(num, ts, end, dur);
     if (guess) li.appendChild(guess);
-    li.append(text, nudge, endNudge, wordsGroup);
+    li.appendChild(text);
+    if (mark) li.appendChild(mark);
     ul.appendChild(li);
   });
 }
 
+/* Любой клик по строке делает её выбранной: с ней работают клавиши,
+   кольцо, полоса слов на дорожке и панель выбранной строки */
 $('edit-list').addEventListener('click', (e) => {
-  // Любой клик по строке делает её выбранной: с ней работают клавиши,
-  // кольцо и полоса слов на дорожке
   const row = e.target.closest('.edit-row');
   if (row && +row.dataset.row !== editor.sel) {
     selectLine(+row.dataset.row, { scrollTimeline: true });
   }
+});
 
-  const playBtn = e.target.closest('[data-play]');
-  if (playBtn) { playLine(+playBtn.dataset.play); return; }
-  const wordsBtn = e.target.closest('[data-words]');
-  if (wordsBtn) { startWordTap(+wordsBtn.dataset.words); return; }
-  const wordsReset = e.target.closest('[data-words-reset]');
-  if (wordsReset) { resetWords(+wordsReset.dataset.wordsReset); return; }
-  const endBtn = e.target.closest('[data-end-i]');
-  if (endBtn) {
-    pushHistory();
-    nudgeLineEnd(+endBtn.dataset.endI, +endBtn.dataset.endDelta);
-    renderEditList();
-    drawTimeline();
+/* Двойной клик по строке перематывает песню на её начало.
+   По самому тексту — не перематывает: там двойной клик выделяет слово,
+   и отнимать это у правки текста нельзя. */
+$('edit-list').addEventListener('dblclick', (e) => {
+  if (e.target.closest('.edit-text')) return;
+  const row = e.target.closest('.edit-row');
+  if (!row) return;
+  const i = +row.dataset.row;
+  const line = state.lines[i];
+  if (!line || line.time == null) return;
+  if (editor.sel !== i) selectLine(i, {});
+  const sp = spanOfRow(i);
+  const t = sp ? sp.start : line.time;
+  if (audio.playing) audio.play(t);
+  else audio.offset = t;
+  showTime(sp);
+  editor.stageKey = '';
+  renderEditStage();
+  updatePlayerUI();
+  drawTimeline();
+});
+
+/* Прокрутка сетки за воспроизведением: текущая строка сама всплывает
+   в середину списка. Двигаем только сам список, не страницу: иначе
+   при каждой смене строки уезжал бы весь редактор. */
+function scrollEditListTo(row) {
+  const list = $('edit-list');
+  const el = list.querySelector(`.edit-row[data-row="${row}"]`);
+  if (!el) return;
+  const listBox = list.getBoundingClientRect();
+  const elBox = el.getBoundingClientRect();
+  const delta = (elBox.top + elBox.height / 2) - (listBox.top + listBox.height / 2);
+  if (Math.abs(delta) < 2) return;
+  list.scrollTop = Math.max(0, list.scrollTop + delta);
+}
+
+/* ============================================================
+   Панель выбранной строки
+
+   Одна на весь редактор — вместо кнопок, стоявших в каждой строке.
+   ============================================================ */
+function selPanelNudge(what, delta) {
+  if (editor.sel < 0) return;
+  pushHistory();
+  if (what === 'start') nudgeLine(editor.sel, delta);
+  else nudgeLineEnd(editor.sel, delta);
+  dropEmptyHistory();
+  renderEditList();
+  editor.stageKey = '';
+  renderEditStage();
+  drawTimeline();
+}
+
+$('sel-panel').addEventListener('click', (e) => {
+  const start = e.target.closest('[data-sel-start]');
+  if (start) { selPanelNudge('start', +start.dataset.selStart); return; }
+  const end = e.target.closest('[data-sel-end]');
+  if (end) { selPanelNudge('end', +end.dataset.selEnd); return; }
+});
+
+$('btn-sel-play').addEventListener('click', () => {
+  if (editor.sel >= 0) playLine(editor.sel);
+});
+$('btn-sel-words').addEventListener('click', () => {
+  if (editor.sel >= 0) startWordTap(editor.sel);
+});
+$('btn-sel-words-reset').addEventListener('click', () => {
+  if (editor.sel >= 0) resetWords(editor.sel);
+});
+$('btn-sel-del').addEventListener('click', () => deleteLine(editor.sel));
+$('btn-sel-tap').addEventListener('click', () => {
+  startTapMode(editor.sel >= 0 ? editor.sel : 0);
+});
+
+$('sel-vocal').addEventListener('change', () => {
+  editor.hearVocal = $('sel-vocal').checked;
+  audio.restoreVocal();
+});
+
+/* Убрать строку из караоке. Отменяется общей отменой: снимок держит
+   и текст, поэтому удалённая строка возвращается целиком. */
+function deleteLine(row) {
+  const line = state.lines[row];
+  if (!line) return;
+  if (state.lines.length <= 1) {
+    alert('Это последняя строка — удалять нечего. Текст правится на шаге «Текст».');
     return;
   }
-  const btn = e.target.closest('.nudge-btn');
-  if (btn && btn.dataset.i != null) {
-    pushHistory();
-    nudgeLine(+btn.dataset.i, +btn.dataset.delta);
-    drawTimeline();
-  }
+  if (!confirm(`Убрать строку «${line.text}» из караоке?\n\nОтменяется через Cmd+Z.`)) return;
+  pushHistory();
+  state.lines.splice(row, 1);
+  editor.histLines = state.lines.length;
+  $('lyrics-input').value = state.lines.map((l) => l.text).join('\n');
+  editor.spansKey = '';
+  editor.sel = Math.min(row, state.lines.length - 1);
+  renderEditList();
+  refreshTimes();
+  updateWordExportBtn();
+  editor.stageKey = '';
+  renderEditStage();
+  saveProject();
+  drawTimeline();
+}
+
+/* Сдвиг всей разметки разом — раньше жил на шаге «Синхронизация» */
+$('shift-all').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-shift]');
+  if (!btn) return;
+  pushHistory();
+  shiftAllLines(+btn.dataset.shift);
+  dropEmptyHistory();
+  renderEditList();
+  editor.stageKey = '';
+  renderEditStage();
+  drawTimeline();
 });
 
 /* ============================================================
@@ -2715,7 +2688,7 @@ function updateWordExportBtn() {
 function startWordTap(i) {
   const line = state.lines[i];
   if (!line || line.time == null) {
-    alert('Сначала отметь начало этой строки на шаге «Синхронизация».');
+    alert('Сначала простучи начало этой строки: кнопка «✎ простучать заново» в панели выбранной строки.');
     return;
   }
   const chunks = splitWords(line.text);
@@ -2805,8 +2778,7 @@ function finishWordTap(save) {
   wordTap.active = false;
   audio.pause();
   audio.stopAt = null;
-  audio.forceVocal = false;
-  audio.applyMix();
+  audio.restoreVocal();
   $('word-tap').classList.add('hidden');
 
   if (save && wordTap.marks.length && line) {
@@ -2846,6 +2818,190 @@ $('btn-word-done').addEventListener('click', () => finishWordTap(true));
 $('btn-word-cancel').addEventListener('click', () => finishWordTap(false));
 $('word-tap-line').addEventListener('click', tapWord); // на телефоне пробела нет
 
+/* ============================================================
+   Режим простукивания
+
+   Не отдельный шаг и не панель в придачу к редактору, а режим внутри
+   него: пока он включён, сетка строк, предпросмотр и панель выбранной
+   строки убраны с глаз (класс .tapping на панели шага). На экране
+   остаётся ровно то, чем в этот момент пользуются: крупная текущая
+   строка, следующая помельче, счётчик, время, дорожка — на ней метки
+   появляются на глазах — и две кнопки.
+
+   Правила переписывания меток. Человек не должен бояться, что потеряет
+   работу, поэтому:
+     • стучать можно с любого места; метки раньше него не трогаются;
+     • ничего не стирается заранее: метка переписывается ровно в тот
+       момент, когда по строке ударили. Строки, до которых не дошли,
+       остаются как были;
+     • каждый удар отменяется по отдельности — «отменить последнюю»,
+       она же Backspace: строка возвращается к прежнему времени,
+       а песня отматывается назад, чтобы попробовать ещё раз;
+     • весь заход целиком откатывается общей отменой Cmd+Z — снимок
+       всех времён кладётся в стек один раз, перед первым ударом.
+   ============================================================ */
+const tap = {
+  active: false,
+  index: 0,      // строка, которую ждём (номер в state.lines)
+  from: 0,       // с какой строки начали заход
+  done: [],      // по записи на удар: чем строка была до него
+  pushed: false, // снимок захода лежит в стеке отмены
+};
+const TAP_LEAD = 1;   // сколько секунд играем до строки, с которой начали
+
+function startTapMode(from) {
+  if (!state.originalBuffer || !state.lines.length) return;
+  if (wordTap.active) finishWordTap(false);
+  if (editor.loop) setLoop(false);
+  from = Math.max(0, Math.min(from | 0, state.lines.length - 1));
+
+  tap.active = true;
+  tap.from = from;
+  tap.index = from;
+  tap.done = [];
+  // Один снимок на весь заход: Cmd+Z должен снимать его целиком
+  pushHistory();
+  tap.pushed = true;
+
+  $('step-3').classList.add('tapping');
+  $('tap-mode').classList.remove('hidden');
+
+  const prev = from > 0 && state.lines[from - 1].time != null ? state.lines[from - 1].time : 0;
+  const at = state.lines[from].time != null ? state.lines[from].time : prev;
+  audio.play(Math.max(0, at - TAP_LEAD));
+  audio.onEnded = () => finishTapMode();
+  renderTapMode();
+  resizeTimeline();
+  drawTimeline();
+}
+
+function renderTapMode() {
+  const total = state.lines.length;
+  const done = state.lines.filter((l) => l.time != null).length;
+  $('tap-count').textContent = `размечено ${done} из ${total}`;
+  const cur = state.lines[tap.index];
+  const next = state.lines[tap.index + 1];
+  $('tap-now').textContent = cur ? cur.text : 'Все строки размечены';
+  $('tap-next').textContent = next ? next.text : '';
+  $('btn-tap-undo').disabled = !tap.done.length;
+}
+
+/* Удар: строка получает время, следующая становится текущей */
+function tapHit() {
+  if (!tap.active) return;
+  const i = tap.index;
+  const line = state.lines[i];
+  if (!line) { finishTapMode(); return; }
+  const t = audio.position();
+
+  // Чем строка была до удара — чтобы вернуть её кнопкой «отменить последнюю»
+  tap.done.push({
+    row: i,
+    time: line.time,
+    end: line.end,
+    hand: !!line.ручнойКонец,
+    guess: !!line.сомнительная,
+    words: line.words ? line.words.map((w) => ({ ...w })) : null,
+  });
+
+  const was = line.time;
+  line.time = t;
+  line.сомнительная = false;
+  // Метки слов заданы абсолютным временем — двигаются вместе со строкой
+  if (was != null) shiftWords(line, t - was);
+  // Ручной конец переживает удар, пока он всё ещё позже начала
+  if (line.ручнойКонец && line.end != null && line.end <= t + 0.05) {
+    line.end = null;
+    line.ручнойКонец = false;
+  }
+
+  tap.index++;
+  editor.spansKey = '';
+  renderTapMode();
+  drawTimeline();
+  if (tap.index >= state.lines.length) finishTapMode();
+}
+
+/* Отменить последний удар: строка возвращается к прежнему времени,
+   а песня отматывается к тому месту, где по ней ударили */
+function undoLastTap() {
+  if (!tap.active || !tap.done.length) return;
+  const last = tap.done.pop();
+  const line = state.lines[last.row];
+  const hit = line ? line.time : null;
+  if (line) {
+    line.time = last.time;
+    line.end = last.end;
+    line.ручнойКонец = last.hand;
+    line.сомнительная = last.guess;
+    if (last.words) line.words = last.words.map((w) => ({ ...w }));
+    else delete line.words;
+  }
+  tap.index = last.row;
+  editor.spansKey = '';
+  if (hit != null) audio.play(Math.max(0, hit - TAP_LEAD));
+  renderTapMode();
+  drawTimeline();
+}
+
+/* Закончить заход. Метки остаются как есть, снимок остаётся в стеке —
+   Cmd+Z снимет весь заход. */
+function finishTapMode() {
+  if (!tap.active) return;
+  tap.active = false;
+  audio.pause();
+  audio.onEnded = null;
+  $('step-3').classList.remove('tapping');
+  $('tap-mode').classList.add('hidden');
+  // Простучали и ничего не изменили — отменять нечего
+  if (tap.pushed) { dropEmptyHistory(); tap.pushed = false; }
+
+  if (tap.done.length) {
+    editor.sel = tap.done[tap.done.length - 1].row;
+    проверитьПорядокПослеЗахода();
+  }
+  editor.spansKey = '';
+  audio.restoreVocal();
+  renderEditList();
+  refreshTimes();
+  updateWordExportBtn();
+  editor.stageKey = '';
+  renderEditStage();
+  saveProject();
+  resizeTimeline();
+  drawTimeline();
+  updatePlayerUI();
+}
+
+/* Заход закончили посреди песни, а дальше лежат метки из прошлой
+   разметки — и они могут оказаться РАНЬШЕ только что простуканных.
+   Молча ломать караоке нельзя, но и стирать чужую работу без спроса
+   тоже: спрашиваем. Стирание попадает в тот же снимок отмены. */
+function проверитьПорядокПослеЗахода() {
+  const last = tap.done[tap.done.length - 1];
+  const t = state.lines[last.row] ? state.lines[last.row].time : null;
+  if (t == null) return;
+  let k = -1;
+  for (let i = last.row + 1; i < state.lines.length; i++) {
+    if (state.lines[i].time != null) { k = i; break; }
+  }
+  if (k < 0 || state.lines[k].time > t) return;
+  const ok = confirm(
+    `Строка ${k + 1} размечена раньше, чем та, которую ты только что простучал.\n\n` +
+    `Стереть метки с ${k + 1}-й строки и дальше, чтобы простучать их заново?\n` +
+    'Всё вместе с этим заходом отменяется через Cmd+Z.');
+  if (!ok) return;
+  for (let i = k; i < state.lines.length; i++) {
+    const l = state.lines[i];
+    l.time = null; l.end = null; l.ручнойКонец = false; l.сомнительная = false;
+    delete l.words;
+  }
+}
+
+$('tap-hit').addEventListener('click', tapHit);   // на телефоне пробела нет
+$('btn-tap-undo').addEventListener('click', undoLastTap);
+$('btn-tap-done').addEventListener('click', () => finishTapMode());
+
 /* Вставка в строки — только плоским текстом, без HTML из буфера */
 $('edit-list').addEventListener('paste', (e) => {
   const el = e.target.closest('.edit-text');
@@ -2872,11 +3028,10 @@ $('edit-list').addEventListener('input', (e) => {
     } else {
       delete line.words;
       // Перерисовать список сразу нельзя — потеряется курсор в поле,
-      // поэтому просто гасим отметку у этой строки
-      const btn = el.closest('.edit-row').querySelector('.words-btn');
-      if (btn) { btn.classList.remove('marked'); btn.textContent = '♪ слова'; }
-      const rst = el.closest('.edit-row').querySelector('.words-reset');
-      if (rst) rst.remove();
+      // поэтому просто убираем пометку «♪» у этой строки
+      const mark = el.closest('.edit-row').querySelector('.word-mark');
+      if (mark) mark.remove();
+      if (i === editor.sel) updateSelInfo();
       updateWordExportBtn();
     }
   }
@@ -2934,6 +3089,16 @@ function renderEditStage() {
   document.querySelectorAll('#edit-list .edit-row').forEach((row) => {
     row.classList.toggle('current-row', +row.dataset.row === globalIdx);
   });
+
+  /* Сетка идёт за воспроизведением: текущая строка сама всплывает.
+     Не лезем, когда человек правит текст прямо в списке — курсор бы
+     уехал из поля вместе с прокруткой. */
+  if (audio.playing && globalIdx >= 0 && !tap.active) {
+    const el = document.activeElement;
+    if (!(el && el.isContentEditable && $('edit-list').contains(el))) {
+      scrollEditListTo(globalIdx);
+    }
+  }
 }
 
 function updateEditStage() {
@@ -3378,14 +3543,30 @@ function showTime(sp) {
   }
 }
 
+/* Подпись и кнопки панели выбранной строки */
 function updateSelInfo() {
   const el = $('tl-sel');
   if (!el) return;
   const sp = spanOfRow(editor.sel);
-  if (!sp) { el.textContent = 'Строка не выбрана'; return; }
-  const dur = Math.max(0, sp.end - sp.start);
-  el.textContent = `№${sp.row + 1}: ${sp.start.toFixed(2)} → ${sp.end.toFixed(2)} с`
-    + ` · ${dur.toFixed(2)} с${sp.line.сомнительная ? ' · ≈' : ''}`;
+  const line = sp ? sp.line : null;
+  if (!sp) {
+    el.textContent = 'Строка не выбрана';
+  } else {
+    const dur = Math.max(0, sp.end - sp.start);
+    el.textContent = `№${sp.row + 1}: ${sp.start.toFixed(2)} → ${sp.end.toFixed(2)} с`
+      + ` · ${dur.toFixed(2)} с${line.сомнительная ? ' · ≈' : ''}`;
+  }
+  // Пока строка не выбрана, работать не с чем — кнопки гаснут
+  const panel = $('sel-panel');
+  panel.classList.toggle('empty', !sp);
+  panel.querySelectorAll('[data-sel-start], [data-sel-end]').forEach((b) => { b.disabled = !sp; });
+  $('btn-sel-play').disabled = !sp;
+  $('btn-sel-words').disabled = !sp;
+  $('btn-sel-del').disabled = !state.lines.length;
+  const marked = !!(line && hasWords(line));
+  $('btn-sel-words').classList.toggle('marked', marked);
+  $('btn-sel-words').textContent = marked ? '♪ слова ✓' : '♪ слова';
+  $('btn-sel-words-reset').classList.toggle('hidden', !marked);
 }
 
 /* ---------- Перетаскивание ---------- */
@@ -3585,9 +3766,8 @@ function setLoop(on) {
     audio.stopAt = null;      // кольцо само вернёт указатель назад
     audio.forceVocal = true;
     audio.applyMix();
-  } else if (audio.forceVocal && !sync.active && !wordTap.active) {
-    audio.forceVocal = false;
-    audio.applyMix();
+  } else {
+    audio.restoreVocal();
   }
   drawTimeline();
 }
@@ -3605,16 +3785,16 @@ $('btn-edit-play').addEventListener('click', () => {
   else audio.play();
 });
 
-$('btn-back-4').addEventListener('click', () => goToStep(3));
-$('btn-editor-next').addEventListener('click', () => goToStep(5));
+$('btn-back-2').addEventListener('click', () => goToStep(2));
+$('btn-editor-next').addEventListener('click', () => goToStep(4));
 
 window.addEventListener('resize', () => {
-  if ($('step-4').classList.contains('active')) {
+  if ($('step-3').classList.contains('active')) {
     resizeTimeline();
     drawTimeline();
     fitStageLines($('edit-stage'));
   }
-  if ($('step-5').classList.contains('active')) {
+  if ($('step-4').classList.contains('active')) {
     fitStageLines($('lyrics-stage'));
     placeCountdown($('lyrics-stage')); // раскладка поехала — точки тоже
   }
@@ -3689,7 +3869,7 @@ function nudgeSelected(what, delta) {
 }
 
 document.addEventListener('keydown', (e) => {
-  if (!$('step-4').classList.contains('active')) return;
+  if (!$('step-3').classList.contains('active')) return;
   if (wordTap.active) return;                 // разметка слов держит клавиши сама
   const el = document.activeElement;
   const typing = el && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
@@ -3700,10 +3880,15 @@ document.addEventListener('keydown', (e) => {
   if (cmd && (code === 'KeyZ' || code === 'KeyY')) {
     if (typing) return;
     e.preventDefault();
+    // Общая отмена посреди простукивания снимает весь заход целиком:
+    // сначала закрываем его, потом откатываем снимок, снятый перед ним
+    if (tap.active) finishTapMode();
     if (code === 'KeyY' || e.shiftKey) redoEdit();
     else undoEdit();
     return;
   }
+  // Остальными клавишами режим простукивания управляет сам, см. tapHit
+  if (tap.active) return;
   if (cmd || typing) return;
 
   switch (code) {
@@ -4218,16 +4403,21 @@ document.addEventListener('keydown', (e) => {
     if (code === 'Escape') { e.preventDefault(); finishWordTap(false); return; }
     if (code === 'Enter') { e.preventDefault(); finishWordTap(true); return; }
   }
+  /* Простукивание забирает пробел себе — в том числе с кнопки, на
+     которой остался фокус после клика: иначе удар прошёл бы дважды.
+     Escape и Enter заканчивают заход, Backspace отменяет последний удар. */
+  if (tap.active) {
+    if (code === 'Space') { e.preventDefault(); tapHit(); return; }
+    if (code === 'Escape' || code === 'Enter') { e.preventDefault(); finishTapMode(); return; }
+    if (code === 'Backspace') { e.preventDefault(); undoLastTap(); return; }
+  }
   if (code !== 'Space') return;
   const active = document.activeElement;
   const tag = active && active.tagName;
   if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'BUTTON' || (active && active.isContentEditable)) {
-    if (!sync.active) return;
+    return;
   }
-  if (sync.active) {
-    e.preventDefault();
-    tapLine();
-  } else if (($('step-4').classList.contains('active') || $('step-5').classList.contains('active'))
+  if (($('step-3').classList.contains('active') || $('step-4').classList.contains('active'))
       && state.originalBuffer) {
     e.preventDefault();
     if (audio.playing) audio.pause();

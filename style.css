@@ -263,8 +263,8 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .card a, .faq a { color: #34d399; }
 
 /* ============ Как это работает ============ */
-/* Пять шагов держим одной строкой: с auto-fit последний срывался вниз */
-.how-steps { list-style: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+/* Шаги держим одной строкой: с auto-fit последний срывался вниз */
+.how-steps { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
 .how-steps li { display: flex; gap: 0.7rem; align-items: flex-start; }
 .how-num {
   flex-shrink: 0;
@@ -395,65 +395,15 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 #lyrics-input:focus { outline: none; border-color: var(--violet); }
 
-/* --- Шаг 3: синхронизация --- */
-.sync-controls { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 1.2rem; }
-.sync-time { font-variant-numeric: tabular-nums; color: var(--text-dim); font-size: 1.1rem; min-width: 3.5rem; }
-.tap-button {
-  display: block;
-  width: 100%;
-  padding: 1.6rem;
-  margin-bottom: 1.2rem;
-  background: var(--grad-btn);
-  border: none;
-  border-radius: var(--radius);
-  color: #fff;
-  font-family: inherit;
-  cursor: pointer;
-  transition: transform 0.08s;
-}
-.tap-button:active { transform: scale(0.98); }
-.tap-label { display: block; font-size: 1.2rem; font-weight: 700; }
-.tap-next { display: block; font-size: 0.95rem; opacity: 0.85; margin-top: 0.3rem; }
-.sync-list {
-  list-style: none;
-  max-height: 300px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-card);
-}
-.sync-list li {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.55rem 1.2rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.95rem;
-}
-.sync-list li:last-child { border-bottom: none; }
-.sync-list li.done { color: var(--text); }
-.sync-list li.pending { color: var(--text-dim); }
-.sync-list li.next { background: rgba(16, 185, 129, 0.12); }
-.sync-list .ts {
-  font-variant-numeric: tabular-nums;
-  min-width: 3.6rem;
-  color: var(--pink);
-  font-weight: 600;
-  font-size: 0.85rem;
-}
-.sync-list .ts.empty { color: var(--border); }
-.sync-list .line-text { flex: 1; }
+/* --- Общие мелочи разметки --- */
 /* Строка, которую нейросеть не расслышала при подгонке текста:
    время подобрано на глазок. Пометка тихая — не крик, а подсказка. */
 .guess-mark {
   color: var(--text-dim);
   font-size: 0.9rem;
   cursor: help;
-  margin-left: -0.6rem;
+  margin-left: 0;
 }
-/* В списке редактора пометка стоит между временем и текстом,
-   поэтому подтягивать её влево не нужно */
-.edit-row .guess-mark { margin-left: 0; }
 .nudge { display: flex; gap: 0.25rem; }
 .nudge-btn {
   min-width: 34px;
@@ -468,20 +418,10 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
-.nudge-btn:hover { border-color: var(--violet); color: var(--text); }
+.nudge-btn:hover:not(:disabled) { border-color: var(--violet); color: var(--text); }
+.nudge-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.shift-all {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin: 1rem 0 0.2rem;
-  color: var(--text-dim);
-  font-size: 0.9rem;
-}
-
-/* --- Шаг 5: редактор --- */
+/* --- Шаг 3: редактор --- */
 .editor-grid {
   display: grid;
   grid-template-columns: 1fr 320px;
@@ -496,32 +436,43 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   border-radius: var(--radius);
   background: var(--bg-card);
 }
+/* Строка сетки: только чтение и правка текста. Кнопок подстройки здесь
+   нет — они живут в панели выбранной строки и на дорожке. */
 .edit-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.8rem;
+  padding: 0.35rem 0.8rem;
   border-bottom: 1px solid var(--border);
   font-size: 0.9rem;
-  flex-wrap: wrap;
 }
 .edit-row:last-child { border-bottom: none; }
 .edit-row.current-row { background: rgba(16, 185, 129, 0.1); }
-/* Выбранная строка — та, которой слушаются клавиши и дорожка */
+/* Выбранная строка — та, которой слушаются клавиши, панель и дорожка */
 .edit-row.selected-row {
   background: rgba(132, 204, 22, 0.13);
   box-shadow: inset 3px 0 0 #84cc16;
 }
-.edit-row .ts { min-width: 3rem; }
+.edit-row .ts { min-width: 3rem; flex-shrink: 0; }
+.edit-row .end-ts { min-width: 3.6rem; }
+.edit-row .dur-ts {
+  min-width: 2.6rem;
+  color: var(--text-dim);
+  font-weight: 400;
+  text-align: right;
+}
 .edit-row .num {
   min-width: 1.6rem;
+  flex-shrink: 0;
   color: var(--text-dim);
   font-size: 0.8rem;
   text-align: right;
 }
+/* Тихая пометка: слова этой строки размечены вручную */
+.word-mark { color: #84cc16; font-size: 0.85rem; cursor: help; flex-shrink: 0; }
 .edit-text {
   flex: 1;
-  min-width: 150px;
+  min-width: 90px;
   outline: none;
   padding: 0.1rem 0.35rem;
   border-radius: 6px;
@@ -530,15 +481,95 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   caret-color: #34d399;
 }
 .edit-text:focus { background: rgba(255, 255, 255, 0.07); }
-.line-play { min-width: 30px; }
 
-/* --- Разметка слов внутри строки --- */
-.words-nudge { margin-left: auto; }
-.words-btn.marked {
-  border-color: #34d399;
-  color: #34d399;
+/* --- Панель выбранной строки: одна на весь редактор --- */
+.sel-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
 }
-.words-reset { min-width: 26px; }
+.sel-panel.empty { opacity: 0.75; }
+.sel-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.sel-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.sel-label { color: var(--text-dim); font-size: 0.78rem; }
+.sel-vocal {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  cursor: pointer;
+  user-select: none;
+}
+.sel-vocal input { accent-color: #10b981; cursor: pointer; }
+.sel-vocal:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
+#btn-sel-tap { margin-left: auto; border-color: #34d399; color: #34d399; }
+#btn-sel-words.marked { border-color: #34d399; color: #34d399; }
+
+/* --- Режим простукивания ---
+   Забирает экран себе: сетка строк, предпросмотр и панель выбранной
+   строки уходят с глаз, дорожка и метки на ней остаются. */
+.step-panel.tapping > .panel-hint,
+.step-panel.tapping > .editor-grid,
+.step-panel.tapping > .sel-panel,
+.step-panel.tapping > .panel-actions,
+.step-panel.tapping .timeline-tools,
+.step-panel.tapping .timeline-legend,
+.step-panel.tapping .timeline-keys { display: none; }
+
+.tap-mode { display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 1rem; }
+.tap-hit {
+  display: block;
+  width: 100%;
+  padding: 1.8rem 1.2rem;
+  background: var(--grad-btn);
+  background-origin: border-box;
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-family: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.08s;
+}
+.tap-hit:active { transform: scale(0.99); }
+.tap-now {
+  display: block;
+  font-size: clamp(1.3rem, 3.4vw, 2rem);
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.tap-next {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: clamp(0.9rem, 2vw, 1.1rem);
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+.tap-key { display: block; margin-top: 0.9rem; font-size: 0.8rem; opacity: 0.75; }
+.tap-key kbd {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 5px;
+  padding: 0.05rem 0.35rem;
+  font-family: inherit;
+}
+.tap-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.tap-count { font-weight: 600; color: #34d399; }
+.tap-actions { display: flex; gap: 0.8rem; justify-content: space-between; flex-wrap: wrap; }
 
 .word-tap {
   border: 1px solid #34d399;
@@ -650,11 +681,14 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .timeline-tools .nudge-btn { white-space: nowrap; }
 .timeline-tools .tools-right { display: flex; align-items: center; gap: 0.4rem; }
 .timeline-tools .tl-group { display: flex; align-items: center; gap: 0.4rem; }
-/* Выбранная строка: подпись между кнопками, тянется на всё свободное место */
+.tl-shift-label { white-space: nowrap; }
+/* Подпись выбранной строки: живёт в её панели и тянется на всё место */
 .tl-sel {
   flex: 1;
   min-width: 8rem;
   color: #34d399;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1251,5 +1285,10 @@ body.is-desktop .only-web { display: none; }
      а подпись выбранной строки — на свою строку под кнопками */
   .editor-grid { grid-template-columns: 1fr; }
   .timeline-tools { font-size: 0.75rem; }
-  .tl-sel { flex-basis: 100%; order: 9; }
+  /* Панель выбранной строки на узком экране: подпись и «простучать
+     заново» встают в две строки, а переключатель вокала — под кнопки */
+  .sel-head { flex-direction: column; align-items: stretch; gap: 0.4rem; }
+  #btn-sel-tap { margin-left: 0; }
+  .sel-vocal { margin-left: 0; flex-basis: 100%; }
+  .tap-actions .btn { flex: 1; padding: 0.75rem 1rem; }
 }

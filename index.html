@@ -31,6 +31,16 @@
     <span class="whatsnew-badge"><span class="dot"></span> Обновление</span>
     <h3 id="whatsnew-title">Что нового в версии 1.7.0</h3>
     <ul class="whatsnew-list">
+      <li>
+        <b>🎯 Шагов стало четыре, простукивание переехало в редактор.</b>
+        Отдельного шага «Синхронизация» больше нет: простукивание пробелом
+        стало режимом внутри редактора. Пока он включён, список строк
+        и предпросмотр уходят с глаз, а на экране остаются крупная текущая
+        строка, следующая, счётчик и дорожка, на которой метки появляются
+        прямо на глазах. Стучать можно с любого места: более ранние метки
+        не трогаются, каждый удар отменяется по отдельности, а весь заход
+        целиком — привычным Cmd+Z.
+      </li>
       <li class="only-desktop">
         <b>🗣 Нейросеть размечает твой текст по песне.</b>
         Вставь текст песни — модель Whisper послушает пение, найдёт, где какое
@@ -61,7 +71,7 @@
       </li>
       <li>
         <b>♪ Разметка слов вручную.</b>
-        У каждой строки в редакторе появилась кнопка «♪ слова»: играет отрывок
+        В панели выбранной строки есть кнопка «♪ слова»: играет отрывок
         с вокалом, а ты жмёшь пробел на каждом слове. Рядом новый экспорт —
         «.lrc со словами», расширенный формат с меткой времени у каждого слова.
       </li>
@@ -133,7 +143,7 @@
     <div class="card">
       <div class="card-icon">📝</div>
       <h3>Разметка текста</h3>
-      <p>Вставь текст песни и отбивай строки клавишей пробел под музыку. Дальше в редакторе правь начала и окончания фраз, слушай их по отдельности, тяни маркеры на звуковой дорожке — а кнопкой «♪ слова» можно простучать и каждое слово внутри строки.</p>
+      <p>Вставь текст песни — и прямо в редакторе отбивай строки клавишей пробел под музыку. Там же правь начала и окончания фраз, слушай их по отдельности, тяни блоки на звуковой дорожке, а кнопкой «♪ слова» простучи и каждое слово внутри строки.</p>
     </div>
     <div class="card">
       <div class="card-icon">🎤</div>
@@ -155,7 +165,7 @@
   <p class="desktop-lead">
     <b>Разметить текст.</b> Вставь текст песни — модель Whisper послушает пение,
     найдёт, где какое слово поётся, и разложит по этим меткам твои строки. Времена
-    строк и слов проставятся сами, синхронизацию можно пропустить. Буквы остаются
+    строк и слов проставятся сами, простукивать ничего не нужно. Буквы остаются
     твоими: от нейросети берётся только время, а во времени она ошибается куда реже,
     чем в буквах. Если текста под рукой нет, она напишет его и сама — но это уже
     черновик, который придётся править.
@@ -192,9 +202,8 @@
   <ol class="how-steps">
     <li><span class="how-num">1</span><div><b>Загрузи песню</b><p>Подойдут MP3, WAV, OGG и M4A. Можно добавить фон и готовую минусовку; в версии для компьютера есть удаление вокала нейросетью.</p></div></li>
     <li><span class="how-num">2</span><div><b>Вставь текст</b><p>Одна непустая строка — одна караоке-фраза. В версии для компьютера текст можно распознать нейросетью.</p></div></li>
-    <li><span class="how-num">3</span><div><b>Отметь начала</b><p>Нажимай пробел в начале строк. Если ошибся — остановись, выбери строку и продолжи только с неё.</p></div></li>
-    <li><span class="how-num">4</span><div><b>Доведи разметку</b><p>В редакторе правь текст, начала и окончания фраз, слушай их по отдельности, тяни маркеры на дорожке и при желании простучи слова внутри строки.</p></div></li>
-    <li><span class="how-num">5</span><div><b>Пой и сохрани</b><p>Настрой оформление текста, фон, вокал и эквалайзер. Сохрани LRC (обычный или со словами), WAV-минусовку или видео для YouTube в HD, Full HD либо 2K.</p></div></li>
+    <li><span class="how-num">3</span><div><b>Размети в редакторе</b><p>Простучи начала строк пробелом, а потом доведи разметку: правь текст, тяни блоки на дорожке, слушай строки и простукивай слова внутри них.</p></div></li>
+    <li><span class="how-num">4</span><div><b>Пой и сохрани</b><p>Настрой оформление текста, фон, вокал и эквалайзер. Сохрани LRC (обычный или со словами), WAV-минусовку или видео для YouTube в HD, Full HD либо 2K.</p></div></li>
   </ol>
 </section>
 
@@ -204,9 +213,8 @@
   <div class="steps-nav">
     <button class="step-tab active" data-step="1"><span>1</span> Песня</button>
     <button class="step-tab" data-step="2" disabled><span>2</span> Текст</button>
-    <button class="step-tab" data-step="3" disabled><span>3</span> Синхронизация</button>
-    <button class="step-tab" data-step="4" disabled><span>4</span> Редактор</button>
-    <button class="step-tab" data-step="5" disabled><span>5</span> Караоке</button>
+    <button class="step-tab" data-step="3" disabled><span>3</span> Редактор</button>
+    <button class="step-tab" data-step="4" disabled><span>4</span> Караоке</button>
   </div>
 
   <!-- Шаг 1: загрузка -->
@@ -229,7 +237,7 @@
           <div class="track-meta" id="track-meta"></div>
         </div>
       </div>
-      <p class="mono-warning hidden" id="mono-warning">⚠️ Файл моно — приглушить вокал не получится, но синхронизация текста и караоке будут работать.</p>
+      <p class="mono-warning hidden" id="mono-warning">⚠️ Файл моно — приглушить вокал не получится, но разметка текста и караоке будут работать.</p>
       <div class="bg-upload">
         <img id="bg-preview" class="bg-preview hidden" alt="Фон караоке">
         <div class="bg-upload-text">
@@ -263,44 +271,12 @@
     <textarea id="lyrics-input" placeholder="Вставь сюда текст песни…&#10;&#10;Каждая строка —&#10;отдельная строка караоке"></textarea>
     <div class="panel-actions">
       <button class="btn btn-ghost" id="btn-back-1">← Назад</button>
-      <button class="btn btn-primary" id="btn-to-sync">К синхронизации →</button>
+      <button class="btn btn-primary" id="btn-to-editor">К редактору →</button>
     </div>
   </div>
 
-  <!-- Шаг 3: синхронизация -->
-  <div class="step-panel" id="step-3">
-    <p class="panel-hint">
-      Нажми «Старт» — заиграет песня (с вокалом, чтобы было слышно слова).
-      В момент начала каждой строки нажимай <b>пробел</b> или большую кнопку.
-      Можно остановиться, выбрать строку в списке и продолжить с неё. Точные
-      начало и конец строки при необходимости правятся в редакторе.
-    </p>
-    <div class="sync-controls">
-      <button class="btn btn-primary" id="btn-sync-start">▶ Начать</button>
-      <button class="btn btn-ghost hidden" id="btn-sync-stop">⏸ Остановить</button>
-      <button class="btn btn-ghost" id="btn-sync-reset">↺ Начать заново</button>
-      <span class="sync-time" id="sync-time">0:00</span>
-    </div>
-    <button class="tap-button hidden" id="tap-button">
-      <span class="tap-label">Отметить строку</span>
-      <span class="tap-next" id="tap-next"></span>
-    </button>
-    <ul class="sync-list" id="sync-list"></ul>
-    <div class="shift-all hidden" id="shift-all">
-      <span>Сдвинуть всё:</span>
-      <button class="nudge-btn" data-shift="-1">−1с</button>
-      <button class="nudge-btn" data-shift="-0.1">−0,1с</button>
-      <button class="nudge-btn" data-shift="0.1">+0,1с</button>
-      <button class="nudge-btn" data-shift="1">+1с</button>
-    </div>
-    <div class="panel-actions">
-      <button class="btn btn-ghost" id="btn-back-2">← Назад</button>
-      <button class="btn btn-primary" id="btn-to-player" disabled>Готово, к редактору →</button>
-    </div>
-  </div>
-
-  <!-- Шаг 5: караоке -->
-  <div class="step-panel" id="step-5">
+  <!-- Шаг 4: караоке -->
+  <div class="step-panel" id="step-4">
     <div class="player">
       <div class="lyrics-stage" id="lyrics-stage"></div>
       <div class="player-bar">
@@ -488,17 +464,39 @@
     </div>
   </div>
 
-  <!-- Шаг 4: редактор -->
-  <div class="step-panel" id="step-4">
-    <p class="panel-hint">
-      Слева — текст: его можно править прямо в списке, слушать построчно (▶) и двигать кнопками.
-      Кнопка «♪ слова» включает простукивание слов внутри строки: подсветка
-      пойдёт точно по словам, а не по их длине на глазок.
+  <!-- Шаг 3: редактор -->
+  <div class="step-panel" id="step-3">
+    <p class="panel-hint" id="editor-hint">
+      Слева — текст: его можно править прямо в списке, двойной клик по строке
+      перематывает песню на её начало. Под списком — панель выбранной строки:
+      начало, конец, разметка слов и кнопка «простучать заново».
       Справа — предпросмотр караоке, один в один со сценой.
       Внизу — дорожка: каждая строка нарисована блоком от начала до конца.
       Тяни за края блока — сдвинется граница, тяни за середину — вся строка.
       Клик по пустому месту перематывает.
     </p>
+
+    <!-- Режим простукивания: пока он включён, сетка строк, предпросмотр
+         и панель выбранной строки убраны с глаз (см. .step-panel.tapping
+         в style.css). На экране остаётся только то, что нужно, чтобы
+         попадать в строки: сама строка, следующая, счётчик, время,
+         дорожка и две кнопки. -->
+    <div class="tap-mode hidden" id="tap-mode">
+      <button class="tap-hit" id="tap-hit">
+        <span class="tap-now" id="tap-now"></span>
+        <span class="tap-next" id="tap-next"></span>
+        <span class="tap-key">жми <kbd>пробел</kbd> в начале строки — или сюда</span>
+      </button>
+      <div class="tap-meta">
+        <span class="tap-count" id="tap-count"></span>
+        <span class="time" id="tap-time">0:00</span>
+      </div>
+      <div class="tap-actions">
+        <button class="btn btn-ghost" id="btn-tap-undo" disabled>↶ отменить последнюю</button>
+        <button class="btn btn-primary" id="btn-tap-done">Готово</button>
+      </div>
+    </div>
+
     <div class="editor-grid">
       <ul class="edit-list" id="edit-list"></ul>
       <div class="editor-side">
@@ -511,6 +509,43 @@
         </div>
       </div>
     </div>
+
+    <!-- Панель выбранной строки: одна на весь редактор.
+         Раньше эти же кнопки стояли в каждой строке списка — по восемь
+         штук, и список из-за них было не прочитать. -->
+    <div class="sel-panel" id="sel-panel">
+      <div class="sel-head">
+        <span class="tl-sel" id="tl-sel">Строка не выбрана</span>
+        <button class="nudge-btn" id="btn-sel-tap" title="Простучать эту строку и следующие заново (пробелом)">✎ простучать заново</button>
+      </div>
+      <div class="sel-row">
+        <span class="sel-label">начало</span>
+        <span class="nudge">
+          <button class="nudge-btn" data-sel-start="-1">−1</button>
+          <button class="nudge-btn" data-sel-start="-0.1">−0,1</button>
+          <button class="nudge-btn" data-sel-start="0.1">+0,1</button>
+          <button class="nudge-btn" data-sel-start="1">+1</button>
+        </span>
+        <span class="sel-label">конец</span>
+        <span class="nudge">
+          <button class="nudge-btn" data-sel-end="-1">−1</button>
+          <button class="nudge-btn" data-sel-end="-0.1">−0,1</button>
+          <button class="nudge-btn" data-sel-end="0.1">+0,1</button>
+          <button class="nudge-btn" data-sel-end="1">+1</button>
+        </span>
+      </div>
+      <div class="sel-row">
+        <button class="nudge-btn" id="btn-sel-play" title="Прослушать эту строку (Enter)">▶ прослушать</button>
+        <button class="nudge-btn" id="btn-sel-words" title="Простучать слова внутри строки">♪ слова</button>
+        <button class="nudge-btn" id="btn-sel-words-reset" title="Вернуть автоматическое деление слов">⨯ сбросить слова</button>
+        <button class="nudge-btn" id="btn-sel-del" title="Убрать эту строку из караоке">🗑 удалить</button>
+        <label class="sel-vocal" title="В редакторе по умолчанию звучит оригинал: размечать на слух без голоса невозможно">
+          <input type="checkbox" id="sel-vocal" checked>
+          слышу оригинал
+        </label>
+      </div>
+    </div>
+
     <div class="word-tap hidden" id="word-tap">
       <div class="word-tap-head">
         <b>♪ Разметка слов</b>
@@ -533,7 +568,14 @@
           <button class="nudge-btn" id="tl-loop" title="Играть выбранную строку по кругу (клавиша L)">↻ по кругу</button>
           <button class="nudge-btn on" id="tl-snap" title="Притягивать границы к настоящему вступлению голоса (клавиша S)">⇥ к голосу</button>
         </span>
-        <span class="tl-sel" id="tl-sel">Строка не выбрана</span>
+        <!-- Сдвиг всей разметки разом: раньше жил на шаге «Синхронизация» -->
+        <span class="tl-group" id="shift-all">
+          <span class="tl-shift-label">сдвинуть всё</span>
+          <button class="nudge-btn" data-shift="-1">−1</button>
+          <button class="nudge-btn" data-shift="-0.1">−0,1</button>
+          <button class="nudge-btn" data-shift="0.1">+0,1</button>
+          <button class="nudge-btn" data-shift="1">+1</button>
+        </span>
         <span class="tl-group tools-right">
           <button class="nudge-btn" id="tl-zoom-out" title="Отдалить (клавиша −)">−</button>
           <span>масштаб</span>
@@ -557,7 +599,7 @@
       </p>
     </div>
     <div class="panel-actions">
-      <button class="btn btn-ghost" id="btn-back-4">← Синхронизация</button>
+      <button class="btn btn-ghost" id="btn-back-2">← Текст</button>
       <button class="btn btn-primary" id="btn-editor-next">Караоке →</button>
     </div>
   </div>
