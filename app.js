@@ -3470,6 +3470,7 @@ tl.addEventListener('pointerdown', (e) => {
     editor.stageKey = '';
     renderEditStage();
     updatePlayerUI();
+    setText('edit-time', fmtTime(audio.position()));
   }
   drawTimeline();
 });
