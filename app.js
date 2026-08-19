@@ -660,6 +660,8 @@ function goToStep(n) {
 
   stopSync();
   if (wordTap.active) finishWordTap(false);
+  // Кольцо живёт только в редакторе: на других шагах оно бы дёргало плеер
+  if (n !== 4 && editor.loop) setLoop(false);
   // Смена шага гасит режим принудительного вокала: иначе он остаётся
   // от недослушанной строки и ползунок в караоке будто не действует
   if (!sync.active && audio.forceVocal) {
@@ -1102,13 +1104,25 @@ function shiftAllLines(delta) {
   saveProject();
 }
 
-/* Обновить отображение таймингов во всех списках */
+/* Обновить отображение таймингов во всех списках.
+   Список редактора не пересобираем: там правят текст, и пересборка
+   узлов выбила бы курсор из поля. Меняем только подписи времени. */
 function refreshTimes() {
   renderSyncList();
-  document.querySelectorAll('#edit-list .ts').forEach((el) => {
+  document.querySelectorAll('#edit-list .ts[data-ts-i]').forEach((el) => {
     const line = state.lines[+el.dataset.tsI];
     if (line) el.textContent = line.time == null ? '–:––' : fmtTime(line.time);
   });
+  editor.spansKey = '';   // времена поехали — раскладку дорожки пересчитать
+  const synced = syncedLines();
+  document.querySelectorAll('#edit-list .end-ts[data-end-ts-i]').forEach((el) => {
+    const line = state.lines[+el.dataset.endTsI];
+    if (!line) return;
+    el.classList.toggle('empty', !line.ручнойКонец);
+    el.textContent = line.time == null
+      ? '–:––' : `до ${fmtTime(lineEnd(synced, synced.indexOf(line)))}`;
+  });
+  updateSelInfo();
 }
 
 $('sync-list').addEventListener('click', (e) => {
@@ -1917,6 +1931,7 @@ function tickPlayer() {
   if ($('step-4').classList.contains('active') && editor.peaks) {
     setText('edit-time', fmtTime(audio.position()));
     setText('btn-edit-play', audio.playing ? '⏸' : '▶');
+    tickLoop();
     updateEditStage();
     followPlayhead();
     drawTimeline();
@@ -2314,9 +2329,169 @@ const editor = {
   pxPerSec: 40,
   scrollT: 0,
   peaks: null,   // огибающая волны для отрисовки дорожки
-  drag: null,    // { index } — какой маркер тащим
+  drag: null,    // что тащим прямо сейчас, см. timelineHit
   stageKey: '',
+
+  sel: -1,       // выбранная строка (номер в state.lines), -1 — ничего
+  loop: false,   // играть выбранную строку по кругу
+  snap: true,    // притягивать границы к настоящему вступлению голоса
+  snapped: null, // куда притянулось в этом перетаскивании — для подсветки
+
+  // Отмена и повтор: снимки времён, см. pushHistory
+  history: [],
+  future: [],
+  histLines: 0,  // при скольких строках снят стек (изменилось — стек не годен)
+
+  spans: null,   // разложенные по времени строки, см. editorSpans
+  spansKey: '',
 };
+
+/* ============================================================
+   Размах строк для дорожки
+
+   Настоящие границы строки считает lineSpan — тот же код, по которому
+   живёт сцена. Считать его на каждый кадр дорожки нельзя: внутри есть
+   медиана длин строк, а это сортировка на каждую строку. Поэтому
+   результат кэшируется, а ключом служит слепок времён: изменилось
+   хоть одно — раскладка пересчитается сама.
+   ============================================================ */
+function spansKey(lines) {
+  let k = `${lines.length}|${voiceReady() ? 1 : 0}|${(audio.duration || 0).toFixed(2)}`;
+  for (const l of lines) {
+    k += `;${l.time.toFixed(3)}`;
+    if (l.ручнойКонец && l.end != null) k += `>${l.end.toFixed(3)}`;
+    if (l.words && l.words.length) {
+      const last = l.words[l.words.length - 1];
+      k += `w${l.words.length}:${(last.end != null ? last.end : last.time).toFixed(3)}`;
+    }
+  }
+  return k;
+}
+
+function editorSpans() {
+  const lines = syncedLines();
+  const key = spansKey(lines);
+  if (editor.spansKey === key && editor.spans) return editor.spans;
+  editor.spans = lines.map((line, i) => {
+    const sp = lineSpan(lines, i);
+    return {
+      line,
+      row: state.lines.indexOf(line),   // номер в общем списке строк
+      start: sp.start,
+      core: sp.core,
+      end: sp.end,
+    };
+  });
+  editor.spansKey = key;
+  return editor.spans;
+}
+
+// Раскладка одной строки по её номеру в state.lines (или null)
+function spanOfRow(row) {
+  return editorSpans().find((s) => s.row === row) || null;
+}
+
+/* ============================================================
+   Отмена и повтор
+
+   Храним снимки только времён: начала, концы, ручные концы, метки слов
+   и признак «время на глазок». Текст строк в снимок не входит — его
+   правят прямо в поле, и там работает обычная отмена браузера; мешать
+   ей своей было бы хуже, чем не иметь её вовсе.
+
+   pushHistory вызывается ПЕРЕД изменением: в стеке лежит то, что было.
+   ============================================================ */
+const HISTORY_MAX = 80;
+
+function snapshotTimings() {
+  return state.lines.map((l) => ({
+    time: l.time,
+    end: l.end != null ? l.end : null,
+    hand: !!l.ручнойКонец,
+    guess: !!l.сомнительная,
+    words: l.words ? l.words.map((w) => ({ text: w.text, time: w.time, end: w.end })) : null,
+  }));
+}
+
+function snapshotEqual(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (x.time !== y.time || x.end !== y.end || x.hand !== y.hand || x.guess !== y.guess) return false;
+    const xw = x.words;
+    const yw = y.words;
+    if (!!xw !== !!yw) return false;
+    if (xw && yw) {
+      if (xw.length !== yw.length) return false;
+      for (let k = 0; k < xw.length; k++) {
+        if (xw[k].time !== yw[k].time || xw[k].end !== yw[k].end) return false;
+      }
+    }
+  }
+  return true;
+}
+
+function pushHistory() {
+  const snap = snapshotTimings();
+  const last = editor.history[editor.history.length - 1];
+  if (snapshotEqual(last, snap)) return;   // ничего не поменялось — не мусорим
+  editor.history.push(snap);
+  if (editor.history.length > HISTORY_MAX) editor.history.shift();
+  editor.future.length = 0;
+  editor.histLines = state.lines.length;
+  updateHistoryButtons();
+}
+
+function clearHistory() {
+  editor.history.length = 0;
+  editor.future.length = 0;
+  editor.histLines = state.lines.length;
+  updateHistoryButtons();
+}
+
+function updateHistoryButtons() {
+  const undo = $('tl-undo');
+  const redo = $('tl-redo');
+  if (undo) undo.disabled = !editor.history.length;
+  if (redo) redo.disabled = !editor.future.length;
+}
+
+/* Разложить снимок обратно по строкам и обновить всё, что от них зависит */
+function applySnapshot(snap) {
+  snap.forEach((s, i) => {
+    const l = state.lines[i];
+    if (!l) return;
+    l.time = s.time;
+    l.end = s.end;
+    l.ручнойКонец = s.hand;
+    l.сомнительная = s.guess;
+    if (s.words) l.words = s.words.map((w) => ({ ...w }));
+    else delete l.words;
+  });
+  editor.spansKey = '';
+  refreshTimes();
+  renderEditList();
+  updateWordExportBtn();
+  editor.stageKey = '';
+  renderEditStage();
+  saveProject();
+  drawTimeline();
+}
+
+function undoEdit() {
+  if (!editor.history.length || editor.histLines !== state.lines.length) return;
+  editor.future.push(snapshotTimings());
+  applySnapshot(editor.history.pop());
+  updateHistoryButtons();
+}
+
+function redoEdit() {
+  if (!editor.future.length || editor.histLines !== state.lines.length) return;
+  editor.history.push(snapshotTimings());
+  applySnapshot(editor.future.pop());
+  updateHistoryButtons();
+}
 
 function computePeaks() {
   const buf = state.originalBuffer;
@@ -2342,9 +2517,24 @@ function computePeaks() {
 function openEditor() {
   if (!state.originalBuffer) return;
   if (!editor.peaks) computePeaks();
+  // Разметку пересобрали заново — прежние снимки уже не о тех строках
+  if (editor.histLines !== state.lines.length) clearHistory();
+  editor.spansKey = '';
+  if (editor.sel >= state.lines.length || (editor.sel >= 0 && state.lines[editor.sel].time == null)) {
+    editor.sel = -1;
+  }
+  if (editor.sel < 0) {
+    const first = state.lines.findIndex((l) => l.time != null);
+    editor.sel = first;
+  }
   renderEditList();
   renderEditStage();
   updateWordExportBtn();
+  updateHistoryButtons();
+  updateSelInfo();
+  $('tl-voice-note').textContent = voiceReady()
+    ? '— видно, где на самом деле поют'
+    : '— появится, когда уберёшь вокал нейросетью';
   resizeTimeline();
   $('edit-total').textContent = fmtTime(audio.duration);
   drawTimeline();
@@ -2357,7 +2547,12 @@ function renderEditList() {
   state.lines.forEach((line, i) => {
     const li = document.createElement('li');
     li.className = 'edit-row';
+    if (i === editor.sel) li.classList.add('selected-row');
     li.dataset.row = i;
+
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = String(i + 1);
 
     const play = document.createElement('button');
     play.className = 'nudge-btn line-play';
@@ -2372,7 +2567,18 @@ function renderEditList() {
 
     const end = document.createElement('span');
     end.className = 'ts end-ts' + (line.ручнойКонец ? '' : ' empty');
+    end.dataset.endTsI = i;
     end.textContent = line.time == null ? '–:––' : `до ${fmtTime(lineEnd(syncedLines(), syncedLines().indexOf(line)))}`;
+
+    /* Та же тихая пометка, что и в списке синхронизации: время этой строки
+       нейросеть подобрала на глазок. На дорожке такой блок тоже другой. */
+    let guess = null;
+    if (line.сомнительная) {
+      guess = document.createElement('span');
+      guess.className = 'guess-mark';
+      guess.textContent = '≈';
+      guess.title = 'Время подобрано приблизительно — послушай и поправь';
+    }
 
     const text = document.createElement('div');
     text.className = 'edit-text';
@@ -2424,12 +2630,21 @@ function renderEditList() {
       wordsGroup.appendChild(rst);
     }
 
-    li.append(play, ts, end, text, nudge, endNudge, wordsGroup);
+    li.append(num, play, ts, end);
+    if (guess) li.appendChild(guess);
+    li.append(text, nudge, endNudge, wordsGroup);
     ul.appendChild(li);
   });
 }
 
 $('edit-list').addEventListener('click', (e) => {
+  // Любой клик по строке делает её выбранной: с ней работают клавиши,
+  // кольцо и полоса слов на дорожке
+  const row = e.target.closest('.edit-row');
+  if (row && +row.dataset.row !== editor.sel) {
+    selectLine(+row.dataset.row, { scrollTimeline: true });
+  }
+
   const playBtn = e.target.closest('[data-play]');
   if (playBtn) { playLine(+playBtn.dataset.play); return; }
   const wordsBtn = e.target.closest('[data-words]');
@@ -2437,9 +2652,19 @@ $('edit-list').addEventListener('click', (e) => {
   const wordsReset = e.target.closest('[data-words-reset]');
   if (wordsReset) { resetWords(+wordsReset.dataset.wordsReset); return; }
   const endBtn = e.target.closest('[data-end-i]');
-  if (endBtn) { nudgeLineEnd(+endBtn.dataset.endI, +endBtn.dataset.endDelta); renderEditList(); return; }
+  if (endBtn) {
+    pushHistory();
+    nudgeLineEnd(+endBtn.dataset.endI, +endBtn.dataset.endDelta);
+    renderEditList();
+    drawTimeline();
+    return;
+  }
   const btn = e.target.closest('.nudge-btn');
-  if (btn) nudgeLine(+btn.dataset.i, +btn.dataset.delta);
+  if (btn && btn.dataset.i != null) {
+    pushHistory();
+    nudgeLine(+btn.dataset.i, +btn.dataset.delta);
+    drawTimeline();
+  }
 });
 
 /* ============================================================
@@ -2572,7 +2797,9 @@ function finishWordTap(save) {
   $('word-tap').classList.add('hidden');
 
   if (save && wordTap.marks.length && line) {
+    pushHistory();   // разметку слов тоже можно отменить
     line.words = buildWords(wordTap.chunks, wordTap.marks, wordTap.start, wordTap.end);
+    editor.spansKey = '';
     saveProject();
   }
   renderEditList();
@@ -2585,7 +2812,9 @@ function finishWordTap(save) {
 function resetWords(i) {
   const line = state.lines[i];
   if (!line) return;
+  pushHistory();
   delete line.words;
+  editor.spansKey = '';
   saveProject();
   renderEditList();
   editor.stageKey = '';
@@ -2641,6 +2870,7 @@ $('edit-list').addEventListener('input', (e) => {
   $('lyrics-input').value = state.lines.map((l) => l.text).join('\n');
   saveProject();
   editor.stageKey = ''; // заставляем предпросмотр перерисоваться
+  editor.spansKey = ''; // и раскладку дорожки: подписи блоков поменялись
 });
 
 /* --- Мини-сцена предпросмотра --- */
@@ -2715,15 +2945,55 @@ function updateEditStage() {
   applyWordFill(el, lines[ph.cur], ph, pos);
 }
 
-/* --- Дорожка --- */
+/* ============================================================
+   Дорожка редактора
+
+   Дорожка собрана из полос, сверху вниз:
+     • линейка времени;
+     • голос — огибающая вокальной дорожки. Её считает настольная
+       версия после удаления вокала нейросетью, и по ней прямо видно,
+       где на самом деле поют. На сайте этой полосы нет, дорожка просто
+       становится ниже;
+     • волна общего микса;
+     • строки — блоками от начала до конца, а не точками: видно длину;
+     • слова выбранной строки.
+
+   Всё рисуется на одном канвасе: элементов было бы под тысячу, а
+   перерисовка идёт каждый кадр вместе с указателем воспроизведения.
+   ============================================================ */
+
+const LANE_RULER = 18;
+const LANE_VOICE = 34;
+const LANE_WAVE = 46;
+const LANE_LINES = 38;
+const LANE_WORDS = 24;
+const EDGE_GRAB = 6;      // сколько пикселей у края блока считаются «за край»
+const SNAP_PX = 12;       // на таком расстоянии граница притягивается к голосу
+const MIN_SPAN = 0.08;    // короче строку и слово не делаем
+
+/* Полосы дорожки: где какая лежит и какой высоты. Полоса голоса
+   появляется, только когда огибающая есть. */
+function timelineLanes() {
+  let y = 0;
+  const L = {};
+  L.ruler = { y, h: LANE_RULER }; y += LANE_RULER;
+  if (voiceReady()) { L.voice = { y, h: LANE_VOICE }; y += LANE_VOICE; }
+  L.wave = { y, h: LANE_WAVE }; y += LANE_WAVE;
+  L.lines = { y, h: LANE_LINES }; y += LANE_LINES;
+  L.words = { y, h: LANE_WORDS }; y += LANE_WORDS;
+  L.total = y;
+  return L;
+}
+
 function resizeTimeline() {
   const c = $('timeline');
-  const w = c.parentElement.clientWidth - 2;
+  const w = Math.max(120, c.parentElement.clientWidth - 2);
+  const h = timelineLanes().total;
   const dpr = window.devicePixelRatio || 1;
   c.width = Math.round(w * dpr);
-  c.height = Math.round(150 * dpr);
+  c.height = Math.round(h * dpr);
   c.style.width = `${w}px`;
-  c.style.height = '150px';
+  c.style.height = `${h}px`;
 }
 
 function timelineDims() {
@@ -2732,98 +3002,458 @@ function timelineDims() {
   return { W: c.width / dpr, H: c.height / dpr, dpr };
 }
 
+const tToX = (t) => (t - editor.scrollT) * editor.pxPerSec;
+const xToT = (x) => editor.scrollT + x / editor.pxPerSec;
+
+function clampScroll() {
+  const { W } = timelineDims();
+  const viewDur = W / editor.pxPerSec;
+  editor.scrollT = Math.min(Math.max(0, editor.scrollT),
+    Math.max(0, (audio.duration || 0) - viewDur));
+}
+
+/* Прямоугольник со скруглением: roundRect есть не везде, поэтому свой */
+function roundRect(g, x, y, w, h, r) {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  g.beginPath();
+  g.moveTo(x + rr, y);
+  g.lineTo(x + w - rr, y);
+  g.quadraticCurveTo(x + w, y, x + w, y + rr);
+  g.lineTo(x + w, y + h - rr);
+  g.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  g.lineTo(x + rr, y + h);
+  g.quadraticCurveTo(x, y + h, x, y + h - rr);
+  g.lineTo(x, y + rr);
+  g.quadraticCurveTo(x, y, x + rr, y);
+  g.closePath();
+}
+
+/* Подпись внутри блока: обрезаем по ширине, чтобы не лезла к соседям */
+function clipText(g, text, maxW) {
+  if (maxW < 12) return '';
+  if (g.measureText(text).width <= maxW) return text;
+  let s = text;
+  while (s.length > 1 && g.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+  return s.length > 1 ? s + '…' : '';
+}
+
+/* ---------- Полоса голоса ---------- */
+function drawVoiceLane(g, lane, W) {
+  const level = voice.level;
+  g.fillStyle = 'rgba(10, 22, 32, 0.9)';
+  g.fillRect(0, lane.y, W, lane.h);
+
+  // Куски пения — подложкой: сразу видно, где голос вообще есть
+  g.fillStyle = 'rgba(56, 189, 248, 0.16)';
+  for (const r of voice.runs) {
+    const x0 = tToX(r.start);
+    const x1 = tToX(r.end);
+    if (x1 < 0 || x0 > W) continue;
+    g.fillRect(x0, lane.y, Math.max(1, x1 - x0), lane.h);
+  }
+
+  // Сама огибающая: столбик на пиксель, высота — громкость голоса
+  if (level && level.length) {
+    g.fillStyle = 'rgba(56, 189, 248, 0.75)';
+    const base = lane.y + lane.h - 1;
+    for (let x = 0; x < W; x++) {
+      const i0 = Math.floor(xToT(x) * VOICE_RATE);
+      const i1 = Math.floor(xToT(x + 1) * VOICE_RATE);
+      if (i1 < 0) continue;
+      if (i0 >= level.length) break;
+      let mx = 0;
+      for (let i = Math.max(0, i0); i <= Math.min(level.length - 1, i1); i++) {
+        if (level[i] > mx) mx = level[i];
+      }
+      const h = (mx / 255) * (lane.h - 2);
+      if (h > 0.5) g.fillRect(x, base - h, 1, h);
+    }
+  }
+
+  g.fillStyle = 'rgba(56, 189, 248, 0.5)';
+  g.font = '9px sans-serif';
+  g.textAlign = 'left';
+  g.fillText('голос', 4, lane.y + 10);
+}
+
+/* ---------- Полоса волны ---------- */
+function drawWaveLane(g, lane, W) {
+  const { mins, maxs, bucketDur } = editor.peaks;
+  g.fillStyle = 'rgba(45, 212, 191, 0.5)';
+  const mid = lane.y + lane.h / 2;
+  for (let x = 0; x < W; x++) {
+    const t0 = xToT(x);
+    if (t0 < 0) continue;
+    const b0 = Math.floor(t0 / bucketDur);
+    if (b0 >= maxs.length) break;
+    const b1 = Math.min(maxs.length - 1, Math.floor(xToT(x + 1) / bucketDur));
+    let mn = 1;
+    let mx = -1;
+    for (let b = b0; b <= b1; b++) {
+      if (mins[b] < mn) mn = mins[b];
+      if (maxs[b] > mx) mx = maxs[b];
+    }
+    const y0 = mid + mn * (lane.h / 2) * 0.92;
+    const y1 = mid + mx * (lane.h / 2) * 0.92;
+    g.fillRect(x, Math.min(y0, y1), 1, Math.max(1, Math.abs(y1 - y0)));
+  }
+}
+
+/* ---------- Блоки строк ---------- */
+function drawLineBlocks(g, lane, W) {
+  g.font = '11px sans-serif';
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  for (const sp of editorSpans()) {
+    const x0 = tToX(sp.start);
+    const x1 = tToX(sp.end);
+    if (x1 < -40 || x0 > W + 40) continue;
+    const w = Math.max(2, x1 - x0);
+    const sel = sp.row === editor.sel;
+    const guess = !!sp.line.сомнительная;
+    const y = lane.y + 3;
+    const h = lane.h - 6;
+
+    roundRect(g, x0, y, w, h, 5);
+    g.fillStyle = sel ? 'rgba(132, 204, 22, 0.34)'
+      : guess ? 'rgba(245, 158, 11, 0.22)' : 'rgba(16, 185, 129, 0.24)';
+    g.fill();
+    g.lineWidth = sel ? 2 : 1;
+    g.strokeStyle = sel ? '#a3e635' : guess ? '#f59e0b' : '#10b981';
+    g.setLineDash(guess ? [4, 3] : []);
+    g.stroke();
+    g.setLineDash([]);
+
+    /* Где строка спета по словам (core) и докуда её тянет голос (end) —
+       разница видна тонкой чертой: справа от неё распев. */
+    if (sp.core < sp.end - 0.02) {
+      const xc = tToX(sp.core);
+      if (xc > x0 + 2 && xc < x1 - 1) {
+        g.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(xc, y + 2);
+        g.lineTo(xc, y + h - 2);
+        g.stroke();
+      }
+    }
+
+    // Ручки по краям — чтобы было видно, за что тянуть
+    g.fillStyle = sel ? '#a3e635' : guess ? '#f59e0b' : '#10b981';
+    g.fillRect(x0, y, 2, h);
+    g.fillRect(x1 - 2, y, 2, h);
+
+    const label = (guess ? '≈ ' : '') + sp.line.text;
+    g.fillStyle = sel ? '#f2f7e6' : 'rgba(226, 245, 238, 0.92)';
+    const txt = clipText(g, label, w - 10);
+    if (txt) g.fillText(txt, x0 + 5, lane.y + lane.h / 2);
+  }
+  g.textBaseline = 'alphabetic';
+}
+
+/* ---------- Слова выбранной строки ---------- */
+function drawWordBlocks(g, lane, W) {
+  g.fillStyle = 'rgba(255, 255, 255, 0.03)';
+  g.fillRect(0, lane.y, W, lane.h);
+  const sp = spanOfRow(editor.sel);
+  if (!sp) {
+    g.fillStyle = 'rgba(154, 154, 176, 0.6)';
+    g.font = '10px sans-serif';
+    g.textAlign = 'left';
+    g.fillText('выбери строку — здесь появятся её слова', 6, lane.y + lane.h / 2 + 3);
+    return;
+  }
+  const manual = hasWords(sp.line);
+  const words = lineWords(sp.line, sp);
+  g.font = '10px sans-serif';
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  words.forEach((w, k) => {
+    const x0 = tToX(w.start);
+    const x1 = tToX(w.end);
+    if (x1 < -20 || x0 > W + 20) return;
+    const width = Math.max(2, x1 - x0);
+    roundRect(g, x0, lane.y + 3, width, lane.h - 7, 3);
+    g.fillStyle = manual
+      ? (k % 2 ? 'rgba(132, 204, 22, 0.28)' : 'rgba(132, 204, 22, 0.2)')
+      : (k % 2 ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.13)');
+    g.fill();
+    g.lineWidth = 1;
+    g.strokeStyle = manual ? 'rgba(163, 230, 53, 0.8)' : 'rgba(148, 163, 184, 0.5)';
+    g.setLineDash(manual ? [] : [3, 3]);
+    g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = manual ? '#e8f7cf' : 'rgba(226, 232, 240, 0.75)';
+    const txt = clipText(g, w.text.trim(), width - 6);
+    if (txt) g.fillText(txt, x0 + 3, lane.y + lane.h / 2);
+  });
+  g.textBaseline = 'alphabetic';
+}
+
 function drawTimeline() {
   if (!editor.peaks) return;
   const c = $('timeline');
   const g = c.getContext('2d');
   const { W, H, dpr } = timelineDims();
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const rulerH = 20;
-  const waveH = H - rulerH;
-  const viewDur = W / editor.pxPerSec;
-  editor.scrollT = Math.min(Math.max(0, editor.scrollT), Math.max(0, audio.duration - viewDur));
+  const L = timelineLanes();
+  clampScroll();
 
   g.fillStyle = '#0e0e15';
   g.fillRect(0, 0, W, H);
 
-  // Волна
-  const { mins, maxs, bucketDur } = editor.peaks;
-  g.fillStyle = 'rgba(45, 212, 191, 0.5)';
-  const mid = rulerH + waveH / 2;
-  for (let x = 0; x < W; x++) {
-    const t0 = editor.scrollT + x / editor.pxPerSec;
-    const b0 = Math.floor(t0 / bucketDur);
-    if (b0 >= maxs.length) break;
-    const b1 = Math.min(maxs.length - 1, Math.floor((t0 + 1 / editor.pxPerSec) / bucketDur));
-    let mn = 1, mx = -1;
-    for (let b = b0; b <= b1; b++) {
-      if (mins[b] < mn) mn = mins[b];
-      if (maxs[b] > mx) mx = maxs[b];
+  if (L.voice) drawVoiceLane(g, L.voice, W);
+  drawWaveLane(g, L.wave, W);
+
+  // Кольцевое прослушивание: отрезок, который крутится, слегка подсвечен
+  if (editor.loop) {
+    const sp = spanOfRow(editor.sel);
+    if (sp) {
+      const x0 = tToX(sp.start - LOOP_LEAD);
+      const x1 = tToX(sp.end + LOOP_TAIL);
+      g.fillStyle = 'rgba(132, 204, 22, 0.09)';
+      g.fillRect(x0, L.ruler, Math.max(1, x1 - x0), H - L.ruler);
     }
-    const y0 = mid + mn * (waveH / 2) * 0.92;
-    const y1 = mid + mx * (waveH / 2) * 0.92;
-    g.fillRect(x, Math.min(y0, y1), 1, Math.max(1, Math.abs(y1 - y0)));
   }
+
+  drawLineBlocks(g, L.lines, W);
+  drawWordBlocks(g, L.words, W);
+
+  // Разделители полос
+  g.fillStyle = 'rgba(255, 255, 255, 0.07)';
+  [L.wave, L.lines, L.words].forEach((lane) => g.fillRect(0, lane.y, W, 1));
 
   // Линейка времени
   const step = editor.pxPerSec >= 60 ? 1 : editor.pxPerSec >= 25 ? 2 : editor.pxPerSec >= 12 ? 5 : 10;
+  const viewDur = W / editor.pxPerSec;
+  g.fillStyle = '#0e0e15';
+  g.fillRect(0, 0, W, L.ruler);
   g.fillStyle = '#9a9ab0';
   g.font = '10px sans-serif';
   g.textAlign = 'left';
   for (let t = Math.ceil(editor.scrollT / step) * step; t <= editor.scrollT + viewDur; t += step) {
-    const x = (t - editor.scrollT) * editor.pxPerSec;
+    const x = tToX(t);
     g.fillRect(x, 0, 1, 5);
     g.fillText(fmtTime(t), x + 3, 12);
   }
 
-  // Маркеры строк
-  g.font = '10px sans-serif';
-  state.lines.forEach((line, i) => {
-    if (line.time == null) return;
-    const x = (line.time - editor.scrollT) * editor.pxPerSec;
-    if (x < -60 || x > W + 60) return;
-    const active = editor.drag && editor.drag.index === i;
-    g.fillStyle = active ? '#84cc16' : '#10b981';
-    g.fillRect(x - 1, rulerH, 2, waveH);
-    g.fillStyle = active ? '#d9f99d' : 'rgba(52, 211, 153, 0.9)';
-    const label = line.text.length > 14 ? line.text.slice(0, 14) + '…' : line.text;
-    g.fillText(label, x + 4, rulerH + 12);
-  });
+  // Куда притянулась граница при перетаскивании
+  if (editor.snapped != null) {
+    const x = tToX(editor.snapped);
+    g.fillStyle = '#38bdf8';
+    g.fillRect(x - 1, L.ruler, 2, H - L.ruler);
+  }
 
-  // Курсор воспроизведения
-  const px = (audio.position() - editor.scrollT) * editor.pxPerSec;
-  if (px >= 0 && px <= W) {
+  // Указатель воспроизведения
+  const px = tToX(audio.position());
+  if (px >= -2 && px <= W + 2) {
     g.fillStyle = '#f2f2f7';
     g.fillRect(px - 1, 0, 2, H);
+    g.beginPath();
+    g.moveTo(px - 5, 0);
+    g.lineTo(px + 5, 0);
+    g.lineTo(px, 7);
+    g.closePath();
+    g.fill();
   }
 }
 
-function timelineHitMarker(x) {
-  let best = null, bestDist = 7;
-  state.lines.forEach((line, i) => {
-    if (line.time == null) return;
-    const mx = (line.time - editor.scrollT) * editor.pxPerSec;
-    const dist = Math.abs(mx - x);
-    if (dist < bestDist) { best = i; bestDist = dist; }
-  });
+/* ============================================================
+   Что под курсором
+
+   Возвращает, за что человек взялся: за край блока строки, за её
+   середину, за границу слова или ни за что (тогда клик перематывает).
+   ============================================================ */
+function timelineHit(x, y) {
+  const L = timelineLanes();
+
+  // Слова выбранной строки
+  if (y >= L.words.y && y < L.words.y + L.words.h) {
+    const sp = spanOfRow(editor.sel);
+    if (sp) {
+      const words = lineWords(sp.line, sp);
+      for (let k = 0; k < words.length; k++) {
+        const x0 = tToX(words[k].start);
+        const x1 = tToX(words[k].end);
+        // Границу между словами тянем за левый край — кроме самого первого:
+        // начало первого слова — это начало строки, у него своя ручка
+        if (k > 0 && Math.abs(x - x0) <= EDGE_GRAB) return { kind: 'word-edge', row: sp.row, k };
+        if (x >= x0 && x <= x1) return { kind: 'word-move', row: sp.row, k };
+      }
+    }
+    return null;
+  }
+
+  // Блоки строк
+  if (y >= L.lines.y && y < L.lines.y + L.lines.h) {
+    const spans = editorSpans();
+    // Сначала края — они важнее середины соседнего блока
+    for (const sp of spans) {
+      if (Math.abs(x - tToX(sp.start)) <= EDGE_GRAB) return { kind: 'line-start', row: sp.row };
+      if (Math.abs(x - tToX(sp.end)) <= EDGE_GRAB) return { kind: 'line-end', row: sp.row };
+    }
+    for (const sp of spans) {
+      if (x >= tToX(sp.start) && x <= tToX(sp.end)) return { kind: 'line-move', row: sp.row };
+    }
+  }
+  return null;
+}
+
+/* Притягивание к голосу: рядом с настоящим вступлением (или концом)
+   пения граница прилипает к нему. Без огибающей и с выключенным
+   переключателем время остаётся ровно тем, куда привели мышь. */
+function snapToVoice(t) {
+  editor.snapped = null;
+  if (!editor.snap || !voiceReady()) return t;
+  const w = SNAP_PX / editor.pxPerSec;
+  let best = null;
+  for (const r of voice.runs) {
+    if (r.end < t - w) continue;
+    if (r.start > t + w) break;
+    for (const cand of [r.start, r.end]) {
+      if (Math.abs(cand - t) <= w && (best == null || Math.abs(cand - t) < Math.abs(best - t))) {
+        best = cand;
+      }
+    }
+  }
+  if (best == null) return t;
+  editor.snapped = best;
   return best;
 }
 
+/* ---------- Выбор строки ---------- */
+function selectLine(row, opts) {
+  const o = opts || {};
+  const line = state.lines[row];
+  editor.sel = line && line.time != null ? row : -1;
+  document.querySelectorAll('#edit-list .edit-row').forEach((el) => {
+    el.classList.toggle('selected-row', +el.dataset.row === editor.sel);
+  });
+  if (o.scrollList && editor.sel >= 0) {
+    const el = document.querySelector(`#edit-list .edit-row[data-row="${editor.sel}"]`);
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+  }
+  if (o.scrollTimeline) showTime(spanOfRow(editor.sel));
+  updateSelInfo();
+  drawTimeline();
+}
+
+/* Подвинуть окно дорожки так, чтобы строка попала в кадр */
+function showTime(sp) {
+  if (!sp) return;
+  const { W } = timelineDims();
+  const viewDur = W / editor.pxPerSec;
+  if (sp.start < editor.scrollT + viewDur * 0.1 || sp.end > editor.scrollT + viewDur * 0.9) {
+    editor.scrollT = Math.max(0, sp.start - viewDur * 0.25);
+    clampScroll();
+  }
+}
+
+function updateSelInfo() {
+  const el = $('tl-sel');
+  if (!el) return;
+  const sp = spanOfRow(editor.sel);
+  if (!sp) { el.textContent = 'Строка не выбрана'; return; }
+  const dur = Math.max(0, sp.end - sp.start);
+  el.textContent = `Строка ${sp.row + 1}: ${fmtTime(sp.start)} — ${fmtTime(sp.end)} `
+    + `(${dur.toFixed(2)} с)${sp.line.сомнительная ? ' ≈' : ''}`;
+}
+
+/* ---------- Перетаскивание ---------- */
 const tl = $('timeline');
+
+function beginDrag(hit, t) {
+  const sp = spanOfRow(hit.row);
+  if (!sp) return;
+  pushHistory();
+  editor.drag = {
+    kind: hit.kind,
+    row: hit.row,
+    k: hit.k,
+    grabT: t,
+    startWas: sp.line.time,
+    endWas: lineEnd(syncedLines(), syncedLines().indexOf(sp.line)),
+    words: hasWords(sp.line) ? sp.line.words.map((w) => ({ ...w })) : null,
+    moved: false,
+  };
+}
+
+/* Ручную разметку слов делаем из того, что видно: пока слова делились
+   автоматически, тянуть их границу было бы некуда — сначала записываем
+   текущее деление как настоящее, а потом двигаем в нём одну границу. */
+function ensureWords(line, sp) {
+  if (hasWords(line)) return line.words;
+  const words = lineWords(line, sp);
+  line.words = words.map((w) => ({ text: w.text, time: w.start, end: w.end }));
+  return line.words;
+}
+
+function applyDrag(t) {
+  const d = editor.drag;
+  const line = state.lines[d.row];
+  if (!line) return;
+  const sp = spanOfRow(d.row);
+  d.moved = true;
+
+  if (d.kind === 'line-start') {
+    setLineTime(d.row, snapToVoice(t));
+  } else if (d.kind === 'line-end') {
+    setLineEnd(d.row, snapToVoice(t));
+  } else if (d.kind === 'line-move') {
+    const delta = t - d.grabT;
+    const hadEnd = line.ручнойКонец;
+    setLineTime(d.row, d.startWas + delta);
+    // Конец едет за строкой, только если человек уже задавал его руками:
+    // иначе он и так пересчитается от нового начала
+    if (hadEnd) setLineEnd(d.row, d.endWas + delta);
+  } else if (d.kind === 'word-edge' || d.kind === 'word-move') {
+    if (!sp) return;
+    const words = ensureWords(line, sp);
+    const k = d.k;
+    if (!words[k]) return;
+    if (d.kind === 'word-edge') {
+      const lo = (words[k - 1] ? words[k - 1].time : line.time) + MIN_SPAN;
+      const hi = (words[k].end != null ? words[k].end : sp.end) - MIN_SPAN;
+      const nt = Math.min(Math.max(snapToVoice(t), lo), Math.max(lo, hi));
+      words[k].time = nt;
+      if (words[k - 1]) words[k - 1].end = nt;
+    } else {
+      // Слово целиком: двигаем его вместе с обеими границами
+      const src = d.words && d.words[k] ? d.words[k] : words[k];
+      const delta = t - d.grabT;
+      const width = (src.end != null ? src.end : src.time + 0.3) - src.time;
+      const lo = (words[k - 1] ? words[k - 1].time : line.time) + MIN_SPAN;
+      const hi = (words[k + 1] ? words[k + 1].end != null ? words[k + 1].end : sp.end : sp.end)
+        - width - MIN_SPAN;
+      const nt = Math.min(Math.max(src.time + delta, lo), Math.max(lo, hi));
+      words[k].time = nt;
+      words[k].end = nt + width;
+      if (words[k - 1]) words[k - 1].end = nt;
+      if (words[k + 1]) words[k + 1].time = Math.max(nt + width, words[k + 1].time);
+    }
+  }
+  editor.spansKey = '';
+  refreshTimes();
+  editor.stageKey = '';
+  drawTimeline();
+}
 
 tl.addEventListener('pointerdown', (e) => {
   const rect = tl.getBoundingClientRect();
   const x = e.clientX - rect.left;
-  const idx = timelineHitMarker(x);
-  if (idx != null) {
-    editor.drag = { index: idx };
+  const y = e.clientY - rect.top;
+  const hit = timelineHit(x, y);
+  if (hit) {
+    if (hit.row !== editor.sel) selectLine(hit.row, { scrollList: true });
+    beginDrag(hit, xToT(x));
     try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
   } else {
-    const t = editor.scrollT + x / editor.pxPerSec;
+    const t = Math.min(Math.max(0, xToT(x)), audio.duration);
     if (audio.playing) audio.play(t);
-    else audio.offset = Math.min(Math.max(0, t), audio.duration);
+    else audio.offset = t;
+    editor.stageKey = '';
     renderEditStage();
+    updatePlayerUI();
   }
   drawTimeline();
 });
@@ -2831,39 +3461,119 @@ tl.addEventListener('pointerdown', (e) => {
 tl.addEventListener('pointermove', (e) => {
   const rect = tl.getBoundingClientRect();
   const x = e.clientX - rect.left;
-  if (editor.drag) {
-    setLineTime(editor.drag.index, editor.scrollT + x / editor.pxPerSec);
-    refreshTimes();
-    drawTimeline();
-  } else {
-    tl.style.cursor = timelineHitMarker(x) != null ? 'ew-resize' : 'pointer';
-  }
+  const y = e.clientY - rect.top;
+  if (editor.drag) { applyDrag(xToT(x)); return; }
+  const hit = timelineHit(x, y);
+  tl.style.cursor = !hit ? 'pointer'
+    : hit.kind === 'line-start' || hit.kind === 'line-end' || hit.kind === 'word-edge'
+      ? 'ew-resize' : 'grab';
 });
 
-tl.addEventListener('pointerup', () => {
-  if (editor.drag) {
-    editor.drag = null;
+function endDrag() {
+  if (!editor.drag) return;
+  const moved = editor.drag.moved;
+  editor.drag = null;
+  editor.snapped = null;
+  if (moved) {
     saveProject();
+    renderEditList();
+    updateWordExportBtn();
+    editor.stageKey = '';
     renderEditStage();
-    drawTimeline();
+  } else {
+    // Взялись и отпустили, ничего не сдвинув — лишний снимок в стеке не нужен
+    editor.history.pop();
+    updateHistoryButtons();
   }
-});
+  drawTimeline();
+}
 
+tl.addEventListener('pointerup', endDrag);
+tl.addEventListener('pointercancel', endDrag);
+
+/* Колесо: прокрутка по времени, с Cmd/Ctrl/Alt (и щипком тачпада) — масштаб */
 tl.addEventListener('wheel', (e) => {
   e.preventDefault();
-  editor.scrollT += (e.deltaX + e.deltaY) / editor.pxPerSec;
-  drawTimeline();
+  const rect = tl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  if (e.ctrlKey || e.metaKey || e.altKey) {
+    zoomAt(Math.pow(0.995, e.deltaY), x);
+  } else {
+    editor.scrollT += (e.deltaX + e.deltaY) / editor.pxPerSec;
+    clampScroll();
+    drawTimeline();
+  }
 }, { passive: false });
+
+/* Масштаб вокруг точки: время под курсором остаётся на месте */
+function zoomAt(factor, x) {
+  const t = xToT(x);
+  editor.pxPerSec = Math.min(400, Math.max(4, editor.pxPerSec * factor));
+  editor.scrollT = t - x / editor.pxPerSec;
+  clampScroll();
+  drawTimeline();
+}
 
 function zoomTimeline(factor) {
   const { W } = timelineDims();
-  const center = editor.scrollT + W / editor.pxPerSec / 2;
-  editor.pxPerSec = Math.min(200, Math.max(8, editor.pxPerSec * factor));
-  editor.scrollT = center - W / editor.pxPerSec / 2;
-  drawTimeline();
+  zoomAt(factor, W / 2);
 }
 $('tl-zoom-in').addEventListener('click', () => zoomTimeline(1.5));
 $('tl-zoom-out').addEventListener('click', () => zoomTimeline(1 / 1.5));
+$('tl-fit').addEventListener('click', () => {
+  const { W } = timelineDims();
+  editor.pxPerSec = Math.max(4, W / Math.max(1, audio.duration || 1));
+  editor.scrollT = 0;
+  drawTimeline();
+});
+$('tl-undo').addEventListener('click', undoEdit);
+$('tl-redo').addEventListener('click', redoEdit);
+$('tl-snap').addEventListener('click', () => setSnap(!editor.snap));
+$('tl-loop').addEventListener('click', () => setLoop(!editor.loop));
+
+function setSnap(on) {
+  editor.snap = !!on;
+  $('tl-snap').classList.toggle('on', editor.snap);
+}
+
+/* ---------- Прослушивание выбранной строки по кругу ----------
+   Кольцо крутит отрезок «немного до строки — строка — немного после».
+   Вокал при этом включён всегда: подгонять на слух иначе не выйдет. */
+const LOOP_LEAD = 0.8;
+const LOOP_TAIL = 0.5;
+
+function loopBounds() {
+  const sp = spanOfRow(editor.sel);
+  if (!sp) return null;
+  return {
+    from: Math.max(0, sp.start - LOOP_LEAD),
+    to: Math.min(audio.duration, sp.end + LOOP_TAIL),
+  };
+}
+
+function setLoop(on) {
+  editor.loop = !!on && editor.sel >= 0;
+  $('tl-loop').classList.toggle('on', editor.loop);
+  const b = loopBounds();
+  if (editor.loop && b) {
+    audio.play(b.from);
+    audio.stopAt = null;      // кольцо само вернёт указатель назад
+    audio.forceVocal = true;
+    audio.applyMix();
+  } else if (audio.forceVocal && !sync.active && !wordTap.active) {
+    audio.forceVocal = false;
+    audio.applyMix();
+  }
+  drawTimeline();
+}
+
+/* Вызывается каждый кадр, пока открыт редактор */
+function tickLoop() {
+  if (!editor.loop) return;
+  const b = loopBounds();
+  if (!b) { setLoop(false); return; }
+  if (audio.playing && audio.position() >= b.to) audio.play(b.from);
+}
 
 $('btn-edit-play').addEventListener('click', () => {
   if (audio.playing) audio.pause();
@@ -2887,7 +3597,7 @@ window.addEventListener('resize', () => {
 
 /* Держим курсор в кадре во время воспроизведения */
 function followPlayhead() {
-  if (!audio.playing) return;
+  if (!audio.playing || editor.drag) return;
   const { W } = timelineDims();
   const viewDur = W / editor.pxPerSec;
   const pos = audio.position();
@@ -2895,6 +3605,85 @@ function followPlayhead() {
     editor.scrollT = Math.max(0, pos - viewDur * 0.15);
   }
 }
+
+/* ============================================================
+   Клавиши редактора
+
+   Пробел живёт в общем обработчике внизу файла — он один на все шаги.
+   Здесь всё остальное: выбор строки, точная подстройка, отмена.
+   Величина шага: обычная 0,1 с, с Shift мельче, с Alt крупнее.
+   ============================================================ */
+const NUDGE_STEP = 0.1;
+const NUDGE_FINE = 0.02;
+const NUDGE_COARSE = 1;
+
+function editorStep(e) {
+  return e.shiftKey ? NUDGE_FINE : e.altKey ? NUDGE_COARSE : NUDGE_STEP;
+}
+
+function moveSelection(delta) {
+  const rows = state.lines
+    .map((l, i) => (l.time != null ? i : -1))
+    .filter((i) => i >= 0);
+  if (!rows.length) return;
+  const at = rows.indexOf(editor.sel);
+  const next = at < 0 ? (delta > 0 ? 0 : rows.length - 1)
+    : Math.min(rows.length - 1, Math.max(0, at + delta));
+  selectLine(rows[next], { scrollList: true, scrollTimeline: true });
+}
+
+/* Подстройка выбранной строки с клавиатуры — с записью в историю */
+function nudgeSelected(what, delta) {
+  if (editor.sel < 0) return;
+  pushHistory();
+  if (what === 'start') nudgeLine(editor.sel, delta);
+  else nudgeLineEnd(editor.sel, delta);
+  renderEditList();
+  editor.stageKey = '';
+  renderEditStage();
+  drawTimeline();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!$('step-4').classList.contains('active')) return;
+  if (wordTap.active) return;                 // разметка слов держит клавиши сама
+  const el = document.activeElement;
+  const typing = el && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+  const cmd = e.metaKey || e.ctrlKey;
+
+  // Отмена и повтор работают всегда, кроме правки текста: там своя отмена
+  if (cmd && (e.code === 'KeyZ' || e.code === 'KeyY')) {
+    if (typing) return;
+    e.preventDefault();
+    if (e.code === 'KeyY' || e.shiftKey) redoEdit();
+    else undoEdit();
+    return;
+  }
+  if (cmd || typing) return;
+
+  switch (e.code) {
+    case 'ArrowUp': e.preventDefault(); moveSelection(-1); break;
+    case 'ArrowDown': e.preventDefault(); moveSelection(1); break;
+    case 'ArrowLeft': e.preventDefault(); nudgeSelected('start', -editorStep(e)); break;
+    case 'ArrowRight': e.preventDefault(); nudgeSelected('start', editorStep(e)); break;
+    case 'BracketLeft': e.preventDefault(); nudgeSelected('end', -editorStep(e)); break;
+    case 'BracketRight': e.preventDefault(); nudgeSelected('end', editorStep(e)); break;
+    case 'Enter':
+      e.preventDefault();
+      if (editor.sel >= 0) playLine(editor.sel);
+      break;
+    case 'KeyL': e.preventDefault(); setLoop(!editor.loop); break;
+    case 'KeyS': e.preventDefault(); setSnap(!editor.snap); break;
+    case 'Escape':
+      if (editor.loop) { e.preventDefault(); setLoop(false); }
+      break;
+    case 'Equal':
+    case 'NumpadAdd': e.preventDefault(); zoomTimeline(1.5); break;
+    case 'Minus':
+    case 'NumpadSubtract': e.preventDefault(); zoomTimeline(1 / 1.5); break;
+    default: break;
+  }
+});
 
 /* ---------- Экспорт видео для YouTube ----------
    Рисуем караоке на canvas 1280×720, звук ведём в MediaStream,
