@@ -178,6 +178,37 @@ function asrReady(key) {
     && m.files.every((rel) => sizes[rel] == null || asrFileOk(dir, m, sizes, rel));
 }
 
+/* ---------- Настоящие ошибки страницы ----------
+   Самопроверка читала window.__errors, которого в проекте нет вовсе:
+   признак «ошибок: 0» ничего не значил. Копим ошибки здесь, в главном
+   процессе, — страницу для этого править не надо, всё видно снаружи. */
+const ошибкиСтраницы = [];
+
+function запомнитьОшибку(текст) {
+  // Больше сотни держать незачем: важно, что они вообще есть
+  if (ошибкиСтраницы.length < 100) ошибкиСтраницы.push(String(текст).slice(0, 300));
+}
+
+function следитьЗаОшибками(wc) {
+  wc.on('console-message', (e, level, message) => {
+    // Electron 38 отдаёт объект, прежние версии — отдельные аргументы
+    const уровень = e && e.level !== undefined ? e.level : level;
+    const текст = e && e.message !== undefined ? e.message : message;
+    // Необработанные исключения и отказы обещаний приходят сюда же
+    if (уровень === 'error' || уровень === 3) запомнитьОшибку(текст);
+  });
+  wc.on('preload-error', (_e, файл, err) => {
+    запомнитьОшибку('мостик не загрузился (' + файл + '): ' + (err && err.message || err));
+  });
+  wc.on('render-process-gone', (_e, детали) => {
+    запомнитьОшибку('страница упала: ' + (детали && детали.reason));
+  });
+  wc.on('did-fail-load', (_e, код, описание, адрес) => {
+    // -3 — прерванная навигация, это не ошибка
+    if (код !== -3) запомнитьОшибку(`не загрузилось (${код} ${описание}): ${адрес}`);
+  });
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1180,
@@ -199,6 +230,7 @@ function createWindow() {
       backgroundThrottling: false,
     },
   });
+  следитьЗаОшибками(win.webContents);
   win.loadURL('app://bundle/index.html');
 
   // Внешние ссылки открываем в обычном браузере, а не внутри приложения
@@ -209,8 +241,9 @@ function createWindow() {
 
   // Самопроверка интерфейса: KARAOKE_SELFTEST=1 npm start
   if (process.env.KARAOKE_SELFTEST === '1') {
-    win.webContents.on('console-message', (_e, _lvl, message) => {
-      console.log('[renderer]', message);
+    win.webContents.on('console-message', (e, _lvl, message) => {
+      // В Electron 38 всё лежит в объекте события, старые аргументы устарели
+      console.log('[renderer]', e && e.message !== undefined ? e.message : message);
     });
     win.webContents.once('did-finish-load', async () => {
       const report = await win.webContents.executeJavaScript(`(() => ({
@@ -547,9 +580,13 @@ function createWindow() {
         новостиПроНейросети: [...document.querySelectorAll('.whatsnew-list li.only-desktop')]
           .every((li) => getComputedStyle(li).display !== 'none'),
         сайтоваяСтрокаСкрыта: [...document.querySelectorAll('.only-web')]
-          .every((el) => getComputedStyle(el).display === 'none'),
-        ошибок: window.__errors ? window.__errors.length : 0
+          .every((el) => getComputedStyle(el).display === 'none')
       }))()`);
+      /* Ошибки считаем снаружи: страница их нигде не копит, а window.__errors,
+         который тут читался раньше, в проекте не создаётся вовсе — признак
+         всегда показывал ноль, что бы на странице ни падало. */
+      report.ошибок = ошибкиСтраницы.length;
+      report.ошибки = ошибкиСтраницы.slice(0, 5);
       console.log('SELFTEST', JSON.stringify(report));
 
       /* Звук: проверка считает, а не слушает. Гоняет поддельную песню
