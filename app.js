@@ -3277,41 +3277,23 @@ $('edit-list').addEventListener('input', (e) => {
 function renderEditStage() {
   const el = $('edit-stage');
   const lines = syncedLines();
-  el.innerHTML = '';
-  if (!lines.length) return;
+  if (!lines.length) { el.innerHTML = ''; return; }
   const pos = audio.position();
   const ph = stagePhase(pos);
-  editor.stageKey = `${ph.mode}:${ph.cur}`;
+
+  /* Предпросмотр рисуется ТЕМ ЖЕ кодом, что и сцена караоке: те же
+     места строк, тот же значок проигрыша. Раньше он собирал свой
+     список — и строки в нём подменяли друг друга, съезжая вверх,
+     тогда как на сцене они стоят на закреплённых местах. Человек
+     видел в редакторе не то, что получит. */
+  editor.stageKey = state.style.swapLines
+    ? `${ph.mode}:${ph.cur}`
+    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
   const cur = ph.cur;
 
-  const items = [];
-  if (ph.mode === 'break') {
-    if (cur >= 0) items.push([lines[cur].text, '']);
-    items.push(['♪ ♪ ♪', 'current break-line']);
-    if (cur + 1 < lines.length) items.push([lines[cur + 1].text, 'near']);
-  } else if (cur === -1) {
-    items.push([lines[0].text, 'near']);
-    if (lines[1]) items.push([lines[1].text, '']);
-  } else {
-    items.push([lines[cur].text, 'current']);
-    if (lines[cur + 1]) items.push([lines[cur + 1].text, 'near']);
-  }
-  for (const [text, cls] of items) {
-    // Ноты проигрыша красим посимвольно, обычные строки — по словам
-    const div = cls.includes('break-line')
-      ? (() => {
-          const d = document.createElement('div');
-          d.className = 'stage-line ' + cls;
-          for (const ch of text) {
-            const sp = document.createElement('span');
-            sp.textContent = ch;
-            d.appendChild(sp);
-          }
-          return d;
-        })()
-      : buildLineEl(text, cls);
-    el.appendChild(div);
-  }
+  syncStageLines(el, state.style.swapLines
+    ? scrollingItems(lines, ph)
+    : fixedSlotItems(lines, ph));
 
   // Единый кегль — тот же, что на большой сцене и в видео
   fitStageLines(el);
@@ -3338,7 +3320,12 @@ function updateEditStage() {
   if (!lines.length) return;
   const pos = audio.position();
   const ph = stagePhase(pos);
-  if (`${ph.mode}:${ph.cur}` !== editor.stageKey) renderEditStage();
+  // Ключ считается так же, как в renderEditStage: в режиме закреплённых
+  // мест в него входит чётность строки, иначе места не поменяются местами
+  const key = state.style.swapLines
+    ? `${ph.mode}:${ph.cur}`
+    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
+  if (key !== editor.stageKey) renderEditStage();
   const el = $('edit-stage').querySelector(
     ph.mode === 'break' ? '.break-line' : '.stage-line.current');
   if (!el) return;

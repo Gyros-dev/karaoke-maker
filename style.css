@@ -428,7 +428,10 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 /* --- Шаг 3: редактор --- */
 .editor-grid {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  /* Кегль в предпросмотре пропорционален его ширине (см. fitStageLines):
+     в прежние 320px текст выходил втрое мельче, чем на сцене, и читать
+     его было нечем. Отдаём предпросмотру заметную долю ширины. */
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: 1rem;
   margin-bottom: 1rem;
 }
@@ -634,6 +637,12 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .edit-stage {
   flex: 1;
   min-height: 170px;
+  /* Пропорции кадра: предпросмотр — уменьшенная копия того, что
+     запишется в видео, поэтому и форма у него та же. Заодно не остаётся
+     пустой высоты, из-за которой текст казался потерянным. */
+  aspect-ratio: 16 / 9;
+  /* Точка отсчёта для строк на закреплённых местах */
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -647,12 +656,10 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   overflow: hidden;
 }
 .edit-stage { --st-size: 1rem; }
-/* В превью строка может переноситься: подсветка идёт посимвольно,
-   поэтому перенос её не ломает, и длинный текст виден целиком */
+/* Предпросмотр показывает ровно то, что получится: перенос строк
+   решается общим правилом (класс wrap от единого кегля), а не особым
+   для превью — иначе здесь текст переносился бы, а на сцене нет. */
 .edit-stage .stage-line {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
   background: none;
   color: var(--st-inactive);
 }
@@ -819,7 +826,8 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 /* Режим закреплённых мест: строки стоят там, где их поставили,
    и не съезжают вверх по мере пения */
 .lyrics-stage[data-slots="on"] { position: relative; display: block; }
-.lyrics-stage[data-slots="on"] .stage-line.slot {
+.lyrics-stage[data-slots="on"] .stage-line.slot,
+.edit-stage[data-slots="on"] .stage-line.slot {
   /* Абсолютный элемент считает left/right от области ВМЕСТЕ с полями
      родителя, поэтому одних нулей мало: поля повторяем на самой строке,
      иначе её коробка шире полей сцены (и мерить по ней ширину нельзя —
