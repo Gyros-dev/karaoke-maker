@@ -649,14 +649,45 @@ function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
-/* ---------- Скачивание модели с прогрессом ---------- */
+/* ---------- Скачивание модели с прогрессом ----------
+   Возвращает не голое обещание, а пару «обещание + отмена»: без отмены
+   загрузку нечем остановить, и она доживает до конца работы приложения.
+
+   Главное правило здесь — обещание обязано завершиться ровно один раз
+   и ни одна ошибка не должна вылететь из колбэка потока. Раньше
+   переименование делалось прямо в колбэке file.close без перехвата:
+   стоило второй загрузке добраться до того же .part первой — и опоздавший
+   падал с необработанным исключением. Electron показывал системное окно
+   «A JavaScript error occurred in the main process», и приложение вставало
+   намертво: окно модальное, закрыть его из программы уже нечем. */
 function downloadModel(dest) {
-  return new Promise((resolve, reject) => {
-    const tmp = dest + '.part';
+  const tmp = dest + '.part';
+  let stop = () => {};
+  const promise = new Promise((resolve, reject) => {
     const file = fs.createWriteStream(tmp);
+    let завершено = false;
+    let resp = null;
+    let req = null;
+    /* Единственный выход из этой функции: и успех, и ошибка, и отмена */
+    const finish = (err) => {
+      if (завершено) return;
+      завершено = true;
+      if (!err) return resolve(dest);
+      try { if (resp) resp.destroy(); } catch (e) { /* уже закрыт */ }
+      try { if (req) req.destroy(); } catch (e) { /* уже закрыт */ }
+      try { file.destroy(); } catch (e) { /* уже закрыт */ }
+      fs.unlink(tmp, () => reject(err));
+    };
+    stop = () => finish(new Error('отменено'));
+    // Например, кончилось место на диске: без этого обработчика ошибка
+    // записи никого не будила и загрузка висела вечно
+    file.on('error', finish);
+
     const get = (url, redirects = 0) => {
-      if (redirects > 5) return reject(new Error('Слишком много перенаправлений'));
-      https.get(url, { headers: { 'User-Agent': 'benengskaya' } }, (res) => {
+      if (завершено) return;
+      if (redirects > 5) return finish(new Error('Слишком много перенаправлений'));
+      req = https.get(url, { headers: { 'User-Agent': 'benengskaya' }, timeout: 30000 }, (res) => {
+        if (завершено) { res.resume(); return; }
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
           // Адрес может быть относительным — достраиваем от текущего
@@ -664,26 +695,39 @@ function downloadModel(dest) {
         }
         if (res.statusCode !== 200) {
           res.resume();
-          return reject(new Error('Сервер ответил ' + res.statusCode));
+          return finish(new Error('Сервер ответил ' + res.statusCode));
         }
+        resp = res;
         const total = parseInt(res.headers['content-length'], 10) || MODEL_BYTES;
         let done = 0;
         res.on('data', (chunk) => {
           done += chunk.length;
           send('model-progress', { done, total });
         });
+        res.on('error', finish);          // обрыв связи на середине
         res.pipe(file);
         file.on('finish', () => file.close(() => {
-          fs.renameSync(tmp, dest);
-          resolve(dest);
+          try {
+            // Оборванная загрузка тоже доходит до 'finish' — сверяем длину
+            if (done !== total) {
+              throw new Error(`модель пришла не целиком: ${done} из ${total} байт`);
+            }
+            fs.renameSync(tmp, dest);
+            finish(null);
+          } catch (e) { finish(e); }
         }));
-      }).on('error', (err) => {
-        fs.unlink(tmp, () => reject(err));
       });
+      req.on('error', finish);
+      req.on('timeout', () => req.destroy(new Error('сервер не отвечает')));
     };
     get(MODEL_URL);
   });
+  return { promise, cancel: () => stop() };
 }
+
+/* Идущая загрузка модели — одна на всех. Второй вызов подхватывает её,
+   а не начинает вторую в тот же самый .part. */
+let modelDownload = null;
 
 ipcMain.handle('model-bytes', () => {
   const p = modelPath();
@@ -789,12 +833,29 @@ ipcMain.handle('model-status', () => {
 ipcMain.handle('model-download', async () => {
   const p = modelPath();
   if (fs.existsSync(p)) return { ok: true, path: p };
+  /* Два одновременных скачивания в один файл — тот самый случай, после
+     которого приложение вставало намертво. Ждём уже идущее. */
+  if (!modelDownload) {
+    const свой = downloadModel(p);
+    modelDownload = свой;
+    const убрать = () => { if (modelDownload === свой) modelDownload = null; };
+    свой.promise.then(убрать, убрать);
+  }
   try {
-    await downloadModel(p);
+    await modelDownload.promise;
     return { ok: true, path: p };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
+});
+
+/* Отмена загрузки модели: рвёт запрос, завершает обещание и убирает
+   недокачанный .part. Без неё «Отмена» в интерфейсе гасила только
+   расчёт, а качать продолжало до победного. */
+ipcMain.handle('model-cancel', () => {
+  if (!modelDownload) return false;
+  modelDownload.cancel();
+  return true;
 });
 
 /* ---------- Проверка обновлений ----------

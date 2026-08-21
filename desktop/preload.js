@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('desktop', {
   modelStatus: () => ipcRenderer.invoke('model-status'),
   modelBytes: () => ipcRenderer.invoke('model-bytes'),
   downloadModel: () => ipcRenderer.invoke('model-download'),
+  // Отмена скачивания: рвёт загрузку и убирает недокачанный файл
+  cancelModelDownload: () => ipcRenderer.invoke('model-cancel'),
   onModelProgress: (cb) => {
     ipcRenderer.removeAllListeners('model-progress');
     ipcRenderer.on('model-progress', (_e, data) => cb(data));
