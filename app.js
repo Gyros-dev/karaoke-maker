@@ -942,6 +942,9 @@ function goToStep(n) {
   if (n !== 3 && n !== 4) { audio.pause(); updatePlayerUI(); }
   if (n === 3) openEditor();
   if (n === 4) renderStage();
+  // Рабочий шаг занимает окно целиком — подводим его под шапку,
+  // иначе половина работы окажется за краем экрана
+  scrollStudioIntoView();
   // Громкость вокала считаем заново: в редакторе звучит оригинал,
   // в караоке — то, что выставлено ползунком. Иначе флаг залипал.
   audio.restoreVocal();
@@ -950,6 +953,28 @@ function goToStep(n) {
 document.querySelectorAll('.step-tab').forEach((tab) => {
   tab.addEventListener('click', () => goToStep(+tab.dataset.step));
 });
+
+/* Высота липкой шапки — в переменную: от неё считается высота студии,
+   чтобы рабочий шаг помещался в окно целиком (см. .studio в style.css) */
+function measureHeader() {
+  const шапка = document.querySelector('.site-header');
+  const h = шапка ? Math.round(шапка.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty('--header-h', `${h}px`);
+}
+measureHeader();
+window.addEventListener('resize', measureHeader);
+
+/* Студия высотой в окно: если страница стоит не на ней, работы не видно */
+function scrollStudioIntoView() {
+  const studio = $('studio');
+  if (!studio) return;
+  const шапка = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 0;
+  const r = studio.getBoundingClientRect();
+  if (r.top < шапка - 1 || r.bottom > window.innerHeight + 1) {
+    window.scrollTo({ top: window.scrollY + r.top - шапка - 8, behavior: 'smooth' });
+  }
+}
 
 /* ============================================================
    Шаг 1 — загрузка файла
@@ -2312,9 +2337,11 @@ function updateStyleUI() {
   $('st-pos-cur-val').textContent = `${s.posCurrent}%`;
   $('st-pos-next').value = s.posNext;
   $('st-pos-next-val').textContent = `${s.posNext}%`;
-  // Места строк нужны только когда они закреплены
+  // Места строк нужны только когда они закреплены, а «строк видно» —
+  // только когда они, наоборот, едут вверх. Лишнее убираем с глаз.
   $('row-pos-cur').classList.toggle('hidden', s.swapLines);
   $('row-pos-next').classList.toggle('hidden', s.swapLines);
+  $('row-lines').classList.toggle('hidden', !s.swapLines);
   $('st-lines').value = s.lines;
   $('st-lines-val').textContent = s.lines;
   $('st-dim').value = s.dim;
@@ -2376,6 +2403,61 @@ $('st-reset').addEventListener('click', () => {
   updateStyleUI();
   applyStyle();
   saveProject();
+});
+
+/* --- Закладки левой колонки ---
+   Настроек два десятка, и списком они не читаются: пока доберёшься
+   до нужной, сцена уезжает за край экрана. Поэтому они разложены
+   по закладкам, а колонка всегда одной высоты. */
+function showSideGroup(имя) {
+  $('side-tabs').querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.g === имя);
+  });
+  document.querySelectorAll('.side-group').forEach((g) => {
+    g.classList.toggle('active', g.dataset.g === имя);
+  });
+}
+
+$('side-tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-g]');
+  if (btn) showSideGroup(btn.dataset.g);
+});
+
+/* --- Предпросмотр во весь экран ---
+   Свой режим, а не системный полноэкранный: он одинаково работает
+   и на сайте, и в приложении, и из него видно плеер — можно слушать
+   и править, не выходя обратно. */
+function stageFullOn() {
+  return document.body.classList.contains('stage-full');
+}
+
+function setStageFull(on) {
+  document.body.classList.toggle('stage-full', !!on);
+  const btn = $('btn-stage-full');
+  btn.textContent = on ? '⤡' : '⤢';
+  btn.title = on ? 'Свернуть предпросмотр (Esc)' : 'Развернуть предпросмотр (F)';
+  btn.setAttribute('aria-label', btn.title);
+  // Сцена стала другого размера: кегль и точки отсчёта считаем заново
+  fitStageLines($('lyrics-stage'));
+  placeCountdown($('lyrics-stage'));
+}
+
+$('btn-stage-full').addEventListener('click', () => setStageFull(!stageFullOn()));
+
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const el = document.activeElement;
+  const вПоле = el && (el.tagName === 'INPUT' || el.tagName === 'SELECT'
+    || el.tagName === 'TEXTAREA' || el.isContentEditable);
+  if (e.key === 'Escape' && stageFullOn()) {
+    e.preventDefault();
+    setStageFull(false);
+    return;
+  }
+  if (e.code === 'KeyF' && !вПоле && $('step-4').classList.contains('active')) {
+    e.preventDefault();
+    setStageFull(!stageFullOn());
+  }
 });
 
 /* --- Эквалайзер --- */

@@ -275,185 +275,241 @@
     </div>
   </div>
 
-  <!-- Шаг 4: караоке -->
+  <!-- Шаг 4: караоке.
+       Раскладка как в монтажной программе: слева окно настроек,
+       справа окно предпросмотра, которое разворачивается во весь экран.
+       Раньше настройки лежали длинным списком под сценой: покрутил
+       ползунок — и не видно, что изменилось, надо было прокручивать вверх. -->
   <div class="step-panel" id="step-4">
-    <div class="player">
-      <div class="lyrics-stage" id="lyrics-stage"></div>
-      <div class="player-bar">
-        <button class="play-btn" id="btn-play">▶</button>
-        <span class="time" id="time-current">0:00</span>
-        <input type="range" id="seek" min="0" max="1000" value="0">
-        <span class="time" id="time-total">0:00</span>
-      </div>
-      <div class="mixer">
-        <span class="mixer-icon">🎤</span>
-        <label for="vocal-mix">Вокал</label>
-        <input type="range" id="vocal-mix" min="0" max="100" value="0">
-        <span class="mixer-value" id="vocal-mix-value">0%</span>
-      </div>
-      <details class="eq-panel" id="style-panel">
-        <summary>🎨 Оформление текста</summary>
-        <div class="style-row">
-          <label for="st-font">Шрифт</label>
-          <select id="st-font"></select>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Размер</span>
-          <input type="range" id="st-size" min="60" max="220" step="5" value="220">
-          <span class="eq-val" id="st-size-val">220%</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Жирность</span>
-          <input type="range" id="st-weight" min="300" max="900" step="100" value="600">
-          <span class="eq-val" id="st-weight-val">600</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Эффект</span>
-          <span class="seg" id="st-effect">
-            <button data-v="fill" class="active">Заливка</button>
-            <button data-v="highlight">Подсветка</button>
-            <button data-v="none">Нет</button>
-          </span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Цвета</span>
-          <input type="color" id="st-col-inactive" value="#9a9ab0" title="Неактивный текст">
-          <span class="mini-label">неактив.</span>
-          <input type="color" id="st-col-active" value="#f2f2f7" title="Активная строка">
-          <span class="mini-label">актив.</span>
-          <input type="color" id="st-col-effect" value="#f97316" title="Цвет эффекта">
-          <span class="mini-label">эффект</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Обводка</span>
-          <input type="color" id="st-col-outline" value="#000000" title="Цвет обводки">
-          <input type="range" id="st-outline" min="0" max="6" step="0.5" value="0">
-          <span class="eq-val" id="st-outline-val">0</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Фон сцены</span>
-          <input type="color" id="st-col-bg" value="#16161f">
-          <span class="seg" id="st-bg-mode">
-            <button data-v="default" class="active">Как было</button>
-            <button data-v="color">Цветом</button>
-          </span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Межбуквенный</span>
-          <input type="range" id="st-letter" min="0" max="12" step="1" value="0">
-          <span class="eq-val" id="st-letter-val">0</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Межстрочный</span>
-          <input type="range" id="st-line" min="10" max="25" step="1" value="13">
-          <span class="eq-val" id="st-line-val">1,3</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Поля по краям</span>
-          <input type="range" id="st-pad" min="0" max="12" step="1" value="0">
-          <span class="eq-val" id="st-pad-val">0%</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Строк видно</span>
-          <input type="range" id="st-lines" min="1" max="9" step="1" value="7">
-          <span class="eq-val" id="st-lines-val">7</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Приглушение</span>
-          <input type="range" id="st-dim" min="10" max="90" step="5" value="45">
-          <span class="eq-val" id="st-dim-val">45%</span>
-          <span class="eq-hint">Насколько видны строки, которые сейчас не поют</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Размытие фоновых</span>
-          <input type="range" id="st-blur" min="0" max="3" step="0.5" value="0">
-          <span class="eq-val" id="st-blur-val">0</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Подложка под текстом</span>
-          <input type="range" id="st-scrim" min="0" max="100" step="5" value="70">
-          <span class="eq-val" id="st-scrim-val">70%</span>
-          <span class="eq-hint">Тёмная полоса под строками поверх картинки — вместо затемнения всего кадра</span>
-        </div>
-        <div class="style-row">
-          <label class="style-label" for="st-countdown">Отсчёт перед строкой</label>
-          <input type="checkbox" id="st-countdown" checked>
-          <span class="eq-hint">Три точки гаснут за три секунды до вступления — видно, когда вступать после проигрыша</span>
-        </div>
-        <div class="style-row">
-          <label class="style-label" for="st-swap">Строки меняются местами</label>
-          <input type="checkbox" id="st-swap">
-          <span class="eq-hint">Включи — строки будут подниматься вверх по мере пения</span>
-        </div>
-        <div class="style-row" id="row-pos-cur">
-          <span class="style-label">Место первой</span>
-          <input type="range" id="st-pos-cur" min="5" max="95" step="1" value="40">
-          <span class="eq-val" id="st-pos-cur-val">40%</span>
-        </div>
-        <div class="style-row" id="row-pos-next">
-          <span class="style-label">Место второй</span>
-          <input type="range" id="st-pos-next" min="5" max="95" step="1" value="60">
-          <span class="eq-val" id="st-pos-next-val">60%</span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Появление</span>
-          <span class="seg" id="st-anim">
-            <button data-v="fade" class="active">Плавно</button>
-            <button data-v="slide">Сдвиг</button>
-            <button data-v="none">Нет</button>
-          </span>
-        </div>
-        <div class="style-row">
-          <span class="style-label">Выравнивание</span>
-          <span class="seg" id="st-valign">
-            <button data-v="flex-start">Верх</button>
-            <button data-v="center" class="active">Центр</button>
-            <button data-v="flex-end">Низ</button>
-          </span>
-        </div>
-        <div class="eq-actions">
+    <div class="karaoke-layout">
+
+      <!-- Левое окно: настройки. Их много, поэтому разложены по закладкам:
+           колонка не превращается в бесконечный список. -->
+      <aside class="karaoke-side">
+        <div class="side-head">
+          <b>🎨 Оформление</b>
           <button class="nudge-btn" id="st-reset">Сбросить</button>
-          <span class="eq-hint">Оформление попадает и в видео для YouTube</span>
         </div>
-      </details>
-      <details class="eq-panel">
-        <summary>🎚 Эквалайзер — настроить звук</summary>
-        <div class="eq-row">
-          <span class="eq-label">Низкие <small>бас, бочка</small></span>
-          <input type="range" id="eq-low" min="-12" max="12" step="1" value="0">
-          <span class="eq-val" id="eq-low-val">0 дБ</span>
+        <div class="side-tabs" id="side-tabs" role="tablist">
+          <button data-g="text" class="active" role="tab">Текст</button>
+          <button data-g="color" role="tab">Цвет</button>
+          <button data-g="stage" role="tab">Сцена</button>
+          <button data-g="sound" role="tab">Звук</button>
         </div>
-        <div class="eq-row">
-          <span class="eq-label">Средние <small>гитары, голос</small></span>
-          <input type="range" id="eq-mid" min="-12" max="12" step="1" value="0">
-          <span class="eq-val" id="eq-mid-val">0 дБ</span>
+        <div class="side-body">
+
+          <!-- Закладка «Текст»: чем набрано и какого размера -->
+          <div class="side-group active" data-g="text">
+            <div class="style-row">
+              <label class="style-label" for="st-font">Шрифт</label>
+              <span class="row-wide"><select id="st-font"></select></span>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Размер</span>
+              <span class="eq-val" id="st-size-val">220%</span>
+              <input type="range" id="st-size" min="60" max="220" step="5" value="220">
+              <span class="eq-hint">Строка не станет шире сцены: если выбранный размер не влезает, её ужимает ровно до края</span>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Жирность</span>
+              <span class="eq-val" id="st-weight-val">600</span>
+              <input type="range" id="st-weight" min="300" max="900" step="100" value="600">
+            </div>
+            <div class="style-row">
+              <span class="style-label">Межбуквенный</span>
+              <span class="eq-val" id="st-letter-val">0</span>
+              <input type="range" id="st-letter" min="0" max="12" step="1" value="0">
+            </div>
+            <div class="style-row">
+              <span class="style-label">Межстрочный</span>
+              <span class="eq-val" id="st-line-val">1,3</span>
+              <input type="range" id="st-line" min="10" max="25" step="1" value="13">
+            </div>
+            <div class="style-row">
+              <span class="style-label">Поля по краям</span>
+              <span class="eq-val" id="st-pad-val">0%</span>
+              <input type="range" id="st-pad" min="0" max="12" step="1" value="0">
+            </div>
+          </div>
+
+          <!-- Закладка «Цвет»: чем красится текст и что под ним -->
+          <div class="side-group" data-g="color">
+            <div class="style-row">
+              <span class="style-label">Эффект</span>
+              <span class="seg row-wide" id="st-effect">
+                <button data-v="fill" class="active">Заливка</button>
+                <button data-v="highlight">Подсветка</button>
+                <button data-v="none">Нет</button>
+              </span>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Цвета</span>
+              <span class="row-wide row-colors">
+                <span class="color-pick">
+                  <input type="color" id="st-col-inactive" value="#9a9ab0" title="Неактивный текст">
+                  <span class="mini-label">неактив.</span>
+                </span>
+                <span class="color-pick">
+                  <input type="color" id="st-col-active" value="#f2f2f7" title="Активная строка">
+                  <span class="mini-label">актив.</span>
+                </span>
+                <span class="color-pick">
+                  <input type="color" id="st-col-effect" value="#f97316" title="Цвет эффекта">
+                  <span class="mini-label">эффект</span>
+                </span>
+              </span>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Обводка</span>
+              <span class="eq-val" id="st-outline-val">0</span>
+              <span class="row-wide row-colors">
+                <input type="color" id="st-col-outline" value="#000000" title="Цвет обводки">
+                <input type="range" id="st-outline" min="0" max="6" step="0.5" value="0">
+              </span>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Фон сцены</span>
+              <span class="row-wide row-colors">
+                <input type="color" id="st-col-bg" value="#16161f">
+                <span class="seg" id="st-bg-mode">
+                  <button data-v="default" class="active">Как было</button>
+                  <button data-v="color">Цветом</button>
+                </span>
+              </span>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Приглушение</span>
+              <span class="eq-val" id="st-dim-val">45%</span>
+              <input type="range" id="st-dim" min="10" max="90" step="5" value="45">
+              <span class="eq-hint">Насколько видны строки, которые сейчас не поют</span>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Размытие фоновых</span>
+              <span class="eq-val" id="st-blur-val">0</span>
+              <input type="range" id="st-blur" min="0" max="3" step="0.5" value="0">
+            </div>
+            <div class="style-row">
+              <span class="style-label">Подложка под текстом</span>
+              <span class="eq-val" id="st-scrim-val">70%</span>
+              <input type="range" id="st-scrim" min="0" max="100" step="5" value="70">
+              <span class="eq-hint">Тёмная полоса под строками поверх картинки — вместо затемнения всего кадра</span>
+            </div>
+          </div>
+
+          <!-- Закладка «Сцена»: где стоят строки и как появляются -->
+          <div class="side-group" data-g="stage">
+            <div class="style-row">
+              <label class="style-label" for="st-swap">Строки меняются местами</label>
+              <input type="checkbox" id="st-swap">
+              <span class="eq-hint">Включи — строки будут подниматься вверх по мере пения</span>
+            </div>
+            <div class="style-row" id="row-lines">
+              <span class="style-label">Строк видно</span>
+              <span class="eq-val" id="st-lines-val">7</span>
+              <input type="range" id="st-lines" min="1" max="9" step="1" value="7">
+            </div>
+            <div class="style-row" id="row-pos-cur">
+              <span class="style-label">Место первой</span>
+              <span class="eq-val" id="st-pos-cur-val">40%</span>
+              <input type="range" id="st-pos-cur" min="5" max="95" step="1" value="40">
+            </div>
+            <div class="style-row" id="row-pos-next">
+              <span class="style-label">Место второй</span>
+              <span class="eq-val" id="st-pos-next-val">60%</span>
+              <input type="range" id="st-pos-next" min="5" max="95" step="1" value="60">
+            </div>
+            <div class="style-row">
+              <span class="style-label">Появление</span>
+              <span class="seg row-wide" id="st-anim">
+                <button data-v="fade" class="active">Плавно</button>
+                <button data-v="slide">Сдвиг</button>
+                <button data-v="none">Нет</button>
+              </span>
+            </div>
+            <div class="style-row">
+              <span class="style-label">Выравнивание</span>
+              <span class="seg row-wide" id="st-valign">
+                <button data-v="flex-start">Верх</button>
+                <button data-v="center" class="active">Центр</button>
+                <button data-v="flex-end">Низ</button>
+              </span>
+            </div>
+            <div class="style-row">
+              <label class="style-label" for="st-countdown">Отсчёт перед строкой</label>
+              <input type="checkbox" id="st-countdown" checked>
+              <span class="eq-hint">Три точки гаснут за три секунды до вступления — видно, когда вступать после проигрыша</span>
+            </div>
+            <p class="side-note">Оформление попадает и в видео для YouTube</p>
+          </div>
+
+          <!-- Закладка «Звук»: эквалайзер -->
+          <div class="side-group" data-g="sound">
+            <div class="eq-row">
+              <span class="eq-label">Низкие <small>бас, бочка</small></span>
+              <input type="range" id="eq-low" min="-12" max="12" step="1" value="0">
+              <span class="eq-val" id="eq-low-val">0 дБ</span>
+            </div>
+            <div class="eq-row">
+              <span class="eq-label">Средние <small>гитары, голос</small></span>
+              <input type="range" id="eq-mid" min="-12" max="12" step="1" value="0">
+              <span class="eq-val" id="eq-mid-val">0 дБ</span>
+            </div>
+            <div class="eq-row">
+              <span class="eq-label">Высокие <small>тарелки, воздух</small></span>
+              <input type="range" id="eq-high" min="-12" max="12" step="1" value="0">
+              <span class="eq-val" id="eq-high-val">0 дБ</span>
+            </div>
+            <div class="eq-actions">
+              <button class="nudge-btn" id="eq-reset">Сбросить</button>
+              <span class="eq-hint">Работает в плеере и попадает в видео</span>
+            </div>
+            <p class="side-note">Громкость вокала — под предпросмотром: там её слышно сразу.</p>
+          </div>
         </div>
-        <div class="eq-row">
-          <span class="eq-label">Высокие <small>тарелки, воздух</small></span>
-          <input type="range" id="eq-high" min="-12" max="12" step="1" value="0">
-          <span class="eq-val" id="eq-high-val">0 дБ</span>
+      </aside>
+
+      <!-- Правое окно: предпросмотр. Разворачивается на всю страницу
+           кнопкой ⤢ (или клавишей F), обратно — Esc. -->
+      <div class="karaoke-main" id="karaoke-main">
+        <div class="stage-wrap" id="stage-wrap">
+          <div class="lyrics-stage" id="lyrics-stage"></div>
+          <button class="stage-full-btn" id="btn-stage-full" title="Развернуть предпросмотр (F)" aria-label="Развернуть предпросмотр">⤢</button>
         </div>
-        <div class="eq-actions">
-          <button class="nudge-btn" id="eq-reset">Сбросить</button>
-          <span class="eq-hint">Работает в плеере и попадает в видео</span>
+        <!-- Плеер и громкость вокала — одной строкой под предпросмотром:
+             каждый лишний ряд отнимает высоту у самой сцены -->
+        <div class="transport">
+          <div class="player-bar">
+            <button class="play-btn" id="btn-play">▶</button>
+            <span class="time" id="time-current">0:00</span>
+            <input type="range" id="seek" min="0" max="1000" value="0">
+            <span class="time" id="time-total">0:00</span>
+          </div>
+          <div class="mixer">
+            <span class="mixer-icon">🎤</span>
+            <label for="vocal-mix">Вокал</label>
+            <input type="range" id="vocal-mix" min="0" max="100" value="0">
+            <span class="mixer-value" id="vocal-mix-value">0%</span>
+          </div>
         </div>
-      </details>
-      <div class="export-row">
-        <button class="btn btn-ghost" id="btn-back-3">← Редактор</button>
-        <button class="btn btn-ghost" id="btn-sound-check">🔊 Проверить звук</button>
-        <button class="btn btn-ghost" id="btn-export-lrc">⬇ Текст .lrc</button>
-        <button class="btn btn-ghost hidden" id="btn-export-lrc-words" title="Расширенный LRC: время каждого слова внутри строки">⬇ .lrc со словами</button>
-        <button class="btn btn-ghost" id="btn-export-wav">⬇ Минусовка .wav</button>
-        <label class="btn btn-ghost export-quality" for="video-quality">Качество
-          <select id="video-quality">
-            <option value="720">HD · 1280×720</option>
-            <option value="1080" selected>Full HD · 1920×1080</option>
-            <option value="1440">2K · 2560×1440</option>
-          </select>
-        </label>
-        <button class="btn btn-primary" id="btn-export-video">🎬 Видео для YouTube</button>
       </div>
     </div>
+
+    <div class="export-row">
+      <button class="btn btn-ghost" id="btn-back-3">← Редактор</button>
+      <button class="btn btn-ghost" id="btn-sound-check">🔊 Проверить звук</button>
+      <button class="btn btn-ghost" id="btn-export-lrc">⬇ Текст .lrc</button>
+      <button class="btn btn-ghost hidden" id="btn-export-lrc-words" title="Расширенный LRC: время каждого слова внутри строки">⬇ .lrc со словами</button>
+      <button class="btn btn-ghost" id="btn-export-wav">⬇ Минусовка .wav</button>
+      <label class="btn btn-ghost export-quality" for="video-quality">Качество
+        <select id="video-quality">
+          <option value="720">HD · 1280×720</option>
+          <option value="1080" selected>Full HD · 1920×1080</option>
+          <option value="1440">2K · 2560×1440</option>
+        </select>
+      </label>
+      <button class="btn btn-primary" id="btn-export-video">🎬 Видео для YouTube</button>
+    </div>
+
     <div class="export-overlay hidden" id="export-overlay">
       <div class="export-box">
         <p id="export-status">Записываем видео…</p>
