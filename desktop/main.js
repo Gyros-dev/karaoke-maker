@@ -729,14 +729,29 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
-  registerAppProtocol();
-  createWindow();
-  setupAutoUpdate();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+/* Вторая копия на одной папке настроек только вредит: проекты живут
+   в localStorage профиля, и копии затирают правки друг друга — у той,
+   что запустилась второй, сохранение может тихо не доехать. Поэтому
+   вместо новой копии показываем уже открытое окно. */
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!win || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
   });
-});
+
+  app.whenReady().then(() => {
+    registerAppProtocol();
+    createWindow();
+    setupAutoUpdate();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
