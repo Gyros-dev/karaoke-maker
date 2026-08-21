@@ -655,7 +655,6 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   margin-bottom: 0.8rem;
   overflow: hidden;
 }
-.edit-stage { --st-size: 1rem; }
 /* Предпросмотр показывает ровно то, что получится: перенос строк
    решается общим правилом (класс wrap от единого кегля), а не особым
    для превью — иначе здесь текст переносился бы, а на сцене нет. */
@@ -795,7 +794,6 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .lyrics-stage {
   /* Настраиваемое оформление текста (панель «Оформление») */
   --st-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  --st-size: 1.15rem;
   --st-weight: 600;
   --st-inactive: #9a9ab0;
   --st-active: #f2f2f7;
@@ -803,19 +801,24 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   --st-outline-c: #000000;
   --st-outline: 0px;
   --st-ls: 0px;
-  --st-gap: 0.35rem;
+  --st-gap: 0.35rem;   /* до первого замера; дальше px от fitStageLines */
   --st-dim: 0.45;
   --st-near: 0.75;
   --st-blur: 0px;
   --st-scrim: none;
   /* Подложка живёт в ::before, поэтому сцене нужна своя система координат */
   position: relative;
-  min-height: 340px;
+  /* Пропорции кадра: сцена — то же самое, что запишется в видео, поэтому
+     и форма у неё та же. Раньше сцена была шире и ниже кадра, и места
+     строк («первая на 40%, вторая на 60%») ложились на экране не так,
+     как в готовом ролике. */
+  aspect-ratio: 16 / 9;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: var(--st-gap);
-  /* Боковые отступы — «безопасная зона», чтобы текст не прилипал к краям */
+  /* Поля по краям задаёт настройка «Поля по краям» (applyStyle) */
   padding: 2rem clamp(1.5rem, 8%, 4rem);
   background: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.12), transparent 70%), var(--bg-card);
   border: 1px solid var(--border);
@@ -862,10 +865,10 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .lyrics-stage.has-bg .stage-line:not(.current) { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
 .stage-line {
   font-family: var(--st-font);
-  /* --st-fit — единый кегль на всю песню: множитель, подобранный
-     по самой длинной строке (см. stageFit в app.js). Он один для всех
-     строк, поэтому размер не прыгает от строки к строке. */
-  font-size: calc(var(--st-size) * var(--st-fit, 1));
+  /* --st-fs — единый кегль на всю песню в пикселях: его считает
+     fitStageLines (app.js) от ширины самой сцены и выбранного размера.
+     Он один для всех строк, поэтому размер не прыгает от строки к строке. */
+  font-size: var(--st-fs, 1.15rem);
   font-weight: var(--st-weight);
   letter-spacing: var(--st-ls);
   -webkit-text-stroke: var(--st-outline) var(--st-outline-c);
@@ -932,6 +935,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   transform: translateY(-50%);
   display: flex;
   justify-content: center;
+  /* Точки — того же кегля, что строки: и размер, и просвет между ними
+     считаются от --st-fs, поэтому отсчёт растёт вместе с текстом */
+  font-size: var(--st-fs, 1.15rem);
   gap: 0.7em;
   pointer-events: none;
   opacity: 0;
@@ -943,7 +949,6 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .stage-count i {
   width: 0.62em;
   height: 0.62em;
-  font-size: var(--st-size);
   border-radius: 50%;
   background: var(--st-effect);
   box-shadow: 0 0 0.5em rgba(0, 0, 0, 0.55);
@@ -1291,9 +1296,6 @@ body.is-desktop .only-web { display: none; }
   .site-nav { display: none; }
   .hero { padding: 4.5rem 1.2rem 4rem; }
   .studio { padding: 2rem 1rem 2.5rem; }
-  /* На узком экране уменьшаем базовый размер через переменную,
-     а не жёстким font-size — иначе ползунок размера перестаёт работать */
-  .lyrics-stage { --st-narrow: 0.83; }
   .panel-actions { justify-content: center; }
   /* Редактор на узком экране: предпросмотр уходит под список,
      а подпись выбранной строки — на свою строку под кнопками */

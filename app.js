@@ -26,7 +26,11 @@ const state = {
 function defaultStyle() {
   return {
     font: 'system',
-    size: 100,          // проценты от базового размера
+    /* Размер — проценты от базового кегля (ширина сцены / 32).
+       По умолчанию максимум: подгонка сама ужмёт его ровно настолько,
+       чтобы самая длинная строка встала во всю ширину сцены. Раньше
+       умолчание 100% оставляло текст мелким и жалось к середине. */
+    size: 220,
     weight: 600,
     effect: 'fill',     // fill | highlight | none
     inactive: '#9a9ab0',
@@ -66,10 +70,14 @@ state.style = defaultStyle();
    поколения. Забываем только значения, в точности равные прежнему
    умолчанию: их человек не выбирал. Всё, что он менял осознанно (цвета,
    шрифт, размеры, места строк), не равно умолчанию и переезжает как есть. */
-const STYLE_GEN = 1;
+const STYLE_GEN = 2;
 const STYLE_MIGRATIONS = [
   // Поколение 1: «Строки меняются местами» перестала быть умолчанием
   { поколение: 1, прежниеУмолчания: { swapLines: true } },
+  /* Поколение 2: размер по умолчанию стал максимальным. Прежние 100%
+     были умолчанием, а не выбором человека, — и после починки ползунка
+     оставили бы текст вдвое мельче, чем задумано. */
+  { поколение: 2, прежниеУмолчания: { size: 100 } },
 ];
 
 /* Оформление из сохранённого проекта: сначала перенос, потом умолчания */
@@ -1743,98 +1751,124 @@ function updateCountdown(stage, cd) {
 }
 
 /* ---------- Единый кегль на всю песню ----------
-   Раньше каждая строка ужималась под ширину сама по себе: короткие
-   выходили крупными, длинные мелкими, и размер прыгал от строки к строке.
-   Теперь кегль один на всю песню: подбираем его по самой длинной строке
-   и применяем ко всем одинаково. Ползунок «Размер» остаётся множителем
-   к нему.
+   Кегль один на всю песню: строки не прыгают в размере от строки
+   к строке. Считается он одинаково для трёх поверхностей — сцены
+   караоке, предпросмотра редактора и кадра видео, — поэтому все
+   трое выглядят одинаково по пропорциям.
 
-   Считаем в кадровых единицах — в том же кадре 16:9, в котором пишется
-   видео (ширина кадра = FIT_FRAME_COLS базовых кеглей). Поэтому решение
-   получается одно и то же для караоке, предпросмотра редактора и видео,
-   а не своё у каждой поверхности. Ширину меряем холстом: коробки строк
-   в DOM врут (у закреплённой строки коробка шире полей сцены), а холст
-   даёт ровно ширину текста тем же шрифтом.
+   Отсчёт идёт от ширины ТОЙ поверхности, где рисуем: кегль при
+   «Размер 100%» равен ширине поверхности, делённой на FIT_FRAME_COLS.
+   Сцена шириной 800 px и кадр шириной 1280 px дают разные кегли
+   в пикселях, но одну и ту же долю картинки.
 
-   Если самая длинная строка настолько длинна, что единый кегль стал бы
-   нечитаемо мелким, дальше не ужимаем: с FIT_MIN такие строки переносим
-   на два ряда — как принято в нынешних караоке. */
-const FIT_FRAME_W = 1280;      // ширина опорного кадра, px
-const FIT_FRAME_H = 720;       // высота опорного кадра, px
-const FIT_BASE = 40;           // базовый кегль в этом кадре при «Размер 100%»
-const FIT_FRAME_COLS = FIT_FRAME_W / FIT_BASE;  // ширина кадра в кеглях
-const FIT_MIN = 0.6;           // мельче 60% базового не ужимаем, а переносим
+   Беда, которую это лечит: раньше кегль считался в кадровых единицах
+   (кадр 1280 px, база 40 px), а потом домножался на (ширина сцены /
+   база) / 32 — база сокращалась, и выбранный человеком размер из
+   формулы исчезал совсем. Ползунок «Размер» выше 100% не делал ничего:
+   100%, 160% и 220% давали один и тот же кегль (18,4 / 18,65 / 18,65 px).
 
-const stageFitCache = { key: null, value: null };
+   Теперь размер, выбранный человеком, работает всегда, а подгонка
+   только УЖИМАЕТ — и лишь когда самая длинная строка не влезает
+   в отведённую ширину. Если ужимать пришлось бы ниже FIT_MIN,
+   останавливаемся и переносим такие строки на два ряда, как принято
+   в нынешних караоке.
+
+   Ширину строк меряем холстом: коробки строк в DOM врут (у закреплённой
+   строки коробка шире полей сцены), а холст даёт ровно ширину текста
+   тем же шрифтом. Меряем один раз в долях кегля — «сколько кеглей
+   в ширину занимает строка». От размера и от поверхности эта величина
+   не зависит, поэтому одного замера хватает всем троим. */
+const FIT_FRAME_COLS = 32;   // ширина поверхности в кеглях при «Размер 100%»
+const FIT_MEASURE = 40;      // каким кеглем меряем строки холстом
+const FIT_MIN = 0.6;         // ниже 60% базового не ужимаем, а переносим
+const FIT_SAFE = 0.99;       // запас на неточность замера: строка не липнет к краю
+
+const stageMetricsCache = { key: null, value: null, ctx: null };
 
 function fitCanvasCtx() {
-  if (!stageFitCache.ctx) {
-    stageFitCache.ctx = document.createElement('canvas').getContext('2d');
+  if (!stageMetricsCache.ctx) {
+    stageMetricsCache.ctx = document.createElement('canvas').getContext('2d');
   }
-  return stageFitCache.ctx;
+  return stageMetricsCache.ctx;
 }
 
-/* Единый кегль и список строк, которые придётся перенести.
-   Пересчитывается при смене текста, шрифта, начертания, разрядки,
-   полей и ползунка размера — всё это входит в ключ. */
-function stageFit() {
+/* Ширины строк в долях кегля: строка с em = 12,5 при кегле 40 px займёт
+   500 px. Разрядка сюда не входит — она задаётся в пикселях и от кегля
+   не зависит, поэтому её добавляют отдельно, по числу букв. */
+function stageMetrics() {
   const s = state.style;
   const texts = syncedLines().map((l) => l.text);
-  const key = [s.font, s.weight, s.letter, s.pad, texts.length,
-    texts.join('')].join('|');
-  if (stageFitCache.key === key) return stageFitCache.value;
+  const key = [s.font, s.weight, texts.length, texts.join(' ')].join('|');
+  if (stageMetricsCache.key === key) return stageMetricsCache.value;
 
   const g = fitCanvasCtx();
   const family = (FONTS[s.font] || FONTS.system).css;
-  g.font = `${s.weight} ${FIT_BASE}px ${family}`;
-  // Разрядку холст умеет не везде; где не умеет — добавляем её сами
-  const hasLS = 'letterSpacing' in g;
-  if (hasLS) g.letterSpacing = `${s.letter}px`;
-  const width = (t) => g.measureText(t).width
-    + (hasLS ? 0 : (s.letter || 0) * t.length);
+  g.font = `${s.weight} ${FIT_MEASURE}px ${family}`;
+  if ('letterSpacing' in g) g.letterSpacing = '0px';
+  const list = texts.map((t) => ({
+    text: t,
+    em: g.measureText(t).width / FIT_MEASURE,
+    chars: t.length,
+  }));
 
-  const avail = FIT_FRAME_W * (1 - (s.pad / 100) * 2);
-  let maxW = 0;
-  const widths = texts.map((t) => {
-    const w = width(t);
-    if (w > maxW) maxW = w;
-    return w;
-  });
-  const need = maxW > 0 && avail > 0 ? avail / maxW : 1;
-  // Крупнее заданного не делаем — только ужимаем при нужде
-  const scale = Math.min(1, Math.max(FIT_MIN, need));
-  const wrap = new Set();
-  texts.forEach((t, i) => { if (widths[i] * scale > avail + 0.5) wrap.add(t); });
-
-  stageFitCache.key = key;
-  stageFitCache.value = { scale, wrap, avail, need };
-  return stageFitCache.value;
+  stageMetricsCache.key = key;
+  stageMetricsCache.value = list;
+  return list;
 }
 
-/* Применяем единый кегль к сцене. Множитель кладём в --st-fit,
-   поштучных размеров у строк больше нет. */
-function fitStageLines(container) {
-  if (!container) return;
-  const fit = stageFit();
-  const cs = getComputedStyle(container);
-  const avail = container.clientWidth
-    - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  const base = parseFloat(cs.getPropertyValue('--st-size')) * rem;
-  /* Подстраховка для узкого окна: если сцена на экране уже опорного кадра
-     (меньше FIT_FRAME_COLS своих кеглей), ужимаем ещё на ту же долю —
-     иначе длинная строка вылезет за край. На обычном экране сцена шире
-     кадра, и множитель равен единице, то есть кегль тот же, что в видео. */
-  let extra = 1;
-  if (avail > 0 && base > 0) {
-    extra = Math.min(1, (avail / base) / FIT_FRAME_COLS * 0.99);
+/* Единый кегль для одной поверхности.
+   unit  — кегль при «Размер 100%»: ширина поверхности / FIT_FRAME_COLS;
+   avail — сколько ширины отдано тексту (поверхность минус поля по краям).
+   Возвращает готовый кегль в пикселях и набор строк, которые не влезли
+   даже на самом мелком кегле и должны переноситься. */
+function stageFit(unit, avail) {
+  const s = state.style;
+  const want = Math.max(0.1, (+s.size || 100) / 100);
+  const ls = +s.letter || 0;
+  const room = Math.max(0, avail) * FIT_SAFE;
+  const lines = stageMetrics();
+
+  // Самый крупный множитель, при котором влезают все строки
+  let roomForAll = Infinity;
+  for (const l of lines) {
+    if (l.em <= 0) continue;
+    const m = (room - ls * l.chars) / (l.em * unit);
+    if (m < roomForAll) roomForAll = m;
   }
-  container.style.setProperty('--st-fit', (fit.scale * extra).toFixed(4));
+  if (!isFinite(roomForAll)) roomForAll = want;
+
+  // Выбор человека работает всегда; подгонка только ужимает и не ниже FIT_MIN
+  const m = Math.min(want, Math.max(FIT_MIN, roomForAll));
+  const size = Math.max(1, unit * m);
+  const wrap = new Set();
+  for (const l of lines) {
+    if (l.em * size + ls * l.chars > avail + 0.5) wrap.add(l.text);
+  }
+  return { size, m, wrap, roomForAll };
+}
+
+/* Единый кегль для сцены на экране. Считаем по ширине самой сцены:
+   караоке меряется по караоке, предпросмотр редактора — по себе.
+   Готовый кегль кладём в --st-fs, поштучных размеров у строк нет. */
+function fitStageLines(container) {
+  if (!container) return null;
+  const box = container.clientWidth;
+  if (box <= 0) return null;   // шаг сейчас скрыт — мерить нечего
+  const cs = getComputedStyle(container);
+  const avail = box - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const fit = stageFit(box / FIT_FRAME_COLS, avail);
+  container.style.setProperty('--st-fs', `${fit.size.toFixed(2)}px`);
+  /* Просвет между строками — доля кегля, как и в видео (там ряд равен
+     кеглю, умноженному на межстрочный). В em его задавать нельзя: em
+     у сцены считается от её собственного шрифта, а не от кегля строк. */
+  const gap = Math.max(0, ((+state.style.line || 13) / 10 - 1) * fit.size);
+  container.style.setProperty('--st-gap', `${gap.toFixed(1)}px`);
   container.querySelectorAll('.stage-line').forEach((el) => {
-    el.style.fontSize = '';  // размер задаёт --st-fit, а не отдельная строка
+    el.style.fontSize = '';  // размер задаёт --st-fs, а не отдельная строка
     const text = el.dataset.text != null ? el.dataset.text : el.textContent;
     el.classList.toggle('wrap', fit.wrap.has(text));
   });
+  return fit;
 }
 
 /* Две строки на закреплённых местах. Активна та, чья очередь петь,
@@ -2048,14 +2082,13 @@ $('vocal-mix').addEventListener('input', () => {
 function applyStyle() {
   const s = state.style;
   const stages = [$('lyrics-stage'), $('edit-stage')];
-  stages.forEach((stage, i) => {
+  stages.forEach((stage) => {
     if (!stage) return;
-    const baseRem = i === 0 ? 1.15 : 1.0; // редакторская сцена меньше
+    /* Кегль здесь не задаётся: его считает fitStageLines по ширине самой
+       сцены (см. --st-fs). Так ползунок размера работает одинаково
+       и на широком, и на узком экране, и никакой отдельной поправки
+       «на узкое окно» больше не нужно. */
     stage.style.setProperty('--st-font', (FONTS[s.font] || FONTS.system).css);
-    // На узком экране базовый размер меньше, но настройка пользователя
-    // по-прежнему действует — она умножается, а не перекрывается
-    const narrow = parseFloat(getComputedStyle(stage).getPropertyValue('--st-narrow')) || 1;
-    stage.style.setProperty('--st-size', `${baseRem * narrow * s.size / 100}rem`);
     stage.style.setProperty('--st-weight', s.weight);
     stage.style.setProperty('--st-inactive', s.inactive);
     stage.style.setProperty('--st-active', s.active);
@@ -2063,7 +2096,8 @@ function applyStyle() {
     stage.style.setProperty('--st-outline-c', s.outlineColor);
     stage.style.setProperty('--st-outline', `${s.outline}px`);
     stage.style.setProperty('--st-ls', `${s.letter}px`);
-    stage.style.setProperty('--st-gap', `${(s.line / 10 - 1).toFixed(2)}em`);
+    // Просвет между строками ставит fitStageLines: он считается от кегля,
+    // а кегль известен только после замера ширины сцены
     // Неактивные строки глушим прозрачностью и (по желанию) размытием.
     // Размер строк при этом НЕ меняется — иначе текст «прыгает».
     const dim = Math.max(0, Math.min(100, s.dim)) / 100;
@@ -4179,19 +4213,19 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   const family = (FONTS[st.font] || FONTS.system).css;
   const font = (size) => `${st.weight} ${size}px ${family}`;
 
-  /* Кегль — единый на всю песню, тот же множитель, что на экране:
-     stageFit подбирает его в кадровых единицах по самой длинной строке.
-     Базовый кегль привязан к высоте кадра, поэтому при любом качестве
-     записи текст занимает одну и ту же долю картинки. */
-  const fit = stageFit();
-  const baseSize = Math.max(1, Math.round(H * (FIT_BASE / FIT_FRAME_H) * st.size / 100));
-  const size = Math.max(10, baseSize * fit.scale);
+  /* Кегль — единый на всю песню и тот же, что на экране: stageFit
+     считает его от ширины поверхности, а поверхность здесь — кадр.
+     Поэтому при любом качестве записи текст занимает одну и ту же
+     долю картинки, и та же доля выходит на сцене караоке и в
+     предпросмотре редактора. */
+  const fit = stageFit(W / FIT_FRAME_COLS, maxWidth);
+  const size = Math.max(10, fit.size);
   const lineGap = st.line / 10;
   const rowH = size * lineGap;
 
   // Последний нарисованный кадр — для самопроверки (единый кегль,
   // отсутствие наложений). Данные те же, по которым идёт отрисовка.
-  const layout = { size, baseSize, scale: fit.scale, rowH, items: [] };
+  const layout = { size, unit: W / FIT_FRAME_COLS, m: fit.m, rowH, items: [] };
   drawVideoFrame.последнийКадр = layout;
 
   /* Строка разбирается на куски: слово со своей долей закраски (p)
@@ -4264,7 +4298,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   /* Отсчёт перед вступлением строки: три точки на месте нот проигрыша */
   const cd = countdownState(pos, ph);
   const drawCountdown = (cy) => {
-    const r = Math.max(4, baseSize * 0.2);
+    const r = Math.max(4, size * 0.2);
     const gap = r * 3.4;
     const from = W / 2 - ((COUNT_DOTS - 1) * gap) / 2;
     for (let i = 0; i < COUNT_DOTS; i++) {
@@ -4362,7 +4396,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     if (cd) {
       drawCountdown(ph.mode === 'break'
         ? H * (breakTop / 100)
-        : H * (st.posCurrent / 100) - baseSize * 0.9);
+        : H * (st.posCurrent / 100) - size * 0.9);
     }
     g2d.letterSpacing = '0px';
     if (watermark) {
@@ -4401,7 +4435,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     }
   }
 
-  const blockGap = Math.round(baseSize * 0.35);
+  const blockGap = Math.round(size * 0.35);
   const totalH = blocks.reduce((sum, b) => sum + b.height + blockGap, -blockGap);
   const pad = Math.round(H / 18);
   let y = st.valign === 'flex-start' ? pad
