@@ -3650,13 +3650,17 @@ const MIN_SPAN = 0.08;    // короче строку и слово не дел
 /* Полосы дорожки: где какая лежит и какой высоты. Полоса голоса
    появляется, только когда огибающая есть. */
 function timelineLanes() {
+  /* На низком экране дорожка ужимается: редактор должен помещаться
+     в окно целиком, а высота нужнее сетке строк и предпросмотру. */
+  const k = window.innerHeight <= 780 ? 0.8 : 1;
+  const px = (v) => Math.round(v * k);
   let y = 0;
   const L = {};
-  L.ruler = { y, h: LANE_RULER }; y += LANE_RULER;
-  if (voiceReady()) { L.voice = { y, h: LANE_VOICE }; y += LANE_VOICE; }
-  L.wave = { y, h: LANE_WAVE }; y += LANE_WAVE;
-  L.lines = { y, h: LANE_LINES }; y += LANE_LINES;
-  L.words = { y, h: LANE_WORDS }; y += LANE_WORDS;
+  L.ruler = { y, h: px(LANE_RULER) }; y += L.ruler.h;
+  if (voiceReady()) { L.voice = { y, h: px(LANE_VOICE) }; y += L.voice.h; }
+  L.wave = { y, h: px(LANE_WAVE) }; y += L.wave.h;
+  L.lines = { y, h: px(LANE_LINES) }; y += L.lines.h;
+  L.words = { y, h: px(LANE_WORDS) }; y += L.words.h;
   L.total = y;
   return L;
 }

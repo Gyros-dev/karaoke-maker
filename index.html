@@ -522,12 +522,31 @@
 
   <!-- Шаг 3: редактор -->
   <div class="step-panel" id="step-3">
-    <p class="panel-hint" id="editor-hint">
-      Слева текст — правь прямо в списке, двойной клик перематывает на строку.
-      Справа предпросмотр. Внизу дорожка: тяни за края блока — сдвинется
-      граница, за середину — вся строка. Начала строк простукиваются пробелом:
-      кнопка «✎ простучать заново».
-    </p>
+    <!-- Справка свёрнута: в редакторе каждый пиксель высоты уходит
+         сетке строк и дорожке, а прочитанную один раз подсказку держать
+         на виду незачем. Клавиши переехали сюда же — из-под дорожки. -->
+    <details class="panel-hint editor-hint" id="editor-hint">
+      <summary>Как править разметку</summary>
+      <p>
+        Слева текст — правь прямо в списке, двойной клик перематывает на строку.
+        Справа предпросмотр. Внизу дорожка: тяни за края блока — сдвинется
+        граница, за середину — вся строка. Начала строк простукиваются пробелом:
+        кнопка «✎ простучать заново».
+      </p>
+      <div class="timeline-legend">
+        <span class="tl-key"><i class="sw sw-voice"></i> голос <b id="tl-voice-note">— только в приложении после удаления вокала</b></span>
+        <span class="tl-key"><i class="sw sw-line"></i> строка</span>
+        <span class="tl-key"><i class="sw sw-guess"></i> ≈ время на глазок</span>
+        <span class="tl-key"><i class="sw sw-word"></i> слова выбранной строки</span>
+        <span class="tl-key"><i class="sw sw-own"></i> своё время, если строку подтянуло к голосу</span>
+      </div>
+      <p class="timeline-keys">
+        <kbd>пробел</kbd> играть · <kbd>↑</kbd><kbd>↓</kbd> строка · <kbd>←</kbd><kbd>→</kbd> начало
+        · <kbd>[</kbd><kbd>]</kbd> конец · <kbd>Shift</kbd> точнее, <kbd>Alt</kbd> грубее
+        · <kbd>Enter</kbd> прослушать · <kbd>L</kbd> по кругу · <kbd>Cmd+Z</kbd> отменить
+        · колесо — прокрутка, с <kbd>Cmd</kbd> — масштаб
+      </p>
+    </details>
 
     <!-- Режим простукивания: пока он включён, сетка строк, предпросмотр
          и панель выбранной строки убраны с глаз (см. .step-panel.tapping
@@ -553,7 +572,11 @@
     <div class="editor-grid">
       <ul class="edit-list" id="edit-list"></ul>
       <div class="editor-side">
-        <div class="edit-stage" id="edit-stage"></div>
+        <!-- Предпросмотр вписывается в остаток высоты, сохраняя
+             пропорции кадра, — поэтому у него своя обёртка -->
+        <div class="edit-stage-wrap">
+          <div class="edit-stage" id="edit-stage"></div>
+        </div>
         <div class="editor-controls">
           <button class="play-btn small" id="btn-edit-play">▶</button>
           <span class="time" id="edit-time">0:00</span>
@@ -641,19 +664,6 @@
         </span>
       </div>
       <canvas id="timeline" height="160"></canvas>
-      <div class="timeline-legend">
-        <span class="tl-key"><i class="sw sw-voice"></i> голос <b id="tl-voice-note">— только в приложении после удаления вокала</b></span>
-        <span class="tl-key"><i class="sw sw-line"></i> строка</span>
-        <span class="tl-key"><i class="sw sw-guess"></i> ≈ время на глазок</span>
-        <span class="tl-key"><i class="sw sw-word"></i> слова выбранной строки</span>
-        <span class="tl-key"><i class="sw sw-own"></i> своё время, если строку подтянуло к голосу</span>
-      </div>
-      <p class="timeline-keys">
-        <kbd>пробел</kbd> играть · <kbd>↑</kbd><kbd>↓</kbd> строка · <kbd>←</kbd><kbd>→</kbd> начало
-        · <kbd>[</kbd><kbd>]</kbd> конец · <kbd>Shift</kbd> точнее, <kbd>Alt</kbd> грубее
-        · <kbd>Enter</kbd> прослушать · <kbd>L</kbd> по кругу · <kbd>Cmd+Z</kbd> отменить
-        · колесо — прокрутка, с <kbd>Cmd</kbd> — масштаб
-      </p>
     </div>
     <div class="panel-actions">
       <button class="btn btn-ghost" id="btn-back-2">← Текст</button>
