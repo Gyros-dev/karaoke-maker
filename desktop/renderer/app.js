@@ -26,11 +26,11 @@ const state = {
 function defaultStyle() {
   return {
     font: 'system',
-    /* Размер — проценты от базового кегля (ширина сцены / 32).
-       По умолчанию максимум: подгонка сама ужмёт его ровно настолько,
-       чтобы самая длинная строка встала во всю ширину сцены. Раньше
-       умолчание 100% оставляло текст мелким и жалось к середине. */
-    size: 220,
+    /* Размер — проценты от ЗАПОЛНЯЮЩЕГО кегля, при котором самая
+       длинная строка встаёт во всю ширину сцены. Поэтому умолчание
+       100% и есть «максимально крупно»: больше — уже с переносом
+       строк на два ряда. */
+    size: 100,
     weight: 600,
     effect: 'fill',     // fill | highlight | none
     inactive: '#9a9ab0',
@@ -70,7 +70,7 @@ state.style = defaultStyle();
    поколения. Забываем только значения, в точности равные прежнему
    умолчанию: их человек не выбирал. Всё, что он менял осознанно (цвета,
    шрифт, размеры, места строк), не равно умолчанию и переезжает как есть. */
-const STYLE_GEN = 3;
+const STYLE_GEN = 4;
 const STYLE_MIGRATIONS = [
   // Поколение 1: «Строки меняются местами» перестала быть умолчанием
   { поколение: 1, прежниеУмолчания: { swapLines: true } },
@@ -81,6 +81,10 @@ const STYLE_MIGRATIONS = [
   /* Поколение 3: поля по краям по умолчанию нулевые — текст занимает
      всю ширину сцены. Прежние 8% никто не выбирал, это было умолчание. */
   { поколение: 3, прежниеУмолчания: { pad: 8 } },
+  /* Поколение 4: размер стал долей заполняющего кегля, а не долей
+     базового. Прежнее умолчание 220% в новом счёте означало бы текст
+     вдвое шире сцены — забываем его. */
+  { поколение: 4, прежниеУмолчания: { size: 220 } },
 ];
 
 /* Оформление из сохранённого проекта: сначала перенос, потом умолчания */
@@ -1871,8 +1875,15 @@ function syncStageLines(stage, items) {
     if (wasCurrent && !el.classList.contains('current')) {
       el.querySelectorAll('.w').forEach((s) => s.style.removeProperty('--wfill'));
     }
-    if (it.top != null) el.style.top = `${it.top}%`;
-    else el.style.removeProperty('top');
+    if (it.top != null) {
+      // Своё место запоминаем: fitStageLines двигает строку от него,
+      // когда перенесённая на два ряда строка иначе налезла бы на соседку
+      el.dataset.top = it.top;
+      el.style.top = `${it.top}%`;
+    } else {
+      delete el.dataset.top;
+      el.style.removeProperty('top');
+    }
     if (it.index != null) el.dataset.index = it.index;
     out.push(el);
   }
@@ -1951,20 +1962,26 @@ function updateCountdown(stage, cd) {
    формулы исчезал совсем. Ползунок «Размер» выше 100% не делал ничего:
    100%, 160% и 220% давали один и тот же кегль (18,4 / 18,65 / 18,65 px).
 
-   Теперь размер, выбранный человеком, работает всегда, а подгонка
-   только УЖИМАЕТ — и лишь когда самая длинная строка не влезает
-   в отведённую ширину. Если ужимать пришлось бы ниже FIT_MIN,
-   останавливаемся и переносим такие строки на два ряда, как принято
-   в нынешних караоке.
+   Ползунок «Размер» отсчитывается от ЗАПОЛНЯЮЩЕГО кегля: 100% — самый
+   крупный кегль, при котором каждая строка ещё умещается в один ряд.
+   Поэтому по умолчанию текст занимает сцену целиком, а ползунок живой
+   во всём диапазоне: ниже 100% текст мельче, выше — крупнее, а строки,
+   переставшие влезать в ряд, переносятся на два и больше, как принято
+   в нынешних караоке-плеерах.
+
+   Прежняя беда была именно здесь: подгонка держала строку у края и не
+   давала расти дальше. Ползунок выше 160% снова ничего не делал —
+   для человека это тот же дефект, что и раньше.
 
    Ширину строк меряем холстом: коробки строк в DOM врут (у закреплённой
    строки коробка шире полей сцены), а холст даёт ровно ширину текста
    тем же шрифтом. Меряем один раз в долях кегля — «сколько кеглей
    в ширину занимает строка». От размера и от поверхности эта величина
    не зависит, поэтому одного замера хватает всем троим. */
-const FIT_FRAME_COLS = 32;   // ширина поверхности в кеглях при «Размер 100%»
+const FIT_FRAME_COLS = 32;   // опорная ширина поверхности в базовых кеглях
 const FIT_MEASURE = 40;      // каким кеглем меряем строки холстом
-const FIT_MIN = 0.6;         // ниже 60% базового не ужимаем, а переносим
+const FIT_MAX_UNITS = 3.2;   // потолок заполняющего кегля: песне из двух слов
+const FIT_MIN_UNITS = 0.55;  // пол: ниже строка не ужимается, а переносится
 const FIT_SAFE = 0.99;       // запас на неточность замера: строка не липнет к краю
 
 const stageMetricsCache = { key: null, value: null, ctx: null };
@@ -2001,34 +2018,64 @@ function stageMetrics() {
 }
 
 /* Единый кегль для одной поверхности.
-   unit  — кегль при «Размер 100%»: ширина поверхности / FIT_FRAME_COLS;
+   unit  — базовый кегль поверхности: её ширина / FIT_FRAME_COLS;
    avail — сколько ширины отдано тексту (поверхность минус поля по краям).
-   Возвращает готовый кегль в пикселях и набор строк, которые не влезли
-   даже на самом мелком кегле и должны переноситься. */
+
+   Возвращает готовый кегль в пикселях, набор строк, которые надо
+   переносить, и на сколько рядов растянется самая длинная из них. */
 function stageFit(unit, avail) {
   const s = state.style;
-  const want = Math.max(0.1, (+s.size || 100) / 100);
+  const доля = Math.max(0.2, (+s.size || 100) / 100);
   const ls = +s.letter || 0;
   const room = Math.max(0, avail) * FIT_SAFE;
   const lines = stageMetrics();
 
-  // Самый крупный множитель, при котором влезают все строки
-  let roomForAll = Infinity;
+  /* Заполняющий кегль — самый крупный, при котором каждая строка ещё
+     умещается в один ряд. Это и есть «Размер 100%». */
+  let fill = Infinity;
   for (const l of lines) {
     if (l.em <= 0) continue;
     const m = (room - ls * l.chars) / (l.em * unit);
-    if (m < roomForAll) roomForAll = m;
+    if (m < fill) fill = m;
   }
-  if (!isFinite(roomForAll)) roomForAll = want;
+  if (!isFinite(fill)) fill = 1;
+  fill = Math.min(FIT_MAX_UNITS, Math.max(FIT_MIN_UNITS, fill));
 
-  // Выбор человека работает всегда; подгонка только ужимает и не ниже FIT_MIN
-  const m = Math.min(want, Math.max(FIT_MIN, roomForAll));
+  const m = fill * доля;
   const size = Math.max(1, unit * m);
+
+  // Что в один ряд уже не влезло — переносим, как в нынешних караоке
   const wrap = new Set();
+  let rows = 1;
   for (const l of lines) {
-    if (l.em * size + ls * l.chars > avail + 0.5) wrap.add(l.text);
+    const w = l.em * size + ls * l.chars;
+    if (w > avail + 0.5) {
+      wrap.add(l.text);
+      rows = Math.max(rows, Math.ceil(w / Math.max(1, avail)));
+    }
   }
-  return { size, m, wrap, roomForAll };
+  return { size, m, fill, rows, wrap };
+}
+
+/* Места двух закреплённых строк, в пикселях от верха поверхности.
+   Строка, перенесённая на несколько рядов, выше обычной, и на своих
+   местах две такие налезли бы друг на друга — поэтому места
+   раздвигаются вокруг общей середины. Считается одинаково для сцены,
+   предпросмотра и кадра видео, поэтому все трое кладут строки туда же. */
+function slotPositions(fit, H) {
+  const s = state.style;
+  const rowH = fit.size * ((+s.line || 13) / 10);
+  const half = (fit.rows * rowH) / 2;
+  let a = H * (s.posCurrent / 100);
+  let b = H * (s.posNext / 100);
+  if (Math.abs(b - a) < half * 2) {
+    const середина = (a + b) / 2;
+    const знак = b >= a ? 1 : -1;
+    a = середина - знак * half * 1.05;
+    b = середина + знак * half * 1.05;
+  }
+  const вКрая = (v) => Math.min(Math.max(v, half), Math.max(half, H - half));
+  return { a: вКрая(a), b: вКрая(b), rowH, half };
 }
 
 /* Единый кегль для сцены на экране. Считаем по ширине самой сцены:
@@ -2041,18 +2088,40 @@ function fitStageLines(container) {
   const cs = getComputedStyle(container);
   const avail = box - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
   const fit = stageFit(box / FIT_FRAME_COLS, avail);
+  const межстрочный = (+state.style.line || 13) / 10;
   container.style.setProperty('--st-fs', `${fit.size.toFixed(2)}px`);
-  /* Просвет между строками — доля кегля, как и в видео (там ряд равен
-     кеглю, умноженному на межстрочный). В em его задавать нельзя: em
-     у сцены считается от её собственного шрифта, а не от кегля строк. */
-  const gap = Math.max(0, ((+state.style.line || 13) / 10 - 1) * fit.size);
+  /* Высота ряда — та же доля кегля, что в видео: перенесённая строка
+     занимает на экране ровно столько же рядов и той же высоты. */
+  container.style.setProperty('--st-lh', межстрочный.toFixed(2));
+  /* Просвет между строками в режиме прокрутки. В em его задавать нельзя:
+     em у сцены считается от её собственного шрифта, а не от кегля строк. */
+  const gap = Math.max(0, (межстрочный - 1) * fit.size);
   container.style.setProperty('--st-gap', `${gap.toFixed(1)}px`);
   container.querySelectorAll('.stage-line').forEach((el) => {
     el.style.fontSize = '';  // размер задаёт --st-fs, а не отдельная строка
     const text = el.dataset.text != null ? el.dataset.text : el.textContent;
     el.classList.toggle('wrap', fit.wrap.has(text));
   });
+  placeSlotLines(container, fit);
   return fit;
+}
+
+/* Расставляем закреплённые строки по их местам с поправкой на перенос */
+function placeSlotLines(container, fit) {
+  const s = state.style;
+  const H = container.clientHeight;
+  const строки = container.querySelectorAll('.stage-line[data-top]');
+  if (!строки.length) return;
+  if (s.swapLines || !H) {
+    строки.forEach((el) => { el.style.top = `${el.dataset.top}%`; });
+    return;
+  }
+  const p = slotPositions(fit, H);
+  строки.forEach((el) => {
+    const своё = +el.dataset.top;
+    const y = своё === s.posCurrent ? p.a : (своё === s.posNext ? p.b : H * своё / 100);
+    el.style.top = `${((y / H) * 100).toFixed(2)}%`;
+  });
 }
 
 /* Две строки на закреплённых местах. Активна та, чья очередь петь,
@@ -4618,6 +4687,12 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   /* Закреплённые места: две строки рисуются каждая на своей высоте
      и не съезжают. Активна та, чья очередь петь. */
   if (!st.swapLines) {
+    /* Места строк — те же, что на сцене (slotPositions): перенесённые
+       на несколько рядов строки раздвигаются, чтобы не налезть друг
+       на друга. Считается одинаково здесь и в караоке. */
+    const места = slotPositions(fit, H);
+    const место = (доля) => (доля === st.posCurrent ? места.a
+      : доля === st.posNext ? места.b : H * доля / 100);
     const activeSlot = cur < 0 ? 0 : cur % 2;
     const nextIndex = cur < 0 ? 0 : cur + 1;
     /* То же правило, что на сцене: ноты проигрыша занимают целое место,
@@ -4635,17 +4710,17 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       else index = nextIndex;
       if (index >= lines.length) continue;
       if (kind !== 'cur' && index === nextIndex) kind = 'near';
-      drawLineAt(lines[index].text, H * (top / 100), kind, kind === 'cur' ? lines[index] : null);
+      drawLineAt(lines[index].text, место(top), kind, kind === 'cur' ? lines[index] : null);
     }
     const breakTop = breakSlot === 0 ? st.posCurrent : st.posNext;
     // Пока идёт отсчёт, точки занимают место нот проигрыша
     if (ph.mode === 'break' && !cd) {
-      drawLineAt(BREAK_TEXT_FRAME, H * (breakTop / 100), 'cur', null);
+      drawLineAt(BREAK_TEXT_FRAME, место(breakTop), 'cur', null);
     }
     if (cd) {
       drawCountdown(ph.mode === 'break'
-        ? H * (breakTop / 100)
-        : H * (st.posCurrent / 100) - size * 0.9);
+        ? место(breakTop)
+        : места.a - места.half - size * 0.35);
     }
     g2d.letterSpacing = '0px';
     if (watermark) {

@@ -377,9 +377,9 @@
             </div>
             <div class="style-row">
               <span class="style-label">Размер</span>
-              <span class="eq-val" id="st-size-val">220%</span>
-              <input type="range" id="st-size" min="60" max="220" step="5" value="220">
-              <span class="eq-hint">Строка не станет шире сцены: если выбранный размер не влезает, её ужимает ровно до края</span>
+              <span class="eq-val" id="st-size-val">100%</span>
+              <input type="range" id="st-size" min="40" max="200" step="5" value="100">
+              <span class="eq-hint">100% — самый крупный кегль, при котором строки влезают в один ряд. Крупнее тоже можно: длинные строки перенесутся на два ряда</span>
             </div>
             <div class="style-row">
               <span class="style-label">Жирность</span>
@@ -591,7 +591,12 @@
     </div>
   </div>
 
-  <!-- Шаг 3: редактор -->
+  <!-- Шаг 3: редактор.
+       Рабочее место собрано по образцу монтажных программ: сверху одна
+       панель управления с транспортом и инструментами, посередине три
+       окна — список строк, просмотр и инспектор выбранной строки, —
+       внизу дорожка во всю ширину. Взято только то, что нужно караоке:
+       ни слоёв, ни эффектов, ни библиотеки материалов. -->
   <div class="step-panel" id="step-3">
     <!-- Справка свёрнута: в редакторе каждый пиксель высоты уходит
          сетке строк и дорожке, а прочитанную один раз подсказку держать
@@ -600,9 +605,9 @@
       <summary>Как править разметку</summary>
       <p>
         Слева текст — правь прямо в списке, двойной клик перематывает на строку.
-        Справа предпросмотр. Внизу дорожка: тяни за края блока — сдвинется
-        граница, за середину — вся строка. Начала строк простукиваются пробелом:
-        кнопка «✎ простучать заново».
+        Посередине просмотр, справа инспектор выбранной строки. Внизу дорожка:
+        тяни за края блока — сдвинется граница, за середину — вся строка.
+        Начала строк простукиваются пробелом: кнопка «✎ простучать заново».
       </p>
       <div class="timeline-legend">
         <span class="tl-key"><i class="sw sw-voice"></i> голос <b id="tl-voice-note">— только в приложении после удаления вокала</b></span>
@@ -619,11 +624,10 @@
       </p>
     </details>
 
-    <!-- Режим простукивания: пока он включён, сетка строк, предпросмотр
-         и панель выбранной строки убраны с глаз (см. .step-panel.tapping
-         в style.css). На экране остаётся только то, что нужно, чтобы
-         попадать в строки: сама строка, следующая, счётчик, время,
-         дорожка и две кнопки. -->
+    <!-- Режим простукивания: пока он включён, рабочие окна и панель
+         управления убраны с глаз (см. .step-panel.tapping в style.css).
+         На экране остаётся только то, что нужно, чтобы попадать в строки:
+         сама строка, следующая, счётчик, время, дорожка и две кнопки. -->
     <div class="tap-mode hidden" id="tap-mode">
       <button class="tap-hit" id="tap-hit">
         <span class="tap-now" id="tap-now"></span>
@@ -640,61 +644,91 @@
       </div>
     </div>
 
+    <!-- Панель управления: транспорт и часы слева, инструменты правки
+         в середине, масштаб дорожки справа — как в монтажной программе -->
+    <div class="ed-bar" id="ed-bar">
+      <span class="ed-group">
+        <button class="play-btn small" id="btn-edit-play">▶</button>
+        <span class="ed-clock">
+          <b class="time" id="edit-time">0:00</b>
+          <span class="time" id="edit-total">0:00</span>
+        </span>
+      </span>
+      <span class="ed-group">
+        <button class="nudge-btn" id="tl-undo" title="Отменить последнее действие (Cmd+Z)" disabled>↶</button>
+        <button class="nudge-btn" id="tl-redo" title="Повторить отменённое (Cmd+Shift+Z)" disabled>↷</button>
+      </span>
+      <span class="ed-group">
+        <button class="nudge-btn" id="tl-loop" title="Играть выбранную строку по кругу (клавиша L)">↻ по кругу</button>
+        <button class="nudge-btn on" id="tl-snap" title="Притягивать границы к настоящему вступлению голоса (клавиша S)">⇥ к голосу</button>
+      </span>
+      <!-- Сдвиг всей разметки разом: раньше жил на шаге «Синхронизация» -->
+      <span class="ed-group" id="shift-all">
+        <span class="tl-shift-label">сдвинуть всё</span>
+        <button class="nudge-btn" data-shift="-1">−1</button>
+        <button class="nudge-btn" data-shift="-0.1">−0,1</button>
+        <button class="nudge-btn" data-shift="0.1">+0,1</button>
+        <button class="nudge-btn" data-shift="1">+1</button>
+      </span>
+      <span class="ed-group ed-right">
+        <button class="nudge-btn" id="tl-zoom-out" title="Отдалить (клавиша −)">−</button>
+        <span class="ed-label">масштаб</span>
+        <button class="nudge-btn" id="tl-zoom-in" title="Приблизить (клавиша +)">+</button>
+        <button class="nudge-btn" id="tl-fit" title="Показать песню целиком">вся песня</button>
+      </span>
+    </div>
+
+    <!-- Три окна: строки, просмотр, инспектор -->
     <div class="editor-grid">
-      <ul class="edit-list" id="edit-list"></ul>
-      <div class="editor-side">
-        <!-- Предпросмотр вписывается в остаток высоты, сохраняя
-             пропорции кадра, — поэтому у него своя обёртка -->
+      <section class="ed-pane ed-lines">
+        <header class="ed-pane-head">Строки</header>
+        <ul class="edit-list" id="edit-list"></ul>
+      </section>
+
+      <section class="ed-pane ed-viewer">
+        <header class="ed-pane-head">Просмотр</header>
         <div class="edit-stage-wrap">
           <div class="edit-stage" id="edit-stage"></div>
         </div>
-        <div class="editor-controls">
-          <button class="play-btn small" id="btn-edit-play">▶</button>
-          <span class="time" id="edit-time">0:00</span>
-          <span>/</span>
-          <span class="time" id="edit-total">0:00</span>
-        </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- Панель выбранной строки: одна на весь редактор.
-         Раньше эти же кнопки стояли в каждой строке списка — по восемь
-         штук, и список из-за них было не прочитать. -->
-    <div class="sel-panel" id="sel-panel">
-      <div class="sel-head">
-        <span class="tl-sel" id="tl-sel">Строка не выбрана</span>
-        <button class="nudge-btn" id="btn-sel-tap" title="Простучать эту строку и следующие заново (пробелом)">✎ простучать заново</button>
-      </div>
-      <div class="sel-row">
-        <span class="sel-pair">
-          <span class="sel-label">начало</span>
-          <span class="nudge">
-            <button class="nudge-btn" data-sel-start="-1">−1</button>
-            <button class="nudge-btn" data-sel-start="-0.1">−0,1</button>
-            <button class="nudge-btn" data-sel-start="0.1">+0,1</button>
-            <button class="nudge-btn" data-sel-start="1">+1</button>
-          </span>
-        </span>
-        <span class="sel-pair">
-          <span class="sel-label">конец</span>
-          <span class="nudge">
-            <button class="nudge-btn" data-sel-end="-1">−1</button>
-            <button class="nudge-btn" data-sel-end="-0.1">−0,1</button>
-            <button class="nudge-btn" data-sel-end="0.1">+0,1</button>
-            <button class="nudge-btn" data-sel-end="1">+1</button>
-          </span>
-        </span>
-      </div>
-      <div class="sel-row">
-        <button class="nudge-btn" id="btn-sel-play" title="Прослушать эту строку (Enter)">▶ прослушать</button>
-        <button class="nudge-btn" id="btn-sel-words" title="Простучать слова внутри строки">♪ слова</button>
-        <button class="nudge-btn" id="btn-sel-words-reset" title="Вернуть автоматическое деление слов">⨯ сбросить слова</button>
-        <button class="nudge-btn" id="btn-sel-del" title="Убрать эту строку из караоке">🗑 удалить</button>
-        <label class="sel-vocal" title="В редакторе по умолчанию звучит оригинал: размечать на слух без голоса невозможно">
-          <input type="checkbox" id="sel-vocal" checked>
-          слышу оригинал
-        </label>
-      </div>
+      <!-- Инспектор выбранной строки: всё, что можно с ней сделать,
+           собрано в одном столбце и меняется вместе с выбором -->
+      <aside class="ed-pane sel-panel" id="sel-panel">
+        <header class="ed-pane-head">Строка</header>
+        <div class="ed-pane-body">
+          <span class="tl-sel" id="tl-sel">Строка не выбрана</span>
+          <div class="insp-row">
+            <span class="sel-label">начало</span>
+            <span class="nudge">
+              <button class="nudge-btn" data-sel-start="-1">−1</button>
+              <button class="nudge-btn" data-sel-start="-0.1">−0,1</button>
+              <button class="nudge-btn" data-sel-start="0.1">+0,1</button>
+              <button class="nudge-btn" data-sel-start="1">+1</button>
+            </span>
+          </div>
+          <div class="insp-row">
+            <span class="sel-label">конец</span>
+            <span class="nudge">
+              <button class="nudge-btn" data-sel-end="-1">−1</button>
+              <button class="nudge-btn" data-sel-end="-0.1">−0,1</button>
+              <button class="nudge-btn" data-sel-end="0.1">+0,1</button>
+              <button class="nudge-btn" data-sel-end="1">+1</button>
+            </span>
+          </div>
+          <div class="insp-actions">
+            <button class="nudge-btn" id="btn-sel-play" title="Прослушать эту строку (Enter)">▶ прослушать</button>
+            <button class="nudge-btn" id="btn-sel-words" title="Простучать слова внутри строки">♪ слова</button>
+            <button class="nudge-btn" id="btn-sel-words-reset" title="Вернуть автоматическое деление слов">⨯ сбросить слова</button>
+            <button class="nudge-btn" id="btn-sel-tap" title="Простучать эту строку и следующие заново (пробелом)">✎ простучать заново</button>
+            <button class="nudge-btn" id="btn-sel-del" title="Убрать эту строку из караоке">🗑 удалить</button>
+          </div>
+          <label class="sel-vocal" title="В редакторе по умолчанию звучит оригинал: размечать на слух без голоса невозможно">
+            <input type="checkbox" id="sel-vocal" checked>
+            слышу оригинал
+          </label>
+        </div>
+      </aside>
     </div>
 
     <div class="word-tap hidden" id="word-tap">
@@ -709,33 +743,12 @@
         <button class="btn btn-ghost btn-small" id="btn-word-cancel">Отменить</button>
       </div>
     </div>
+
+    <!-- Дорожка во всю ширину, как в монтажной программе -->
     <div class="timeline-wrap">
-      <div class="timeline-tools">
-        <span class="tl-group">
-          <button class="nudge-btn" id="tl-undo" title="Отменить последнее действие (Cmd+Z)" disabled>↶ отменить</button>
-          <button class="nudge-btn" id="tl-redo" title="Повторить отменённое (Cmd+Shift+Z)" disabled>↷ повторить</button>
-        </span>
-        <span class="tl-group">
-          <button class="nudge-btn" id="tl-loop" title="Играть выбранную строку по кругу (клавиша L)">↻ по кругу</button>
-          <button class="nudge-btn on" id="tl-snap" title="Притягивать границы к настоящему вступлению голоса (клавиша S)">⇥ к голосу</button>
-        </span>
-        <!-- Сдвиг всей разметки разом: раньше жил на шаге «Синхронизация» -->
-        <span class="tl-group" id="shift-all">
-          <span class="tl-shift-label">сдвинуть всё</span>
-          <button class="nudge-btn" data-shift="-1">−1</button>
-          <button class="nudge-btn" data-shift="-0.1">−0,1</button>
-          <button class="nudge-btn" data-shift="0.1">+0,1</button>
-          <button class="nudge-btn" data-shift="1">+1</button>
-        </span>
-        <span class="tl-group tools-right">
-          <button class="nudge-btn" id="tl-zoom-out" title="Отдалить (клавиша −)">−</button>
-          <span>масштаб</span>
-          <button class="nudge-btn" id="tl-zoom-in" title="Приблизить (клавиша +)">+</button>
-          <button class="nudge-btn" id="tl-fit" title="Показать песню целиком">вся песня</button>
-        </span>
-      </div>
       <canvas id="timeline" height="160"></canvas>
     </div>
+
     <div class="panel-actions">
       <button class="btn btn-ghost" id="btn-back-2">← Текст</button>
       <button class="btn btn-primary" id="btn-editor-next">Караоке →</button>
