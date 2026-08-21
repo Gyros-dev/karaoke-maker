@@ -214,6 +214,8 @@ async function transcribe({ modelId, audio, language }) {
   let inChunk = 0;     // докуда дошли внутри текущего окна, секунды
   let ticks = 0;
   let lastPost = 0;
+  // Не null, пока окно слушается повторно: тогда полоса честно стоит
+  let retryText = null;
 
   const streamer = {
     put(rows) {
@@ -234,13 +236,19 @@ async function transcribe({ modelId, audio, language }) {
         Math.max(done / totalWindows, ticks / (seconds * 8 + 40)));
       const elapsed = (now - t0) / 1000;
       const rest = elapsed / Math.max(frac, 0.02) - elapsed;
+      /* Пока окно переслушивается, полоса стоит на месте — двигать её
+         вперёд нечестно, работа идёт по второму разу. Но и молчать
+         нельзя: с упёршейся полосой и обещанием «около 10 с» это
+         выглядит намертво повисшей программой. Поэтому говорим прямо,
+         чем заняты, и не обещаем срок, которого не знаем. */
+      const переслушиваем = retryText != null;
       post({
         type: 'progress',
         percent: 10 + frac * 88,
-        text: 'Разбираем слова…',
-        eta: rest > 5
-          ? `осталось около ${rest < 60 ? Math.ceil(rest / 10) * 10 + ' с' : Math.ceil(rest / 60) + ' мин'}`
-          : '',
+        text: переслушиваем ? retryText : 'Разбираем слова…',
+        eta: переслушиваем || rest <= 5 || frac >= 0.98
+          ? ''
+          : `осталось около ${rest < 60 ? Math.ceil(rest / 10) * 10 + ' с' : Math.ceil(rest / 60) + ' мин'}`,
       });
     },
     /* Раньше здесь считали куски, но end() срабатывает не по разу на
@@ -291,6 +299,9 @@ async function transcribe({ modelId, audio, language }) {
           };
 
       inChunk = 0;
+      retryText = attempt === 0
+        ? null
+        : `Трудный кусок, слушаем заново (${attempt} из ${FALLBACK_TEMPS.length})…`;
       const out = await originalGenerate({ ...args, ...extra });
       if (cancelled) throw new Error('отменено');
 
@@ -311,6 +322,7 @@ async function transcribe({ modelId, audio, language }) {
     }
 
     if (bestJudge && bestJudge.bad) loopsLeft++;
+    retryText = null;   // окно закрыто, дальше полоса снова едет
     windowIdx++;
     return best;
   };
