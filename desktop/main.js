@@ -807,10 +807,29 @@ function fetchTo(url, dest, onChunk) {
     const tmp = dest + '.part';
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     const file = fs.createWriteStream(tmp);
-    const cleanup = (err) => { file.destroy(); fs.unlink(tmp, () => reject(err)); };
+    let завершено = false;
+    let resp = null;
+    let req = null;
+    /* Единственный выход из функции. Отмена рвала запрос через
+       req.destroy() без аргумента, а такой вызов события 'error'
+       не порождает: уборка не случалась никогда — обещание висело
+       вечно, а .part оставался на диске (до 90 МБ на файле весов). */
+    const finish = (err, res) => {
+      if (завершено) return;
+      завершено = true;
+      if (!err) return resolve(res);
+      try { if (resp) resp.destroy(); } catch (e) { /* уже закрыт */ }
+      try { if (req) req.destroy(); } catch (e) { /* уже закрыт */ }
+      try { file.destroy(); } catch (e) { /* уже закрыт */ }
+      fs.unlink(tmp, () => reject(err));
+    };
+    // Например, кончилось место на диске
+    file.on('error', finish);
     const get = (u, redirects = 0) => {
-      if (redirects > 8) return cleanup(new Error('Слишком много перенаправлений'));
-      const req = https.get(u, { headers: { 'User-Agent': 'benengskaya' }, timeout: 30000 }, (res) => {
+      if (завершено) return;
+      if (redirects > 8) return finish(new Error('Слишком много перенаправлений'));
+      req = https.get(u, { headers: { 'User-Agent': 'benengskaya' }, timeout: 30000 }, (res) => {
+        if (завершено) { res.resume(); return; }
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
           // HuggingFace отвечает относительным адресом — достраиваем его
@@ -821,29 +840,33 @@ function fetchTo(url, dest, onChunk) {
           // Необязательный файл: у части моделей его просто нет
           res.resume();
           file.destroy();
-          return fs.unlink(tmp, () => resolve({ skipped: true, bytes: 0 }));
+          return fs.unlink(tmp, () => finish(null, { skipped: true, bytes: 0 }));
         }
         if (res.statusCode !== 200) {
           res.resume();
-          return cleanup(new Error('Сервер ответил ' + res.statusCode));
+          return finish(new Error('Сервер ответил ' + res.statusCode));
         }
+        resp = res;
         // Сколько байт обещал сервер: оборванная раздача тоже доходит
         // до 'finish', и без сверки длины огрызок сходил за целый файл
         const ждём = parseInt(res.headers['content-length'], 10) || 0;
         let получено = 0;
         res.on('data', (chunk) => { получено += chunk.length; onChunk(chunk.length); });
+        res.on('error', finish);        // обрыв связи на середине
         res.pipe(file);
         file.on('finish', () => file.close(() => {
+          /* Всё, что тут падает, падает в колбэке потока: без перехвата
+             это необработанное исключение в главном процессе */
           try {
             if (ждём && получено !== ждём) {
               throw new Error(`файл пришёл не целиком: ${получено} из ${ждём} байт`);
             }
             fs.renameSync(tmp, dest);
-            resolve({ skipped: false, bytes: получено });
-          } catch (e) { cleanup(e); }
+            finish(null, { skipped: false, bytes: получено });
+          } catch (e) { finish(e); }
         }));
       });
-      req.on('error', cleanup);
+      req.on('error', finish);
       req.on('timeout', () => req.destroy(new Error('сервер не отвечает')));
       if (asrAbort) asrAbort.reqs.push(req);
     };
@@ -898,7 +921,12 @@ ipcMain.handle('asr-download', async (_evt, key) => {
 ipcMain.handle('asr-cancel', () => {
   if (!asrAbort) return false;
   asrAbort.cancelled = true;
-  asrAbort.reqs.forEach((r) => { try { r.destroy(); } catch (e) { /* уже закрыт */ } });
+  /* Рвём с ошибкой, а не пустым destroy(): без аргумента событие 'error'
+     не приходит, и загрузка «отменялась» только на словах — обещание
+     висело вечно, а недокачанное оставалось на диске. */
+  asrAbort.reqs.forEach((r) => {
+    try { r.destroy(new Error('отменено')); } catch (e) { /* уже закрыт */ }
+  });
   return true;
 });
 
