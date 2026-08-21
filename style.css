@@ -455,8 +455,45 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    своими частями: сетка строк с предпросмотром забирают весь остаток,
    дорожка и панель выбранной строки стоят своим размером. Прокручивается
    только список строк, а не страница. */
-#step-3.active { gap: 0.6rem; }
+#step-3.active { gap: 0.5rem; }
 #step-3 .panel-hint { font-size: 0.82rem; margin-bottom: 0; flex-shrink: 0; }
+/* Окно рабочего места: заголовок и содержимое, как панели в монтажной */
+.ed-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  /* Окна — теги section и aside, а у section в общих стилях свои поля
+     витринного раздела: здесь они не нужны */
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.ed-pane-head {
+  flex-shrink: 0;
+  padding: 0.3rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ed-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+}
+.ed-viewer .edit-stage-wrap { margin: 0; padding: 0.5rem; }
 /* Справка редактора свёрнута: развернул — прочитал — свернул обратно */
 .editor-hint > summary {
   cursor: pointer;
@@ -466,23 +503,21 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .editor-hint p { margin-top: 0.5rem; text-align: left; }
 .editor-hint .timeline-keys { margin-top: 0.4rem; }
+/* Три окна рабочего места: строки — просмотр — инспектор.
+   Кегль в просмотре пропорционален его ширине (см. fitStageLines),
+   поэтому окну просмотра отдана заметная доля. */
 .editor-grid {
   display: grid;
-  /* Кегль в предпросмотре пропорционален его ширине (см. fitStageLines):
-     в прежние 320px текст выходил втрое мельче, чем на сцене, и читать
-     его было нечем. Отдаём предпросмотру заметную долю ширины. */
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 230px;
+  gap: 0.6rem;
   flex: 1;
   min-height: 150px;
 }
 .edit-list {
   list-style: none;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-card);
 }
 /* Строка сетки: только чтение и правка текста. Кнопок подстройки здесь
    нет — они живут в панели выбранной строки и на дорожке. */
@@ -530,28 +565,23 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .edit-text:focus { background: rgba(255, 255, 255, 0.07); }
 
-/* --- Панель выбранной строки: одна на весь редактор --- */
-.sel-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  flex-shrink: 0;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-card);
-}
+/* --- Инспектор выбранной строки ---
+   Раньше это была широкая полоса под сеткой: кнопки в один ряд, подпись
+   сбоку. В монтажных программах свойства выбранного лежат столбцом
+   сбоку, и здесь так же — работа со строкой собрана в одном месте
+   и не расползается по ширине экрана. */
 .sel-panel.empty { opacity: 0.75; }
-.sel-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-.sel-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-/* Подпись и её кнопки не разъезжаются по разным рядам при переносе */
-.sel-pair { display: flex; align-items: center; gap: 0.4rem; }
+.insp-row { display: flex; flex-direction: column; gap: 0.2rem; }
+.insp-row .nudge { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.25rem; }
+.insp-row .nudge-btn { min-width: 0; padding: 0.25rem 0.1rem; text-align: center; }
+.insp-actions { display: flex; flex-direction: column; gap: 0.3rem; }
+.insp-actions .nudge-btn { text-align: left; padding: 0.3rem 0.5rem; }
+.sel-panel .ed-pane-body { gap: 0.45rem; }
 .sel-label { color: var(--text-dim); font-size: 0.78rem; }
 .sel-vocal {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin-left: auto;
   color: var(--text-dim);
   font-size: 0.8rem;
   cursor: pointer;
@@ -559,7 +589,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .sel-vocal input { accent-color: #10b981; cursor: pointer; }
 .sel-vocal:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
-#btn-sel-tap { margin-left: auto; border-color: #34d399; color: #34d399; }
+#btn-sel-tap { border-color: #34d399; color: #34d399; }
 #btn-sel-words.marked { border-color: #34d399; color: #34d399; }
 
 /* --- Режим простукивания ---
@@ -567,11 +597,8 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    строки уходят с глаз, дорожка и метки на ней остаются. */
 .step-panel.tapping > .panel-hint,
 .step-panel.tapping > .editor-grid,
-.step-panel.tapping > .sel-panel,
-.step-panel.tapping > .panel-actions,
-.step-panel.tapping .timeline-tools,
-.step-panel.tapping .timeline-legend,
-.step-panel.tapping .timeline-keys { display: none; }
+.step-panel.tapping > .ed-bar,
+.step-panel.tapping > .panel-actions { display: none; }
 
 .tap-mode { display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 1rem; }
 .tap-hit {
@@ -674,8 +701,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .word-tap-count { color: var(--text-dim); font-size: 0.85rem; margin-right: auto; }
 
-.editor-side { display: flex; flex-direction: column; min-height: 0; }
-/* Предпросмотр вписывается в остаток по обеим сторонам — как окно
+/* Просмотр вписывается в остаток по обеим сторонам — как окно
    предпросмотра в караоке (см. .stage-wrap) */
 .edit-stage-wrap {
   flex: 1;
@@ -716,14 +742,41 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .edit-stage .stage-line.current { color: var(--st-active); }
 .edit-stage .stage-line.current span.sung { color: var(--st-effect); }
 .edit-stage .stage-line.near { color: var(--st-active); }
-.editor-controls {
+.play-btn.small { width: 36px; height: 36px; font-size: 0.9rem; }
+
+/* --- Панель управления редактора ---
+   Одна полоса на весь редактор, как в монтажной программе: транспорт
+   с часами слева, инструменты правки в середине, масштаб дорожки
+   справа. Раньше то же самое было раскидано на две полосы — одна
+   под предпросмотром, другая над дорожкой. */
+.ed-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.7rem;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  flex-shrink: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
   color: var(--text-dim);
+  font-size: 0.8rem;
 }
-.play-btn.small { width: 42px; height: 42px; font-size: 1rem; }
+.ed-group { display: flex; align-items: center; gap: 0.4rem; }
+.ed-group .nudge-btn { white-space: nowrap; }
+.ed-right { margin-left: auto; }
+.ed-label { white-space: nowrap; }
+/* Часы — как табло в монтажной: текущее время крупно, длина песни рядом */
+.ed-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-soft);
+}
+.ed-clock b { color: #34d399; font-size: 1rem; font-weight: 600; }
 
 .timeline-wrap {
   flex-shrink: 0;
@@ -732,30 +785,14 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   background: var(--bg-card);
   padding: 0.5rem 0.6rem;
 }
-.timeline-tools {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.4rem 0.6rem;
-  margin-bottom: 0.5rem;
-  color: var(--text-dim);
-  font-size: 0.8rem;
-}
-.timeline-tools .nudge-btn { white-space: nowrap; }
-.timeline-tools .tools-right { display: flex; align-items: center; gap: 0.4rem; }
-.timeline-tools .tl-group { display: flex; align-items: center; gap: 0.4rem; }
 .tl-shift-label { white-space: nowrap; }
-/* Подпись выбранной строки: живёт в её панели и тянется на всё место */
+/* Подпись выбранной строки — первая строка инспектора */
 .tl-sel {
-  flex: 1;
-  min-width: 8rem;
+  display: block;
   color: #34d399;
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
 }
 /* Включённый переключатель дорожки (по кругу, притягивание к голосу) */
 .nudge-btn.on {
@@ -1500,9 +1537,9 @@ body.is-desktop .only-web { display: none; }
   .export-row { margin-top: 0.6rem; }
   #step-3 .panel-actions { margin-top: 0; }
   #step-3 .panel-actions .btn { padding: 0.5rem 1rem; font-size: 0.9rem; }
-  /* Предпросмотр на низком экране ограничен высотой, а не шириной:
-     лишнюю ширину отдаём сетке строк — там она нужнее */
-  #step-3 .editor-grid { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+  /* Просмотр на низком экране ограничен высотой, а не шириной:
+     лишнюю ширину отдаём списку строк — там она нужнее */
+  #step-3 .editor-grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 210px; }
 }
 
 /* ============ Адаптив ============ */
@@ -1526,6 +1563,13 @@ body.is-desktop .only-web { display: none; }
      возвращается к обычной ширине во всё окно */
   .stage-wrap { container-type: normal; display: block; }
   .stage-wrap .lyrics-stage { width: 100%; }
+  /* Окна редактора на узком экране идут друг за другом своей высотой.
+     Через #step-3 — иначе правило низкого окна (там три колонки)
+     оказывается сильнее по весу. */
+  #step-3 .editor-grid { grid-template-columns: minmax(0, 1fr); }
+  .ed-lines .edit-list { max-height: 40vh; }
+  .edit-stage-wrap { container-type: normal; display: block; }
+  .edit-stage { width: 100%; }
   #step-1.active, #step-2.active { overflow: visible; }
   #step-2 #lyrics-input { min-height: 300px; }
 }
@@ -1535,19 +1579,14 @@ body.is-desktop .only-web { display: none; }
   .hero { padding: 4.5rem 1.2rem 4rem; }
   .studio { padding: 2rem 1rem 2.5rem; }
   .panel-actions { justify-content: center; }
-  /* Редактор на узком экране: предпросмотр уходит под список,
-     а подпись выбранной строки — на свою строку под кнопками */
+  /* Редактор на узком экране: три окна встают друг под друга */
   .editor-grid { grid-template-columns: 1fr; }
-  .timeline-tools { font-size: 0.75rem; }
+  .ed-bar { font-size: 0.75rem; }
+  .ed-right { margin-left: 0; }
   /* Сетка строк на узком экране: времена в одну строку, текст под ними
      во всю ширину. Длительность прячем — на дорожке она и так видна. */
   .edit-row { flex-wrap: wrap; row-gap: 0.1rem; padding: 0.45rem 0.7rem; }
   .edit-row .edit-text { flex-basis: 100%; order: 9; }
   .edit-row .dur-ts { display: none; }
-  /* Панель выбранной строки на узком экране: подпись и «простучать
-     заново» встают в две строки, а переключатель вокала — под кнопки */
-  .sel-head { flex-direction: column; align-items: stretch; gap: 0.4rem; }
-  #btn-sel-tap { margin-left: 0; }
-  .sel-vocal { margin-left: 0; flex-basis: 100%; }
   .tap-actions .btn { flex: 1; padding: 0.75rem 1rem; }
 }
