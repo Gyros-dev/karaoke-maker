@@ -56,6 +56,12 @@ function registerAppProtocol() {
 
 const MODEL_URL = 'https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx';
 const MODEL_BYTES = 180534758;
+/* Ниже этого размера файл — не модель, а огрызок: обрезанный
+   htdemucs.onnx раньше считался готовым навсегда, разделение падало
+   на разборе protobuf, и выйти из этого из интерфейса было нельзя.
+   Точного совпадения не требуем: на HuggingFace могут переложить
+   чуть иную сборку, а вот недобор в проценты — это уже обрезок. */
+const MODEL_MIN_BYTES = Math.floor(MODEL_BYTES * 0.98);
 
 /* ---------- Модели распознавания текста (Whisper) ----------
    Лежат в папке настроек, качаются при первом использовании — так же,
@@ -74,6 +80,9 @@ const ASR_COMMON = [
    Порядок важен: первой идёт лучшая модель — она же и выбрана по
    умолчанию. Подписи говорят, чем платишь за скорость: обычная модель
    считает примерно вдвое быстрее, но слышит хуже. */
+/* weights — настоящие размеры весов на HuggingFace. По ним отличаем
+   целый файл от обрезанного: проверки «существует и больше мегабайта»
+   хватало, чтобы недокачанные веса числились готовой моделью. */
 const ASR_MODELS = {
   small: {
     id: 'whisper-small_timestamped',
@@ -81,6 +90,10 @@ const ASR_MODELS = {
     label: 'Крупная, 242 МБ — слышит лучше всех',
     bytes: 254 * 1024 * 1024,
     files: ASR_COMMON,
+    weights: {
+      'onnx/encoder_model_quantized.onnx': 92240498,
+      'onnx/decoder_model_merged_quantized.onnx': 156795750,
+    },
   },
   base: {
     id: 'whisper-base_timestamped',
@@ -88,6 +101,10 @@ const ASR_MODELS = {
     label: 'Обычная, 78 МБ — вдвое быстрее, но хуже',
     bytes: 82 * 1024 * 1024,
     files: ASR_COMMON,
+    weights: {
+      'onnx/encoder_model_quantized.onnx': 23159167,
+      'onnx/decoder_model_merged_quantized.onnx': 53712708,
+    },
   },
 };
 
@@ -106,16 +123,59 @@ function asrDir(key) {
   return m ? path.join(asrRoot(), m.id) : null;
 }
 
-/* Модель готова, если на месте оба веса: словарь без них бесполезен,
-   а недокачанный файл лучше считать отсутствующим */
+function размерФайла(p) {
+  try { return fs.statSync(p).size; } catch (e) { return null; }
+}
+
+/* Модель разделения готова, только если файл на месте и он нужной
+   длины. Одного existsSync мало: обрезанный файл ничем не хуже
+   целого выглядел, а на деле разделение падало на разборе protobuf. */
+function modelReady() {
+  const size = размерФайла(modelPath());
+  return size !== null && size >= MODEL_MIN_BYTES;
+}
+
+/* ---------- Что уже скачано у модели распознавания ----------
+   Размеры скачанных файлов запоминаем: сервер сообщает их в ответе,
+   а потом по ним видно, цел ли файл. Без этого недокачанный файл
+   пропускался как готовый и модель оставалась битой навсегда. */
+function asrSizesPath(dir) { return path.join(dir, '.sizes.json'); }
+
+function readAsrSizes(dir) {
+  try { return JSON.parse(fs.readFileSync(asrSizesPath(dir), 'utf8')); }
+  catch (e) { return {}; }
+}
+
+function writeAsrSizes(dir, sizes) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(asrSizesPath(dir), JSON.stringify(sizes));
+  } catch (e) { /* без записи проверка просто станет мягче */ }
+}
+
+/* Файл на месте и цел. Если размер записан при скачивании — сверяем
+   с ним точно. Для старых установок записи нет: веса тогда сверяем
+   с ожидаемым размером, а мелочь принимаем непустой. */
+function asrFileOk(dir, m, sizes, rel) {
+  const size = размерФайла(path.join(dir, rel));
+  if (size === null) return false;
+  if (sizes[rel] != null) return size === sizes[rel];
+  const ждём = m.weights[rel];
+  if (ждём) return size >= Math.floor(ждём * 0.98);
+  return size > 0;
+}
+
+/* Модель готова, если на месте оба веса нужной длины: словарь без них
+   бесполезен, а недокачанный файл лучше считать отсутствующим.
+   Заодно проверяем всё, чей размер мы знаем: битый словарь тоже
+   должен перекачиваться, а не запирать человека навсегда. */
 function asrReady(key) {
   const dir = asrDir(key);
-  if (!dir) return false;
-  return ['onnx/encoder_model_quantized.onnx', 'onnx/decoder_model_merged_quantized.onnx']
-    .every((f) => {
-      const p = path.join(dir, f);
-      return fs.existsSync(p) && fs.statSync(p).size > 1024 * 1024;
-    });
+  const m = ASR_MODELS[key];
+  if (!dir || !m) return false;
+  const sizes = readAsrSizes(dir);
+  return Object.keys(m.weights).every((rel) => asrFileOk(dir, m, sizes, rel))
+    && m.files.every((rel) => sizes[rel] == null || asrFileOk(dir, m, sizes, rel));
 }
 
 function createWindow() {
@@ -761,17 +821,26 @@ function fetchTo(url, dest, onChunk) {
           // Необязательный файл: у части моделей его просто нет
           res.resume();
           file.destroy();
-          return fs.unlink(tmp, () => resolve({ skipped: true }));
+          return fs.unlink(tmp, () => resolve({ skipped: true, bytes: 0 }));
         }
         if (res.statusCode !== 200) {
           res.resume();
           return cleanup(new Error('Сервер ответил ' + res.statusCode));
         }
-        res.on('data', (chunk) => onChunk(chunk.length));
+        // Сколько байт обещал сервер: оборванная раздача тоже доходит
+        // до 'finish', и без сверки длины огрызок сходил за целый файл
+        const ждём = parseInt(res.headers['content-length'], 10) || 0;
+        let получено = 0;
+        res.on('data', (chunk) => { получено += chunk.length; onChunk(chunk.length); });
         res.pipe(file);
         file.on('finish', () => file.close(() => {
-          try { fs.renameSync(tmp, dest); resolve({ skipped: false }); }
-          catch (e) { reject(e); }
+          try {
+            if (ждём && получено !== ждём) {
+              throw new Error(`файл пришёл не целиком: ${получено} из ${ждём} байт`);
+            }
+            fs.renameSync(tmp, dest);
+            resolve({ skipped: false, bytes: получено });
+          } catch (e) { cleanup(e); }
         }));
       });
       req.on('error', cleanup);
@@ -797,19 +866,27 @@ ipcMain.handle('asr-download', async (_evt, key) => {
   const dir = asrDir(key);
   asrAbort = { cancelled: false, reqs: [] };
   const total = m.bytes;
+  const sizes = readAsrSizes(dir);
   let done = 0;
   try {
     for (const rel of m.files) {
       if (asrAbort.cancelled) throw new Error('отменено');
       const dest = path.join(dir, rel);
-      if (fs.existsSync(dest)) { continue; }
+      /* Пропускаем только целые файлы. Раньше хватало existsSync —
+         и недокачанный файл оставался битым навсегда. */
+      if (asrFileOk(dir, m, sizes, rel)) { continue; }
       const url = `https://huggingface.co/${m.repo}/resolve/main/${rel}`;
-      await fetchTo(url, dest, (n) => {
+      const res = await fetchTo(url, dest, (n) => {
         done += n;
         send('asr-progress', { done, total: Math.max(total, done) });
       });
+      // Запоминаем длину скачанного: по ней потом видно, цел ли файл
+      if (!res.skipped) { sizes[rel] = res.bytes; writeAsrSizes(dir, sizes); }
     }
     asrAbort = null;
+    /* Если после честной загрузки модель всё ещё не считается готовой,
+       честнее сказать об этом, чем звать качать по кругу. */
+    if (!asrReady(key)) return { ok: false, error: 'модель скачалась не целиком' };
     return { ok: true };
   } catch (err) {
     const cancelled = asrAbort && asrAbort.cancelled;
@@ -827,12 +904,26 @@ ipcMain.handle('asr-cancel', () => {
 
 ipcMain.handle('model-status', () => {
   const p = modelPath();
-  return { ready: fs.existsSync(p), path: p, bytes: MODEL_BYTES };
+  const есть = размерФайла(p);
+  return {
+    ready: modelReady(),
+    path: p,
+    bytes: MODEL_BYTES,
+    // Сколько байт лежит на диске и битый ли файл — для понятных сообщений
+    have: есть === null ? 0 : есть,
+    broken: есть !== null && !modelReady(),
+  };
 });
 
 ipcMain.handle('model-download', async () => {
   const p = modelPath();
-  if (fs.existsSync(p)) return { ok: true, path: p };
+  if (modelReady()) return { ok: true, path: p };
+  /* Битый или недокачанный файл убираем сами: кнопки «скачать заново»
+     в интерфейсе нет, и без этого человек оставался запертым навсегда
+     — разделение падало, а перекачать модель было нечем. */
+  if (fs.existsSync(p)) {
+    try { fs.unlinkSync(p); } catch (e) { /* перекачаем поверх */ }
+  }
   /* Два одновременных скачивания в один файл — тот самый случай, после
      которого приложение вставало намертво. Ждём уже идущее. */
   if (!modelDownload) {
