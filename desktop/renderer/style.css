@@ -282,14 +282,29 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 
 /* ============ Студия ============ */
 .studio {
+  /* Студия — рабочее место, а не кусок витрины: она занимает окно
+     целиком, поэтому любой шаг виден весь и страницу крутить не надо. */
+  display: flex;
+  flex-direction: column;
+  max-width: 1360px;
+  width: calc(100% - 3rem);
+  /* Высота окна за вычетом шапки (она липкая и накрывает верх страницы)
+     и собственных полей: студия целиком видна, как только до неё
+     доскроллили. --header-h ставит app.js по настоящей высоте шапки. */
+  height: calc(100vh - var(--header-h, 69px) - 3rem);
+  min-height: 480px;
+  scroll-margin-top: calc(var(--header-h, 69px) + 0.5rem);
   background: var(--bg-soft);
   border: 1px solid var(--border);
   border-radius: 24px;
-  padding: 3rem 2rem 3.5rem;
-  margin-top: 2rem;
+  padding: 1.25rem 1.5rem 1rem;
+  margin-top: 1rem;
   margin-bottom: 2rem;
 }
-.steps-nav { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.2rem; }
+/* Заголовок в рабочем месте — подпись, а не витрина: каждый лишний
+   десяток пикселей здесь отнимается у сцены */
+.studio h2 { font-size: 1.4rem; margin-bottom: 0.7rem; }
+.steps-nav { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
 .step-tab {
   display: flex; align-items: center; gap: 0.5rem;
   background: transparent;
@@ -314,13 +329,23 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .step-tab.active span { background: var(--grad); }
 .step-tab:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.step-panel { display: none; max-width: 720px; margin: 0 auto; }
-.step-panel.active { display: block; }
-/* Редактор — самый плотный экран студии: сетка строк, предпросмотр,
-   панель выбранной строки и дорожка. В 720 пикселей он не помещается,
-   поэтому ему одному даётся вся ширина студии. */
-#step-3 { max-width: 1040px; }
-.panel-hint { color: var(--text-dim); margin-bottom: 1.2rem; text-align: center; }
+.step-panel { display: none; max-width: 720px; width: 100%; margin: 0 auto; }
+/* Рабочий шаг делит между своими частями ровно ту высоту, которая
+   осталась от окна, и прокручивается внутри себя, а не страницей.
+   Раньше шаг рос как хотел: панель «Оформление текста» уводила сцену
+   за нижний край экрана, и правку не было видно. */
+.step-panel.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* Редактор и караоке — самые плотные экраны студии: сетка строк,
+   предпросмотр, дорожка, настройки. Им отдаётся вся ширина студии. */
+#step-3, #step-4 { max-width: none; }
+/* Первые два шага короткие: ставим их посередине рабочего места,
+   а поле текста растягиваем на всю высоту. Если содержимое всё-таки
+   не влезло (низкое окно, настольные блоки нейросети) — прокручивается
+   сам шаг, а не страница: студия остаётся на месте. */
+#step-1.active { justify-content: safe center; }
+#step-1.active, #step-2.active { overflow-y: auto; }
+#step-2 #lyrics-input { flex: 1; min-height: 140px; }
+.panel-hint { color: var(--text-dim); margin-bottom: 1rem; text-align: center; }
 .panel-actions { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap; }
 
 /* --- Шаг 1: dropzone --- */
@@ -425,7 +450,22 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .nudge-btn:hover:not(:disabled) { border-color: var(--violet); color: var(--text); }
 .nudge-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* --- Шаг 3: редактор --- */
+/* --- Шаг 3: редактор ---
+   Редактор — самый плотный экран студии. Он делит высоту окна между
+   своими частями: сетка строк с предпросмотром забирают весь остаток,
+   дорожка и панель выбранной строки стоят своим размером. Прокручивается
+   только список строк, а не страница. */
+#step-3.active { gap: 0.6rem; }
+#step-3 .panel-hint { font-size: 0.82rem; margin-bottom: 0; flex-shrink: 0; }
+/* Справка редактора свёрнута: развернул — прочитал — свернул обратно */
+.editor-hint > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  list-style-position: inside;
+}
+.editor-hint p { margin-top: 0.5rem; text-align: left; }
+.editor-hint .timeline-keys { margin-top: 0.4rem; }
 .editor-grid {
   display: grid;
   /* Кегль в предпросмотре пропорционален его ширине (см. fitStageLines):
@@ -433,11 +473,12 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
      его было нечем. Отдаём предпросмотру заметную долю ширины. */
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: 1rem;
-  margin-bottom: 1rem;
+  flex: 1;
+  min-height: 150px;
 }
 .edit-list {
   list-style: none;
-  max-height: 330px;
+  height: 100%;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -493,9 +534,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .sel-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  padding: 0.7rem 0.9rem;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: 0.5rem 0.7rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
@@ -633,10 +674,21 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .word-tap-count { color: var(--text-dim); font-size: 0.85rem; margin-right: auto; }
 
-.editor-side { display: flex; flex-direction: column; }
-.edit-stage {
+.editor-side { display: flex; flex-direction: column; min-height: 0; }
+/* Предпросмотр вписывается в остаток по обеим сторонам — как окно
+   предпросмотра в караоке (см. .stage-wrap) */
+.edit-stage-wrap {
   flex: 1;
-  min-height: 170px;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+.edit-stage {
+  width: min(100%, calc(100cqh * 16 / 9));
+  max-width: 100%;
   /* Пропорции кадра: предпросмотр — уменьшенная копия того, что
      запишется в видео, поэтому и форма у него та же. Заодно не остаётся
      пустой высоты, из-за которой текст казался потерянным. */
@@ -652,10 +704,8 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem 1.2rem;
-  margin-bottom: 0.8rem;
   overflow: hidden;
 }
-.edit-stage { --st-size: 1rem; }
 /* Предпросмотр показывает ровно то, что получится: перенос строк
    решается общим правилом (класс wrap от единого кегля), а не особым
    для превью — иначе здесь текст переносился бы, а на сцене нет. */
@@ -676,10 +726,11 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .play-btn.small { width: 42px; height: 42px; font-size: 1rem; }
 
 .timeline-wrap {
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
-  padding: 0.6rem;
+  padding: 0.5rem 0.6rem;
 }
 .timeline-tools {
   display: flex;
@@ -715,6 +766,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 #timeline {
   display: block;
   width: 100%;
+  /* До первого замера (resizeTimeline) — высота дорожек: иначе канвас
+     тянется по своим 300×160 и раздувает шаг вчетверо */
+  height: 126px;
   border-radius: 8px;
   cursor: pointer;
   touch-action: none;
@@ -791,11 +845,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .export-hint { color: var(--text-dim); font-size: 0.85rem; }
 
 /* --- Шаг 4: караоке --- */
-.player { text-align: center; }
 .lyrics-stage {
   /* Настраиваемое оформление текста (панель «Оформление») */
   --st-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  --st-size: 1.15rem;
   --st-weight: 600;
   --st-inactive: #9a9ab0;
   --st-active: #f2f2f7;
@@ -803,24 +855,28 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   --st-outline-c: #000000;
   --st-outline: 0px;
   --st-ls: 0px;
-  --st-gap: 0.35rem;
+  --st-gap: 0.35rem;   /* до первого замера; дальше px от fitStageLines */
   --st-dim: 0.45;
   --st-near: 0.75;
   --st-blur: 0px;
   --st-scrim: none;
   /* Подложка живёт в ::before, поэтому сцене нужна своя система координат */
   position: relative;
-  min-height: 340px;
+  /* Пропорции кадра: сцена — то же самое, что запишется в видео, поэтому
+     и форма у неё та же. Раньше сцена была шире и ниже кадра, и места
+     строк («первая на 40%, вторая на 60%») ложились на экране не так,
+     как в готовом ролике. */
+  aspect-ratio: 16 / 9;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: var(--st-gap);
-  /* Боковые отступы — «безопасная зона», чтобы текст не прилипал к краям */
+  /* Поля по краям задаёт настройка «Поля по краям» (applyStyle) */
   padding: 2rem clamp(1.5rem, 8%, 4rem);
   background: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.12), transparent 70%), var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin-bottom: 1.2rem;
   overflow: hidden;
 }
 /* Режим закреплённых мест: строки стоят там, где их поставили,
@@ -862,10 +918,10 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .lyrics-stage.has-bg .stage-line:not(.current) { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
 .stage-line {
   font-family: var(--st-font);
-  /* --st-fit — единый кегль на всю песню: множитель, подобранный
-     по самой длинной строке (см. stageFit в app.js). Он один для всех
-     строк, поэтому размер не прыгает от строки к строке. */
-  font-size: calc(var(--st-size) * var(--st-fit, 1));
+  /* --st-fs — единый кегль на всю песню в пикселях: его считает
+     fitStageLines (app.js) от ширины самой сцены и выбранного размера.
+     Он один для всех строк, поэтому размер не прыгает от строки к строке. */
+  font-size: var(--st-fs, 1.15rem);
   font-weight: var(--st-weight);
   letter-spacing: var(--st-ls);
   -webkit-text-stroke: var(--st-outline) var(--st-outline-c);
@@ -932,6 +988,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   transform: translateY(-50%);
   display: flex;
   justify-content: center;
+  /* Точки — того же кегля, что строки: и размер, и просвет между ними
+     считаются от --st-fs, поэтому отсчёт растёт вместе с текстом */
+  font-size: var(--st-fs, 1.15rem);
   gap: 0.7em;
   pointer-events: none;
   opacity: 0;
@@ -943,7 +1002,6 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .stage-count i {
   width: 0.62em;
   height: 0.62em;
-  font-size: var(--st-size);
   border-radius: 50%;
   background: var(--st-effect);
   box-shadow: 0 0 0.5em rgba(0, 0, 0, 0.55);
@@ -953,7 +1011,10 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .stage-count i.off { opacity: 0.18; transform: scale(0.55); background: var(--st-inactive); }
 
-.player-bar { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+/* Плеер и громкость вокала — одной строкой: лишний ряд отнимал бы
+   высоту у сцены, а сцена здесь главное */
+.transport { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; }
+.player-bar { display: flex; align-items: center; gap: 0.8rem; flex: 1; min-width: 260px; }
 .play-btn {
   width: 52px; height: 52px;
   flex-shrink: 0;
@@ -991,6 +1052,7 @@ input[type="range"]::-moz-range-thumb {
   background: var(--pink);
 }
 
+.karaoke-main .mixer { width: 250px; flex: 0 0 auto; margin: 0; }
 .mixer {
   display: flex;
   align-items: center;
@@ -1003,7 +1065,18 @@ input[type="range"]::-moz-range-thumb {
 .mixer-icon { font-size: 1.2rem; }
 .mixer-value { font-variant-numeric: tabular-nums; min-width: 3rem; text-align: right; }
 
-.export-row { display: flex; justify-content: center; gap: 0.8rem; flex-wrap: wrap; align-items: center; }
+.export-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 0.8rem;
+}
+/* Кнопки вывода — компактнее обычных: их семь, и в один ряд они
+   влезают только так */
+.export-row .btn { padding: 0.5rem 0.9rem; font-size: 0.88rem; }
 
 /* Выбор качества стоит в ряду с кнопками экспорта и выглядит так же.
    Оформление берётся у самой кнопки — классы btn btn-ghost на метке,
@@ -1043,23 +1116,7 @@ input[type="range"]::-moz-range-thumb {
 /* Выпадающий список рисует система — задаём ему тёмные цвета */
 .export-quality option { background: var(--bg-card); color: var(--text); }
 
-/* --- Эквалайзер --- */
-.eq-panel {
-  max-width: 480px;
-  margin: 0 auto 1.5rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.8rem 1.2rem;
-  text-align: left;
-}
-.eq-panel summary {
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--text-dim);
-}
-.eq-panel[open] summary { margin-bottom: 0.8rem; color: var(--text); }
+/* --- Эквалайзер и настройки в левой колонке --- */
 .eq-row {
   display: flex;
   align-items: center;
@@ -1084,19 +1141,160 @@ input[type="range"]::-moz-range-thumb {
 }
 .eq-hint { color: var(--text-dim); font-size: 0.78rem; }
 
-/* --- Панель «Оформление» --- */
-.style-row {
+/* --- Панель «Оформление»: слева настройки, справа предпросмотр ---
+   Раскладка как в монтажной программе. Раньше настройки лежали длинным
+   списком под сценой: сцена уезжала за край экрана, и человек, двигая
+   ползунок, не видел, что меняется. */
+.karaoke-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 1rem;
+  flex: 1;
+  min-height: 0;
+  text-align: left;
+}
+.karaoke-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.side-head {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  margin-bottom: 0.7rem;
-  font-size: 0.9rem;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
 }
-.style-row > label:first-child, .style-label { min-width: 120px; }
-.style-row select {
+.side-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 0.6rem 0;
+}
+.side-tabs button {
   flex: 1;
-  min-width: 140px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.2rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.side-tabs button:hover { color: var(--text); }
+.side-tabs button.active {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: var(--violet);
+  color: var(--text);
+}
+/* Настройки прокручиваются внутри своей колонки, а не всей страницей */
+.side-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.8rem;
+}
+.side-group { display: none; }
+.side-group.active { display: block; }
+.side-note {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  margin-top: 0.8rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Правое окно: предпросмотр и всё, что нужно, чтобы его слушать */
+.karaoke-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.7rem;
+}
+/* Сцена держит пропорции кадра и вписывается в остаток по обеим
+   сторонам: по ширине окна и по его высоте (100cqh — высота этого
+   самого места). Поэтому шаг целиком влезает в экран без прокрутки. */
+.stage-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stage-wrap .lyrics-stage {
+  width: min(100%, calc(100cqh * 16 / 9));
+  max-width: 100%;
+  min-height: 0;
+  margin: 0;
+}
+.stage-full-btn {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 3;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 10, 15, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-dim);
+  font-size: 1rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+.karaoke-main:hover .stage-full-btn,
+.stage-full-btn:focus-visible { opacity: 1; }
+.stage-full-btn:hover { color: var(--text); border-color: var(--violet); }
+
+/* Предпросмотр во весь экран: своим режимом, а не системным
+   полноэкранным — так он одинаково работает и на сайте, и в приложении.
+   Выход по Esc или той же кнопкой. */
+body.stage-full .karaoke-main {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #05050a;
+  padding: 1rem;
+  gap: 1rem;
+}
+body.stage-full .stage-full-btn { opacity: 1; }
+body.stage-full .site-header { z-index: 1; }
+
+/* --- Панель «Оформление» --- */
+.style-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+.style-row > label:first-child, .style-label { min-width: 0; color: var(--text); }
+.style-row input[type="range"] { grid-column: 1 / -1; width: 100%; }
+.style-row .eq-hint,
+.style-row .row-wide { grid-column: 1 / -1; }
+.style-row .row-colors {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
+}
+.style-row .row-colors input[type="range"] { grid-column: auto; flex: 1; min-width: 90px; }
+.color-pick { display: inline-flex; align-items: center; gap: 0.3rem; }
+.style-row select {
+  width: 100%;
   background: var(--bg-soft);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1114,6 +1312,7 @@ input[type="range"]::-moz-range-thumb {
   background: var(--bg-soft);
   cursor: pointer;
 }
+.style-row input[type="checkbox"] { accent-color: #10b981; cursor: pointer; }
 .style-row .mini-label { color: var(--text-dim); font-size: 0.8rem; }
 .seg {
   display: inline-flex;
@@ -1121,6 +1320,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 999px;
   overflow: hidden;
 }
+.seg.row-wide { display: flex; }
 .seg button {
   background: transparent;
   border: none;
@@ -1130,6 +1330,7 @@ input[type="range"]::-moz-range-thumb {
   padding: 0.35rem 0.9rem;
   cursor: pointer;
 }
+.seg.row-wide button { flex: 1; padding: 0.35rem 0.4rem; }
 .seg button.active {
   background: rgba(16, 185, 129, 0.18);
   color: var(--text);
@@ -1286,14 +1487,50 @@ body.is-desktop .only-web { display: none; }
   .stage-count i { transform: none !important; }
 }
 
+/* Низкое окно (ноутбук 1280×720 или 1440×900): рабочему месту нужен
+   каждый пиксель высоты, поэтому подпись «Студия» уходит — шаг и так
+   назван в переключателе — а поля студии становятся уже. */
+@media (max-height: 900px) {
+  .studio { padding: 0.8rem 1.5rem; }
+  .studio h2 { display: none; }
+  .steps-nav { margin-bottom: 0.7rem; }
+  .export-row { margin-top: 0.6rem; }
+  #step-3 .panel-actions { margin-top: 0; }
+  #step-3 .panel-actions .btn { padding: 0.5rem 1rem; font-size: 0.9rem; }
+  /* Предпросмотр на низком экране ограничен высотой, а не шириной:
+     лишнюю ширину отдаём сетке строк — там она нужнее */
+  #step-3 .editor-grid { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+}
+
 /* ============ Адаптив ============ */
+/* На узком экране двух колонок не получится: настройки встают под
+   предпросмотр, а студия перестаёт быть высотой в окно — прокрутка
+   страницы на телефоне привычна и ничему не мешает. */
+@media (max-width: 900px) {
+  .studio {
+    display: block;
+    height: auto;
+    min-height: 0;
+    width: calc(100% - 1.5rem);
+  }
+  .step-panel.active { display: block; }
+  .karaoke-layout { grid-template-columns: minmax(0, 1fr); }
+  /* Предпросмотр сверху: на телефоне важнее видеть, что получается */
+  .karaoke-main { order: -1; }
+  .karaoke-side { margin-bottom: 1rem; }
+  .side-body { max-height: 50vh; }
+  /* Без высоты у родителя единицы cqh считать не от чего — сцена
+     возвращается к обычной ширине во всё окно */
+  .stage-wrap { container-type: normal; display: block; }
+  .stage-wrap .lyrics-stage { width: 100%; }
+  #step-1.active, #step-2.active { overflow: visible; }
+  #step-2 #lyrics-input { min-height: 300px; }
+}
+
 @media (max-width: 640px) {
   .site-nav { display: none; }
   .hero { padding: 4.5rem 1.2rem 4rem; }
   .studio { padding: 2rem 1rem 2.5rem; }
-  /* На узком экране уменьшаем базовый размер через переменную,
-     а не жёстким font-size — иначе ползунок размера перестаёт работать */
-  .lyrics-stage { --st-narrow: 0.83; }
   .panel-actions { justify-content: center; }
   /* Редактор на узком экране: предпросмотр уходит под список,
      а подпись выбранной строки — на свою строку под кнопками */

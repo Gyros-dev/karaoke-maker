@@ -26,7 +26,11 @@ const state = {
 function defaultStyle() {
   return {
     font: 'system',
-    size: 100,          // проценты от базового размера
+    /* Размер — проценты от базового кегля (ширина сцены / 32).
+       По умолчанию максимум: подгонка сама ужмёт его ровно настолько,
+       чтобы самая длинная строка встала во всю ширину сцены. Раньше
+       умолчание 100% оставляло текст мелким и жалось к середине. */
+    size: 220,
     weight: 600,
     effect: 'fill',     // fill | highlight | none
     inactive: '#9a9ab0',
@@ -39,7 +43,7 @@ function defaultStyle() {
     letter: 0,          // px
     line: 13,           // ×0.1 — межстрочный интервал
     lines: 7,           // сколько строк видно
-    pad: 8,             // поля по краям сцены, % — 0 растягивает текст во всю ширину
+    pad: 0,             // поля по краям сцены, % — 0 растягивает текст во всю ширину
     swapLines: false,   // строки поднимаются вверх по мере пения
     posCurrent: 40,     // где стоит первая строка, % от верха (когда не меняются местами)
     posNext: 60,        // где стоит вторая строка
@@ -66,10 +70,17 @@ state.style = defaultStyle();
    поколения. Забываем только значения, в точности равные прежнему
    умолчанию: их человек не выбирал. Всё, что он менял осознанно (цвета,
    шрифт, размеры, места строк), не равно умолчанию и переезжает как есть. */
-const STYLE_GEN = 1;
+const STYLE_GEN = 3;
 const STYLE_MIGRATIONS = [
   // Поколение 1: «Строки меняются местами» перестала быть умолчанием
   { поколение: 1, прежниеУмолчания: { swapLines: true } },
+  /* Поколение 2: размер по умолчанию стал максимальным. Прежние 100%
+     были умолчанием, а не выбором человека, — и после починки ползунка
+     оставили бы текст вдвое мельче, чем задумано. */
+  { поколение: 2, прежниеУмолчания: { size: 100 } },
+  /* Поколение 3: поля по краям по умолчанию нулевые — текст занимает
+     всю ширину сцены. Прежние 8% никто не выбирал, это было умолчание. */
+  { поколение: 3, прежниеУмолчания: { pad: 8 } },
 ];
 
 /* Оформление из сохранённого проекта: сначала перенос, потом умолчания */
@@ -854,12 +865,20 @@ function voiceOnsetNear(t, lo, hi) {
 
 /* ---------- Сохранение проекта (текст, разметка, фон) ---------- */
 function saveProject() {
-  // Пока строки ещё не разобраны (например, сразу после загрузки файла),
-  // не затираем уже сохранённую разметку этой же песни
+  /* Пока строки ещё не разобраны (например, сразу после загрузки файла),
+     не затираем уже сохранённую разметку этой же песни.
+
+     «Та же песня» — это совпадение имени ИЛИ ещё не открытый файл.
+     Беда, которую лечит вторая половина условия: после перезагрузки
+     страницы state.fileName пуст, песню ещё не выбрали, — и раньше вся
+     сохранённая работа считалась чужой. Первая же правка текста стирала
+     разметку, фон, огибающую голоса и эквалайзер: времена [5,13,21,29]
+     превращались в [], фон в null, эквалайзер в нули. */
   const prev = loadProject();
-  const keepPrev = prev && prev.name === state.fileName;
+  const keepPrev = !!prev && (!state.fileName || prev.name === state.fileName);
   const data = {
-    name: state.fileName,
+    // Имя песни тоже не теряем: без него проект перестанет узнавать сам себя
+    name: state.fileName || (keepPrev ? prev.name : null),
     lyrics: $('lyrics-input').value || (keepPrev && prev.lyrics) || '',
     times: state.lines.length ? state.lines.map((l) => l.time)
       : (keepPrev && prev.times) || [],
@@ -923,6 +942,9 @@ function goToStep(n) {
   if (n !== 3 && n !== 4) { audio.pause(); updatePlayerUI(); }
   if (n === 3) openEditor();
   if (n === 4) renderStage();
+  // Рабочий шаг занимает окно целиком — подводим его под шапку,
+  // иначе половина работы окажется за краем экрана
+  scrollStudioIntoView();
   // Громкость вокала считаем заново: в редакторе звучит оригинал,
   // в караоке — то, что выставлено ползунком. Иначе флаг залипал.
   audio.restoreVocal();
@@ -931,6 +953,28 @@ function goToStep(n) {
 document.querySelectorAll('.step-tab').forEach((tab) => {
   tab.addEventListener('click', () => goToStep(+tab.dataset.step));
 });
+
+/* Высота липкой шапки — в переменную: от неё считается высота студии,
+   чтобы рабочий шаг помещался в окно целиком (см. .studio в style.css) */
+function measureHeader() {
+  const шапка = document.querySelector('.site-header');
+  const h = шапка ? Math.round(шапка.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty('--header-h', `${h}px`);
+}
+measureHeader();
+window.addEventListener('resize', measureHeader);
+
+/* Студия высотой в окно: если страница стоит не на ней, работы не видно */
+function scrollStudioIntoView() {
+  const studio = $('studio');
+  if (!studio) return;
+  const шапка = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 0;
+  const r = studio.getBoundingClientRect();
+  if (r.top < шапка - 1 || r.bottom > window.innerHeight + 1) {
+    window.scrollTo({ top: window.scrollY + r.top - шапка - 8, behavior: 'smooth' });
+  }
+}
 
 /* ============================================================
    Шаг 1 — загрузка файла
@@ -953,6 +997,38 @@ fileInput.addEventListener('change', () => {
 });
 
 async function handleFile(file) {
+  /* Другая песня поверх готовой разметки.
+     Беда, которую это лечит: state.lines оставались от прежней песни.
+     Строки на 25-й и 40-й секунде переезжали в трек длиной 20 секунд,
+     а saveProject записывал их уже под новым именем — разметка прежней
+     песни пропадала навсегда, и никто ни о чём не спрашивал.
+     Теперь спрашиваем и начинаем новую песню с чистой разметкой. */
+  const prev = loadProject();
+  const прежняя = state.fileName || (prev && prev.name) || null;
+  const другая = !!прежняя && прежняя !== file.name;
+  if (другая) {
+    const своих = state.lines.filter((l) => l.time != null).length;
+    const вПроекте = prev && Array.isArray(prev.times)
+      ? prev.times.filter((t) => t != null).length : 0;
+    const размечено = своих || (prev && prev.name === прежняя ? вПроекте : 0);
+    if (размечено) {
+      const ок = confirm(
+        `Сейчас в студии песня «${прежняя}», размечено строк: ${размечено}.\n`
+        + 'Студия помнит одну песню за раз — если открыть другую, вернуть '
+        + 'разметку прежней будет нельзя.\n\n'
+        + `Открыть «${file.name}»?`);
+      if (!ок) {
+        fileInput.value = '';
+        return;
+      }
+    }
+    // Времена прежней песни новой не годятся: строки стоят не на своих местах
+    state.lines = [];
+    editor.sel = -1;
+    editor.peaks = null;
+    clearHistory();
+  }
+
   dropzone.classList.add('hidden');
   $('track-info').classList.add('hidden');
   $('processing').classList.remove('hidden');
@@ -1139,6 +1215,101 @@ $('btn-to-lyrics').addEventListener('click', () => goToStep(2));
    ============================================================ */
 $('btn-back-1').addEventListener('click', () => goToStep(1));
 
+/* ---------- Правка текста поверх готовой разметки ----------
+   Две беды, которые это лечит.
+
+   1. Добавил или удалил строку — вся разметка исчезала молча.
+      Времена переносились, только если число строк совпало до единицы;
+      иначе все они разом становились null, метки слов стирались, стек
+      отмены очищался, а saveProject тут же записывал потерю.
+   2. Переставил куплеты — времена молча оставались на своих местах
+      по номеру, и «три» начинало петься на месте «раз».
+
+   Лечится одним и тем же: строки сводятся ПО ТЕКСТУ, а не по номеру.
+   Сначала наибольшей общей подпоследовательностью — она сохраняет
+   порядок, поэтому вставку и удаление переживают все соседи. Что не
+   сошлось по порядку, сводится по совпадению текста: переставленный
+   куплет уносит свои времена с собой. И только если строку сопоставить
+   не с чем, её время теряется — но об этом спрашивают, а не молчат. */
+function alignByText(oldLines, texts) {
+  const n = oldLines.length;
+  const m = texts.length;
+  const pairs = new Array(m).fill(-1);   // новая строка → номер старой
+  if (!n || !m) return pairs;
+
+  // Наибольшая общая подпоследовательность. На очень длинных текстах
+  // таблица вышла бы великовата — там обходимся сведением по тексту.
+  if (n * m <= 200000) {
+    const w = m + 1;
+    const dp = new Uint16Array((n + 1) * w);
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i * w + j] = oldLines[i].text === texts[j]
+          ? dp[(i + 1) * w + j + 1] + 1
+          : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
+      }
+    }
+    let i = 0;
+    let j = 0;
+    while (i < n && j < m) {
+      if (oldLines[i].text === texts[j]) { pairs[j] = i; i++; j++; }
+      else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) i++;
+      else j++;
+    }
+  }
+
+  // Остатки — по совпадению текста, уже без оглядки на порядок
+  const занято = new Set(pairs.filter((k) => k >= 0));
+  const свободные = new Map();
+  oldLines.forEach((l, k) => {
+    if (занято.has(k)) return;
+    if (!свободные.has(l.text)) свободные.set(l.text, []);
+    свободные.get(l.text).push(k);
+  });
+  for (let j = 0; j < m; j++) {
+    if (pairs[j] >= 0) continue;
+    const q = свободные.get(texts[j]);
+    if (q && q.length) pairs[j] = q.shift();
+  }
+  return pairs;
+}
+
+/* Строки прежнего проекта из хранилища — в том же виде, что state.lines.
+   Нужны после перезагрузки страницы: в памяти строк ещё нет, а вся
+   работа лежит в проекте. */
+function linesFromProject(saved) {
+  if (!saved) return [];
+  const texts = String(saved.lyrics || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  const по = (arr) => (Array.isArray(arr) && arr.length === texts.length ? arr : null);
+  const times = по(saved.times);
+  const ends = по(saved.ends);
+  const hands = по(saved.handEnds);
+  const guess = по(saved.guess);
+  const words = по(saved.words);
+  return texts.map((text, i) => {
+    const l = {
+      text,
+      time: times ? times[i] : null,
+      end: ends ? ends[i] : null,
+      ручнойКонец: !!(hands && hands[i]),
+      сомнительная: !!(guess && guess[i]),
+    };
+    const w = words ? words[i] : null;
+    if (w && w.length) l.words = w.map((x) => ({ ...x }));
+    return l;
+  });
+}
+
+/* Сколько строк — «1 строка», «2 строки», «5 строк» */
+function поРусски(n, одна, две, много) {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (a > 10 && a < 20) return много;
+  if (b > 1 && b < 5) return две;
+  if (b === 1) return одна;
+  return много;
+}
+
 $('btn-to-editor').addEventListener('click', () => {
   const raw = $('lyrics-input').value;
   const texts = raw.split('\n').map((s) => s.trim()).filter(Boolean);
@@ -1147,38 +1318,59 @@ $('btn-to-editor').addEventListener('click', () => {
     return;
   }
 
-  // Сохраняем старую разметку, если текст не менялся
+  // Текст не менялся — разметку и трогать незачем
   const sameText = state.lines.length === texts.length &&
     state.lines.every((l, i) => l.text === texts[i]);
   if (!sameText) {
+    /* Откуда брать прежнюю разметку: из памяти, а после перезагрузки
+       страницы — из проекта. Проект считаем своим и тогда, когда песня
+       ещё не открыта: имени файла в этот момент попросту нет. */
     const saved = loadProject();
-    const mine = saved && saved.name === state.fileName ? saved : null;
-    const savedTimes = mine ? mine.times : null;
-    const savedWords = mine && mine.words && mine.words.length === texts.length ? mine.words : null;
-    state.lines = texts.map((text, i) => {
+    const mine = saved && (!state.fileName || saved.name === state.fileName) ? saved : null;
+    const было = state.lines.length ? state.lines : linesFromProject(mine);
+    const pairs = alignByText(было, texts);
+
+    // Строки, которым не нашлось места в новом тексте: их время пропадёт
+    const спасены = new Set(pairs.filter((k) => k >= 0));
+    const пропали = было.filter((l, k) => l.time != null && !спасены.has(k));
+    if (пропали.length) {
+      const n = пропали.length;
+      const слово = поРусски(n, 'строки', 'строк', 'строк');
+      const примеры = пропали.slice(0, 3).map((l) => `• ${l.text}`).join('\n');
+      const ок = confirm(
+        `Разметка ${n} ${слово} потеряется — в новом тексте таких строк нет:\n\n`
+        + примеры + (n > 3 ? `\n…и ещё ${n - 3}` : '')
+        + '\n\nПрименить новый текст? Отменить правку можно будет в редакторе кнопкой «↶ отменить».');
+      if (!ок) return;
+    }
+
+    /* Снимок прежней разметки — чтобы правку текста можно было отменить.
+       Раньше стек отмены на этом месте очищался, и возвращать было нечего. */
+    if (state.lines.length) pushHistory();
+
+    state.lines = texts.map((text, j) => {
+      const src = pairs[j] >= 0 ? было[pairs[j]] : null;
       const line = {
         text,
-        time: savedTimes && savedTimes.length === texts.length ? savedTimes[i] : null,
-        end: mine && mine.ends && mine.ends.length === texts.length ? mine.ends[i] : null,
+        time: src ? src.time : null,
+        end: src && src.end != null ? src.end : null,
       };
       /* Конец считается поставленным руками, только если так и записано.
          В проектах постарше пометки нет — там концы пришли от распознавания,
          и пересчитать их заново будет только лучше. */
-      line.ручнойКонец = !!(mine && mine.handEnds
-        && mine.handEnds.length === texts.length && mine.handEnds[i]);
+      line.ручнойКонец = !!(src && src.ручнойКонец);
       // Метки слов годятся, пока число слов в строке то же самое:
       // поправленную орфографию переживают, переписанную строку — нет
-      const w = savedWords ? savedWords[i] : null;
       const chunks = splitWords(text);
-      if (w && w.length && w.length === chunks.length) {
-        line.words = w.map((x, k) => ({ ...x, text: chunks[k] }));
+      if (src && src.words && src.words.length === chunks.length) {
+        line.words = src.words.map((x, k) => ({ ...x, text: chunks[k] }));
       }
       // Пометка «время подобрано на глазок» переживает перезагрузку
-      if (mine && mine.guess && mine.guess.length === texts.length) {
-        line.сомнительная = !!mine.guess[i];
-      }
+      if (src && src.сомнительная) line.сомнительная = true;
       return line;
     });
+    // Снимок уже лежит в стеке — редактору незачем его выбрасывать
+    editor.histLines = state.lines.length;
   }
 
   applyRecognized(state.lines);
@@ -1743,98 +1935,124 @@ function updateCountdown(stage, cd) {
 }
 
 /* ---------- Единый кегль на всю песню ----------
-   Раньше каждая строка ужималась под ширину сама по себе: короткие
-   выходили крупными, длинные мелкими, и размер прыгал от строки к строке.
-   Теперь кегль один на всю песню: подбираем его по самой длинной строке
-   и применяем ко всем одинаково. Ползунок «Размер» остаётся множителем
-   к нему.
+   Кегль один на всю песню: строки не прыгают в размере от строки
+   к строке. Считается он одинаково для трёх поверхностей — сцены
+   караоке, предпросмотра редактора и кадра видео, — поэтому все
+   трое выглядят одинаково по пропорциям.
 
-   Считаем в кадровых единицах — в том же кадре 16:9, в котором пишется
-   видео (ширина кадра = FIT_FRAME_COLS базовых кеглей). Поэтому решение
-   получается одно и то же для караоке, предпросмотра редактора и видео,
-   а не своё у каждой поверхности. Ширину меряем холстом: коробки строк
-   в DOM врут (у закреплённой строки коробка шире полей сцены), а холст
-   даёт ровно ширину текста тем же шрифтом.
+   Отсчёт идёт от ширины ТОЙ поверхности, где рисуем: кегль при
+   «Размер 100%» равен ширине поверхности, делённой на FIT_FRAME_COLS.
+   Сцена шириной 800 px и кадр шириной 1280 px дают разные кегли
+   в пикселях, но одну и ту же долю картинки.
 
-   Если самая длинная строка настолько длинна, что единый кегль стал бы
-   нечитаемо мелким, дальше не ужимаем: с FIT_MIN такие строки переносим
-   на два ряда — как принято в нынешних караоке. */
-const FIT_FRAME_W = 1280;      // ширина опорного кадра, px
-const FIT_FRAME_H = 720;       // высота опорного кадра, px
-const FIT_BASE = 40;           // базовый кегль в этом кадре при «Размер 100%»
-const FIT_FRAME_COLS = FIT_FRAME_W / FIT_BASE;  // ширина кадра в кеглях
-const FIT_MIN = 0.6;           // мельче 60% базового не ужимаем, а переносим
+   Беда, которую это лечит: раньше кегль считался в кадровых единицах
+   (кадр 1280 px, база 40 px), а потом домножался на (ширина сцены /
+   база) / 32 — база сокращалась, и выбранный человеком размер из
+   формулы исчезал совсем. Ползунок «Размер» выше 100% не делал ничего:
+   100%, 160% и 220% давали один и тот же кегль (18,4 / 18,65 / 18,65 px).
 
-const stageFitCache = { key: null, value: null };
+   Теперь размер, выбранный человеком, работает всегда, а подгонка
+   только УЖИМАЕТ — и лишь когда самая длинная строка не влезает
+   в отведённую ширину. Если ужимать пришлось бы ниже FIT_MIN,
+   останавливаемся и переносим такие строки на два ряда, как принято
+   в нынешних караоке.
+
+   Ширину строк меряем холстом: коробки строк в DOM врут (у закреплённой
+   строки коробка шире полей сцены), а холст даёт ровно ширину текста
+   тем же шрифтом. Меряем один раз в долях кегля — «сколько кеглей
+   в ширину занимает строка». От размера и от поверхности эта величина
+   не зависит, поэтому одного замера хватает всем троим. */
+const FIT_FRAME_COLS = 32;   // ширина поверхности в кеглях при «Размер 100%»
+const FIT_MEASURE = 40;      // каким кеглем меряем строки холстом
+const FIT_MIN = 0.6;         // ниже 60% базового не ужимаем, а переносим
+const FIT_SAFE = 0.99;       // запас на неточность замера: строка не липнет к краю
+
+const stageMetricsCache = { key: null, value: null, ctx: null };
 
 function fitCanvasCtx() {
-  if (!stageFitCache.ctx) {
-    stageFitCache.ctx = document.createElement('canvas').getContext('2d');
+  if (!stageMetricsCache.ctx) {
+    stageMetricsCache.ctx = document.createElement('canvas').getContext('2d');
   }
-  return stageFitCache.ctx;
+  return stageMetricsCache.ctx;
 }
 
-/* Единый кегль и список строк, которые придётся перенести.
-   Пересчитывается при смене текста, шрифта, начертания, разрядки,
-   полей и ползунка размера — всё это входит в ключ. */
-function stageFit() {
+/* Ширины строк в долях кегля: строка с em = 12,5 при кегле 40 px займёт
+   500 px. Разрядка сюда не входит — она задаётся в пикселях и от кегля
+   не зависит, поэтому её добавляют отдельно, по числу букв. */
+function stageMetrics() {
   const s = state.style;
   const texts = syncedLines().map((l) => l.text);
-  const key = [s.font, s.weight, s.letter, s.pad, texts.length,
-    texts.join('')].join('|');
-  if (stageFitCache.key === key) return stageFitCache.value;
+  const key = [s.font, s.weight, texts.length, texts.join(' ')].join('|');
+  if (stageMetricsCache.key === key) return stageMetricsCache.value;
 
   const g = fitCanvasCtx();
   const family = (FONTS[s.font] || FONTS.system).css;
-  g.font = `${s.weight} ${FIT_BASE}px ${family}`;
-  // Разрядку холст умеет не везде; где не умеет — добавляем её сами
-  const hasLS = 'letterSpacing' in g;
-  if (hasLS) g.letterSpacing = `${s.letter}px`;
-  const width = (t) => g.measureText(t).width
-    + (hasLS ? 0 : (s.letter || 0) * t.length);
+  g.font = `${s.weight} ${FIT_MEASURE}px ${family}`;
+  if ('letterSpacing' in g) g.letterSpacing = '0px';
+  const list = texts.map((t) => ({
+    text: t,
+    em: g.measureText(t).width / FIT_MEASURE,
+    chars: t.length,
+  }));
 
-  const avail = FIT_FRAME_W * (1 - (s.pad / 100) * 2);
-  let maxW = 0;
-  const widths = texts.map((t) => {
-    const w = width(t);
-    if (w > maxW) maxW = w;
-    return w;
-  });
-  const need = maxW > 0 && avail > 0 ? avail / maxW : 1;
-  // Крупнее заданного не делаем — только ужимаем при нужде
-  const scale = Math.min(1, Math.max(FIT_MIN, need));
-  const wrap = new Set();
-  texts.forEach((t, i) => { if (widths[i] * scale > avail + 0.5) wrap.add(t); });
-
-  stageFitCache.key = key;
-  stageFitCache.value = { scale, wrap, avail, need };
-  return stageFitCache.value;
+  stageMetricsCache.key = key;
+  stageMetricsCache.value = list;
+  return list;
 }
 
-/* Применяем единый кегль к сцене. Множитель кладём в --st-fit,
-   поштучных размеров у строк больше нет. */
-function fitStageLines(container) {
-  if (!container) return;
-  const fit = stageFit();
-  const cs = getComputedStyle(container);
-  const avail = container.clientWidth
-    - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  const base = parseFloat(cs.getPropertyValue('--st-size')) * rem;
-  /* Подстраховка для узкого окна: если сцена на экране уже опорного кадра
-     (меньше FIT_FRAME_COLS своих кеглей), ужимаем ещё на ту же долю —
-     иначе длинная строка вылезет за край. На обычном экране сцена шире
-     кадра, и множитель равен единице, то есть кегль тот же, что в видео. */
-  let extra = 1;
-  if (avail > 0 && base > 0) {
-    extra = Math.min(1, (avail / base) / FIT_FRAME_COLS * 0.99);
+/* Единый кегль для одной поверхности.
+   unit  — кегль при «Размер 100%»: ширина поверхности / FIT_FRAME_COLS;
+   avail — сколько ширины отдано тексту (поверхность минус поля по краям).
+   Возвращает готовый кегль в пикселях и набор строк, которые не влезли
+   даже на самом мелком кегле и должны переноситься. */
+function stageFit(unit, avail) {
+  const s = state.style;
+  const want = Math.max(0.1, (+s.size || 100) / 100);
+  const ls = +s.letter || 0;
+  const room = Math.max(0, avail) * FIT_SAFE;
+  const lines = stageMetrics();
+
+  // Самый крупный множитель, при котором влезают все строки
+  let roomForAll = Infinity;
+  for (const l of lines) {
+    if (l.em <= 0) continue;
+    const m = (room - ls * l.chars) / (l.em * unit);
+    if (m < roomForAll) roomForAll = m;
   }
-  container.style.setProperty('--st-fit', (fit.scale * extra).toFixed(4));
+  if (!isFinite(roomForAll)) roomForAll = want;
+
+  // Выбор человека работает всегда; подгонка только ужимает и не ниже FIT_MIN
+  const m = Math.min(want, Math.max(FIT_MIN, roomForAll));
+  const size = Math.max(1, unit * m);
+  const wrap = new Set();
+  for (const l of lines) {
+    if (l.em * size + ls * l.chars > avail + 0.5) wrap.add(l.text);
+  }
+  return { size, m, wrap, roomForAll };
+}
+
+/* Единый кегль для сцены на экране. Считаем по ширине самой сцены:
+   караоке меряется по караоке, предпросмотр редактора — по себе.
+   Готовый кегль кладём в --st-fs, поштучных размеров у строк нет. */
+function fitStageLines(container) {
+  if (!container) return null;
+  const box = container.clientWidth;
+  if (box <= 0) return null;   // шаг сейчас скрыт — мерить нечего
+  const cs = getComputedStyle(container);
+  const avail = box - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const fit = stageFit(box / FIT_FRAME_COLS, avail);
+  container.style.setProperty('--st-fs', `${fit.size.toFixed(2)}px`);
+  /* Просвет между строками — доля кегля, как и в видео (там ряд равен
+     кеглю, умноженному на межстрочный). В em его задавать нельзя: em
+     у сцены считается от её собственного шрифта, а не от кегля строк. */
+  const gap = Math.max(0, ((+state.style.line || 13) / 10 - 1) * fit.size);
+  container.style.setProperty('--st-gap', `${gap.toFixed(1)}px`);
   container.querySelectorAll('.stage-line').forEach((el) => {
-    el.style.fontSize = '';  // размер задаёт --st-fit, а не отдельная строка
+    el.style.fontSize = '';  // размер задаёт --st-fs, а не отдельная строка
     const text = el.dataset.text != null ? el.dataset.text : el.textContent;
     el.classList.toggle('wrap', fit.wrap.has(text));
   });
+  return fit;
 }
 
 /* Две строки на закреплённых местах. Активна та, чья очередь петь,
@@ -2048,14 +2266,13 @@ $('vocal-mix').addEventListener('input', () => {
 function applyStyle() {
   const s = state.style;
   const stages = [$('lyrics-stage'), $('edit-stage')];
-  stages.forEach((stage, i) => {
+  stages.forEach((stage) => {
     if (!stage) return;
-    const baseRem = i === 0 ? 1.15 : 1.0; // редакторская сцена меньше
+    /* Кегль здесь не задаётся: его считает fitStageLines по ширине самой
+       сцены (см. --st-fs). Так ползунок размера работает одинаково
+       и на широком, и на узком экране, и никакой отдельной поправки
+       «на узкое окно» больше не нужно. */
     stage.style.setProperty('--st-font', (FONTS[s.font] || FONTS.system).css);
-    // На узком экране базовый размер меньше, но настройка пользователя
-    // по-прежнему действует — она умножается, а не перекрывается
-    const narrow = parseFloat(getComputedStyle(stage).getPropertyValue('--st-narrow')) || 1;
-    stage.style.setProperty('--st-size', `${baseRem * narrow * s.size / 100}rem`);
     stage.style.setProperty('--st-weight', s.weight);
     stage.style.setProperty('--st-inactive', s.inactive);
     stage.style.setProperty('--st-active', s.active);
@@ -2063,7 +2280,8 @@ function applyStyle() {
     stage.style.setProperty('--st-outline-c', s.outlineColor);
     stage.style.setProperty('--st-outline', `${s.outline}px`);
     stage.style.setProperty('--st-ls', `${s.letter}px`);
-    stage.style.setProperty('--st-gap', `${(s.line / 10 - 1).toFixed(2)}em`);
+    // Просвет между строками ставит fitStageLines: он считается от кегля,
+    // а кегль известен только после замера ширины сцены
     // Неактивные строки глушим прозрачностью и (по желанию) размытием.
     // Размер строк при этом НЕ меняется — иначе текст «прыгает».
     const dim = Math.max(0, Math.min(100, s.dim)) / 100;
@@ -2119,9 +2337,11 @@ function updateStyleUI() {
   $('st-pos-cur-val').textContent = `${s.posCurrent}%`;
   $('st-pos-next').value = s.posNext;
   $('st-pos-next-val').textContent = `${s.posNext}%`;
-  // Места строк нужны только когда они закреплены
+  // Места строк нужны только когда они закреплены, а «строк видно» —
+  // только когда они, наоборот, едут вверх. Лишнее убираем с глаз.
   $('row-pos-cur').classList.toggle('hidden', s.swapLines);
   $('row-pos-next').classList.toggle('hidden', s.swapLines);
+  $('row-lines').classList.toggle('hidden', !s.swapLines);
   $('st-lines').value = s.lines;
   $('st-lines-val').textContent = s.lines;
   $('st-dim').value = s.dim;
@@ -2183,6 +2403,61 @@ $('st-reset').addEventListener('click', () => {
   updateStyleUI();
   applyStyle();
   saveProject();
+});
+
+/* --- Закладки левой колонки ---
+   Настроек два десятка, и списком они не читаются: пока доберёшься
+   до нужной, сцена уезжает за край экрана. Поэтому они разложены
+   по закладкам, а колонка всегда одной высоты. */
+function showSideGroup(имя) {
+  $('side-tabs').querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('active', b.dataset.g === имя);
+  });
+  document.querySelectorAll('.side-group').forEach((g) => {
+    g.classList.toggle('active', g.dataset.g === имя);
+  });
+}
+
+$('side-tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-g]');
+  if (btn) showSideGroup(btn.dataset.g);
+});
+
+/* --- Предпросмотр во весь экран ---
+   Свой режим, а не системный полноэкранный: он одинаково работает
+   и на сайте, и в приложении, и из него видно плеер — можно слушать
+   и править, не выходя обратно. */
+function stageFullOn() {
+  return document.body.classList.contains('stage-full');
+}
+
+function setStageFull(on) {
+  document.body.classList.toggle('stage-full', !!on);
+  const btn = $('btn-stage-full');
+  btn.textContent = on ? '⤡' : '⤢';
+  btn.title = on ? 'Свернуть предпросмотр (Esc)' : 'Развернуть предпросмотр (F)';
+  btn.setAttribute('aria-label', btn.title);
+  // Сцена стала другого размера: кегль и точки отсчёта считаем заново
+  fitStageLines($('lyrics-stage'));
+  placeCountdown($('lyrics-stage'));
+}
+
+$('btn-stage-full').addEventListener('click', () => setStageFull(!stageFullOn()));
+
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const el = document.activeElement;
+  const вПоле = el && (el.tagName === 'INPUT' || el.tagName === 'SELECT'
+    || el.tagName === 'TEXTAREA' || el.isContentEditable);
+  if (e.key === 'Escape' && stageFullOn()) {
+    e.preventDefault();
+    setStageFull(false);
+    return;
+  }
+  if (e.code === 'KeyF' && !вПоле && $('step-4').classList.contains('active')) {
+    e.preventDefault();
+    setStageFull(!stageFullOn());
+  }
 });
 
 /* --- Эквалайзер --- */
@@ -2561,10 +2836,14 @@ function updateHistoryButtons() {
 
 /* Разложить снимок обратно по строкам и обновить всё, что от них зависит */
 function applySnapshot(snap) {
-  if (snap.length !== state.lines.length) {
-    /* Строку удалили (или возвращаем удалённую) — тогда список
-       восстанавливается целиком, вместе с текстом: вернуть удалённую
-       строку иначе было бы нечем. */
+  /* Текст в снимке отличается от нынешнего — значит отменяют правку
+     самого текста (строку добавили, убрали или переставили). Тогда
+     список восстанавливается целиком, вместе с текстом: иначе времена
+     легли бы на чужие строки. Раньше сверялось только число строк,
+     и отмена перестановки возвращала времена не тем строкам. */
+  const тотЖеТекст = snap.length === state.lines.length
+    && snap.every((s, i) => s.text === state.lines[i].text);
+  if (!тотЖеТекст) {
     state.lines = snap.map((s) => {
       const l = {
         text: s.text,
@@ -3371,13 +3650,17 @@ const MIN_SPAN = 0.08;    // короче строку и слово не дел
 /* Полосы дорожки: где какая лежит и какой высоты. Полоса голоса
    появляется, только когда огибающая есть. */
 function timelineLanes() {
+  /* На низком экране дорожка ужимается: редактор должен помещаться
+     в окно целиком, а высота нужнее сетке строк и предпросмотру. */
+  const k = window.innerHeight <= 780 ? 0.8 : 1;
+  const px = (v) => Math.round(v * k);
   let y = 0;
   const L = {};
-  L.ruler = { y, h: LANE_RULER }; y += LANE_RULER;
-  if (voiceReady()) { L.voice = { y, h: LANE_VOICE }; y += LANE_VOICE; }
-  L.wave = { y, h: LANE_WAVE }; y += LANE_WAVE;
-  L.lines = { y, h: LANE_LINES }; y += LANE_LINES;
-  L.words = { y, h: LANE_WORDS }; y += LANE_WORDS;
+  L.ruler = { y, h: px(LANE_RULER) }; y += L.ruler.h;
+  if (voiceReady()) { L.voice = { y, h: px(LANE_VOICE) }; y += L.voice.h; }
+  L.wave = { y, h: px(LANE_WAVE) }; y += L.wave.h;
+  L.lines = { y, h: px(LANE_LINES) }; y += L.lines.h;
+  L.words = { y, h: px(LANE_WORDS) }; y += L.words.h;
   L.total = y;
   return L;
 }
@@ -4179,19 +4462,19 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   const family = (FONTS[st.font] || FONTS.system).css;
   const font = (size) => `${st.weight} ${size}px ${family}`;
 
-  /* Кегль — единый на всю песню, тот же множитель, что на экране:
-     stageFit подбирает его в кадровых единицах по самой длинной строке.
-     Базовый кегль привязан к высоте кадра, поэтому при любом качестве
-     записи текст занимает одну и ту же долю картинки. */
-  const fit = stageFit();
-  const baseSize = Math.max(1, Math.round(H * (FIT_BASE / FIT_FRAME_H) * st.size / 100));
-  const size = Math.max(10, baseSize * fit.scale);
+  /* Кегль — единый на всю песню и тот же, что на экране: stageFit
+     считает его от ширины поверхности, а поверхность здесь — кадр.
+     Поэтому при любом качестве записи текст занимает одну и ту же
+     долю картинки, и та же доля выходит на сцене караоке и в
+     предпросмотре редактора. */
+  const fit = stageFit(W / FIT_FRAME_COLS, maxWidth);
+  const size = Math.max(10, fit.size);
   const lineGap = st.line / 10;
   const rowH = size * lineGap;
 
   // Последний нарисованный кадр — для самопроверки (единый кегль,
   // отсутствие наложений). Данные те же, по которым идёт отрисовка.
-  const layout = { size, baseSize, scale: fit.scale, rowH, items: [] };
+  const layout = { size, unit: W / FIT_FRAME_COLS, m: fit.m, rowH, items: [] };
   drawVideoFrame.последнийКадр = layout;
 
   /* Строка разбирается на куски: слово со своей долей закраски (p)
@@ -4264,7 +4547,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   /* Отсчёт перед вступлением строки: три точки на месте нот проигрыша */
   const cd = countdownState(pos, ph);
   const drawCountdown = (cy) => {
-    const r = Math.max(4, baseSize * 0.2);
+    const r = Math.max(4, size * 0.2);
     const gap = r * 3.4;
     const from = W / 2 - ((COUNT_DOTS - 1) * gap) / 2;
     for (let i = 0; i < COUNT_DOTS; i++) {
@@ -4362,7 +4645,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     if (cd) {
       drawCountdown(ph.mode === 'break'
         ? H * (breakTop / 100)
-        : H * (st.posCurrent / 100) - baseSize * 0.9);
+        : H * (st.posCurrent / 100) - size * 0.9);
     }
     g2d.letterSpacing = '0px';
     if (watermark) {
@@ -4401,7 +4684,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     }
   }
 
-  const blockGap = Math.round(baseSize * 0.35);
+  const blockGap = Math.round(size * 0.35);
   const totalH = blocks.reduce((sum, b) => sum + b.height + blockGap, -blockGap);
   const pad = Math.round(H / 18);
   let y = st.valign === 'flex-start' ? pad
@@ -4779,13 +5062,25 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-/* ---------- Восстановление текста при загрузке страницы ---------- */
+/* ---------- Восстановление проекта при загрузке страницы ----------
+   Восстанавливаем ВСЁ, что попало в проект, а не только текст с
+   оформлением. Раньше эквалайзер и фон оставались только в хранилище,
+   а в состоянии были пустыми — и первое же сохранение записывало
+   поверх них нули и отсутствие картинки. */
 (function init() {
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
   if (saved && saved.style) state.style = styleFromSaved(saved);
+  if (saved && saved.eq) {
+    state.eq = {
+      low: +saved.eq.low || 0, mid: +saved.eq.mid || 0, high: +saved.eq.high || 0,
+    };
+  }
   updateStyleUI();
+  updateEqUI();
   applyStyle();
+  // Фон ставим через setBgImage: он же обновляет предпросмотр и кнопки
+  if (saved && saved.bg) setBgImage(saved.bg);
   updateInstUI();
   tickPlayer(); // общий цикл обновления UI (лёгкий, обновляет только видимое)
 
