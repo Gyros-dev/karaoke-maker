@@ -934,7 +934,14 @@ ipcMain.handle('asr-download', async (_evt, key) => {
       const dest = path.join(dir, rel);
       /* Пропускаем только целые файлы. Раньше хватало existsSync —
          и недокачанный файл оставался битым навсегда. */
-      if (asrFileOk(dir, m, sizes, rel)) { continue; }
+      if (asrFileOk(dir, m, sizes, rel)) {
+        /* Уже скачанное идёт в зачёт полосы: без этого второй заход
+           считал от нуля при полном total, и после отмены на середине
+           полоса доходила до шестидесяти процентов и там заканчивалась */
+        done += размерФайла(dest) || 0;
+        send('asr-progress', { done, total: Math.max(total, done) });
+        continue;
+      }
       const url = `https://huggingface.co/${m.repo}/resolve/main/${rel}`;
       const res = await fetchTo(url, dest, (n) => {
         done += n;
