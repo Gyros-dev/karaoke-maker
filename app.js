@@ -862,12 +862,20 @@ function voiceOnsetNear(t, lo, hi) {
 
 /* ---------- Сохранение проекта (текст, разметка, фон) ---------- */
 function saveProject() {
-  // Пока строки ещё не разобраны (например, сразу после загрузки файла),
-  // не затираем уже сохранённую разметку этой же песни
+  /* Пока строки ещё не разобраны (например, сразу после загрузки файла),
+     не затираем уже сохранённую разметку этой же песни.
+
+     «Та же песня» — это совпадение имени ИЛИ ещё не открытый файл.
+     Беда, которую лечит вторая половина условия: после перезагрузки
+     страницы state.fileName пуст, песню ещё не выбрали, — и раньше вся
+     сохранённая работа считалась чужой. Первая же правка текста стирала
+     разметку, фон, огибающую голоса и эквалайзер: времена [5,13,21,29]
+     превращались в [], фон в null, эквалайзер в нули. */
   const prev = loadProject();
-  const keepPrev = prev && prev.name === state.fileName;
+  const keepPrev = !!prev && (!state.fileName || prev.name === state.fileName);
   const data = {
-    name: state.fileName,
+    // Имя песни тоже не теряем: без него проект перестанет узнавать сам себя
+    name: state.fileName || (keepPrev ? prev.name : null),
     lyrics: $('lyrics-input').value || (keepPrev && prev.lyrics) || '',
     times: state.lines.length ? state.lines.map((l) => l.time)
       : (keepPrev && prev.times) || [],
@@ -961,6 +969,38 @@ fileInput.addEventListener('change', () => {
 });
 
 async function handleFile(file) {
+  /* Другая песня поверх готовой разметки.
+     Беда, которую это лечит: state.lines оставались от прежней песни.
+     Строки на 25-й и 40-й секунде переезжали в трек длиной 20 секунд,
+     а saveProject записывал их уже под новым именем — разметка прежней
+     песни пропадала навсегда, и никто ни о чём не спрашивал.
+     Теперь спрашиваем и начинаем новую песню с чистой разметкой. */
+  const prev = loadProject();
+  const прежняя = state.fileName || (prev && prev.name) || null;
+  const другая = !!прежняя && прежняя !== file.name;
+  if (другая) {
+    const своих = state.lines.filter((l) => l.time != null).length;
+    const вПроекте = prev && Array.isArray(prev.times)
+      ? prev.times.filter((t) => t != null).length : 0;
+    const размечено = своих || (prev && prev.name === прежняя ? вПроекте : 0);
+    if (размечено) {
+      const ок = confirm(
+        `Сейчас в студии песня «${прежняя}», размечено строк: ${размечено}.\n`
+        + 'Студия помнит одну песню за раз — если открыть другую, вернуть '
+        + 'разметку прежней будет нельзя.\n\n'
+        + `Открыть «${file.name}»?`);
+      if (!ок) {
+        fileInput.value = '';
+        return;
+      }
+    }
+    // Времена прежней песни новой не годятся: строки стоят не на своих местах
+    state.lines = [];
+    editor.sel = -1;
+    editor.peaks = null;
+    clearHistory();
+  }
+
   dropzone.classList.add('hidden');
   $('track-info').classList.add('hidden');
   $('processing').classList.remove('hidden');
@@ -1147,6 +1187,101 @@ $('btn-to-lyrics').addEventListener('click', () => goToStep(2));
    ============================================================ */
 $('btn-back-1').addEventListener('click', () => goToStep(1));
 
+/* ---------- Правка текста поверх готовой разметки ----------
+   Две беды, которые это лечит.
+
+   1. Добавил или удалил строку — вся разметка исчезала молча.
+      Времена переносились, только если число строк совпало до единицы;
+      иначе все они разом становились null, метки слов стирались, стек
+      отмены очищался, а saveProject тут же записывал потерю.
+   2. Переставил куплеты — времена молча оставались на своих местах
+      по номеру, и «три» начинало петься на месте «раз».
+
+   Лечится одним и тем же: строки сводятся ПО ТЕКСТУ, а не по номеру.
+   Сначала наибольшей общей подпоследовательностью — она сохраняет
+   порядок, поэтому вставку и удаление переживают все соседи. Что не
+   сошлось по порядку, сводится по совпадению текста: переставленный
+   куплет уносит свои времена с собой. И только если строку сопоставить
+   не с чем, её время теряется — но об этом спрашивают, а не молчат. */
+function alignByText(oldLines, texts) {
+  const n = oldLines.length;
+  const m = texts.length;
+  const pairs = new Array(m).fill(-1);   // новая строка → номер старой
+  if (!n || !m) return pairs;
+
+  // Наибольшая общая подпоследовательность. На очень длинных текстах
+  // таблица вышла бы великовата — там обходимся сведением по тексту.
+  if (n * m <= 200000) {
+    const w = m + 1;
+    const dp = new Uint16Array((n + 1) * w);
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i * w + j] = oldLines[i].text === texts[j]
+          ? dp[(i + 1) * w + j + 1] + 1
+          : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
+      }
+    }
+    let i = 0;
+    let j = 0;
+    while (i < n && j < m) {
+      if (oldLines[i].text === texts[j]) { pairs[j] = i; i++; j++; }
+      else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) i++;
+      else j++;
+    }
+  }
+
+  // Остатки — по совпадению текста, уже без оглядки на порядок
+  const занято = new Set(pairs.filter((k) => k >= 0));
+  const свободные = new Map();
+  oldLines.forEach((l, k) => {
+    if (занято.has(k)) return;
+    if (!свободные.has(l.text)) свободные.set(l.text, []);
+    свободные.get(l.text).push(k);
+  });
+  for (let j = 0; j < m; j++) {
+    if (pairs[j] >= 0) continue;
+    const q = свободные.get(texts[j]);
+    if (q && q.length) pairs[j] = q.shift();
+  }
+  return pairs;
+}
+
+/* Строки прежнего проекта из хранилища — в том же виде, что state.lines.
+   Нужны после перезагрузки страницы: в памяти строк ещё нет, а вся
+   работа лежит в проекте. */
+function linesFromProject(saved) {
+  if (!saved) return [];
+  const texts = String(saved.lyrics || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  const по = (arr) => (Array.isArray(arr) && arr.length === texts.length ? arr : null);
+  const times = по(saved.times);
+  const ends = по(saved.ends);
+  const hands = по(saved.handEnds);
+  const guess = по(saved.guess);
+  const words = по(saved.words);
+  return texts.map((text, i) => {
+    const l = {
+      text,
+      time: times ? times[i] : null,
+      end: ends ? ends[i] : null,
+      ручнойКонец: !!(hands && hands[i]),
+      сомнительная: !!(guess && guess[i]),
+    };
+    const w = words ? words[i] : null;
+    if (w && w.length) l.words = w.map((x) => ({ ...x }));
+    return l;
+  });
+}
+
+/* Сколько строк — «1 строка», «2 строки», «5 строк» */
+function поРусски(n, одна, две, много) {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (a > 10 && a < 20) return много;
+  if (b > 1 && b < 5) return две;
+  if (b === 1) return одна;
+  return много;
+}
+
 $('btn-to-editor').addEventListener('click', () => {
   const raw = $('lyrics-input').value;
   const texts = raw.split('\n').map((s) => s.trim()).filter(Boolean);
@@ -1155,38 +1290,59 @@ $('btn-to-editor').addEventListener('click', () => {
     return;
   }
 
-  // Сохраняем старую разметку, если текст не менялся
+  // Текст не менялся — разметку и трогать незачем
   const sameText = state.lines.length === texts.length &&
     state.lines.every((l, i) => l.text === texts[i]);
   if (!sameText) {
+    /* Откуда брать прежнюю разметку: из памяти, а после перезагрузки
+       страницы — из проекта. Проект считаем своим и тогда, когда песня
+       ещё не открыта: имени файла в этот момент попросту нет. */
     const saved = loadProject();
-    const mine = saved && saved.name === state.fileName ? saved : null;
-    const savedTimes = mine ? mine.times : null;
-    const savedWords = mine && mine.words && mine.words.length === texts.length ? mine.words : null;
-    state.lines = texts.map((text, i) => {
+    const mine = saved && (!state.fileName || saved.name === state.fileName) ? saved : null;
+    const было = state.lines.length ? state.lines : linesFromProject(mine);
+    const pairs = alignByText(было, texts);
+
+    // Строки, которым не нашлось места в новом тексте: их время пропадёт
+    const спасены = new Set(pairs.filter((k) => k >= 0));
+    const пропали = было.filter((l, k) => l.time != null && !спасены.has(k));
+    if (пропали.length) {
+      const n = пропали.length;
+      const слово = поРусски(n, 'строки', 'строк', 'строк');
+      const примеры = пропали.slice(0, 3).map((l) => `• ${l.text}`).join('\n');
+      const ок = confirm(
+        `Разметка ${n} ${слово} потеряется — в новом тексте таких строк нет:\n\n`
+        + примеры + (n > 3 ? `\n…и ещё ${n - 3}` : '')
+        + '\n\nПрименить новый текст? Отменить правку можно будет в редакторе кнопкой «↶ отменить».');
+      if (!ок) return;
+    }
+
+    /* Снимок прежней разметки — чтобы правку текста можно было отменить.
+       Раньше стек отмены на этом месте очищался, и возвращать было нечего. */
+    if (state.lines.length) pushHistory();
+
+    state.lines = texts.map((text, j) => {
+      const src = pairs[j] >= 0 ? было[pairs[j]] : null;
       const line = {
         text,
-        time: savedTimes && savedTimes.length === texts.length ? savedTimes[i] : null,
-        end: mine && mine.ends && mine.ends.length === texts.length ? mine.ends[i] : null,
+        time: src ? src.time : null,
+        end: src && src.end != null ? src.end : null,
       };
       /* Конец считается поставленным руками, только если так и записано.
          В проектах постарше пометки нет — там концы пришли от распознавания,
          и пересчитать их заново будет только лучше. */
-      line.ручнойКонец = !!(mine && mine.handEnds
-        && mine.handEnds.length === texts.length && mine.handEnds[i]);
+      line.ручнойКонец = !!(src && src.ручнойКонец);
       // Метки слов годятся, пока число слов в строке то же самое:
       // поправленную орфографию переживают, переписанную строку — нет
-      const w = savedWords ? savedWords[i] : null;
       const chunks = splitWords(text);
-      if (w && w.length && w.length === chunks.length) {
-        line.words = w.map((x, k) => ({ ...x, text: chunks[k] }));
+      if (src && src.words && src.words.length === chunks.length) {
+        line.words = src.words.map((x, k) => ({ ...x, text: chunks[k] }));
       }
       // Пометка «время подобрано на глазок» переживает перезагрузку
-      if (mine && mine.guess && mine.guess.length === texts.length) {
-        line.сомнительная = !!mine.guess[i];
-      }
+      if (src && src.сомнительная) line.сомнительная = true;
       return line;
     });
+    // Снимок уже лежит в стеке — редактору незачем его выбрасывать
+    editor.histLines = state.lines.length;
   }
 
   applyRecognized(state.lines);
@@ -2595,10 +2751,14 @@ function updateHistoryButtons() {
 
 /* Разложить снимок обратно по строкам и обновить всё, что от них зависит */
 function applySnapshot(snap) {
-  if (snap.length !== state.lines.length) {
-    /* Строку удалили (или возвращаем удалённую) — тогда список
-       восстанавливается целиком, вместе с текстом: вернуть удалённую
-       строку иначе было бы нечем. */
+  /* Текст в снимке отличается от нынешнего — значит отменяют правку
+     самого текста (строку добавили, убрали или переставили). Тогда
+     список восстанавливается целиком, вместе с текстом: иначе времена
+     легли бы на чужие строки. Раньше сверялось только число строк,
+     и отмена перестановки возвращала времена не тем строкам. */
+  const тотЖеТекст = snap.length === state.lines.length
+    && snap.every((s, i) => s.text === state.lines[i].text);
+  if (!тотЖеТекст) {
     state.lines = snap.map((s) => {
       const l = {
         text: s.text,
@@ -4813,13 +4973,25 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-/* ---------- Восстановление текста при загрузке страницы ---------- */
+/* ---------- Восстановление проекта при загрузке страницы ----------
+   Восстанавливаем ВСЁ, что попало в проект, а не только текст с
+   оформлением. Раньше эквалайзер и фон оставались только в хранилище,
+   а в состоянии были пустыми — и первое же сохранение записывало
+   поверх них нули и отсутствие картинки. */
 (function init() {
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
   if (saved && saved.style) state.style = styleFromSaved(saved);
+  if (saved && saved.eq) {
+    state.eq = {
+      low: +saved.eq.low || 0, mid: +saved.eq.mid || 0, high: +saved.eq.high || 0,
+    };
+  }
   updateStyleUI();
+  updateEqUI();
   applyStyle();
+  // Фон ставим через setBgImage: он же обновляет предпросмотр и кнопки
+  if (saved && saved.bg) setBgImage(saved.bg);
   updateInstUI();
   tickPlayer(); // общий цикл обновления UI (лёгкий, обновляет только видимое)
 
