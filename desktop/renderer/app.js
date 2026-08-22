@@ -6237,8 +6237,11 @@ document.addEventListener('i18n', () => {
   refreshTimes();
   updateSelInfo();
   drawTimeline();
-  if (tap.active) renderTapMode();
-  if (wordTap.active) renderWordTap();
+  /* Простукивание и разметку слов пересобираем всегда, а не только
+     пока они открыты: подписи там остаются с прошлого захода, и в
+     следующий раз окно открылось бы с надписями на прежнем языке. */
+  renderTapMode();
+  if (wordTap.chunks.length) renderWordTap();
   if ($('step-4').classList.contains('active')) renderStage();
   if (updater.перерисовать) updater.перерисовать();
 });

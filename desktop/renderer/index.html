@@ -12,8 +12,8 @@
 
 <div class="update-bar hidden" id="update-bar">
   <span class="update-dot"></span>
-  <span id="update-text">Вышла новая версия студии</span>
-  <button class="btn btn-primary btn-small" id="update-action">Обновить</button>
+  <span id="update-text" data-i18n="обновление.вышлаБезНомера">Вышла новая версия студии</span>
+  <button class="btn btn-primary btn-small" id="update-action" data-i18n="обновление.обновить">Обновить</button>
   <button class="update-later" id="update-dismiss" data-i18n="обновление.позже">Позже</button>
 </div>
 
@@ -400,7 +400,7 @@
           <b data-i18n="шаг1.фон.заголовок">Фон для караоке</b>
           <span data-i18n="шаг1.фон.текст">Необязательно: картинка будет под текстом во время пения</span>
         </div>
-        <button class="btn btn-ghost btn-small" id="btn-bg-add">Выбрать</button>
+        <button class="btn btn-ghost btn-small" id="btn-bg-add" data-i18n="минусовка.выбрать">Выбрать</button>
         <button class="btn btn-ghost btn-small hidden" id="btn-bg-remove" data-i18n="шаг1.убрать">Убрать</button>
         <input type="file" id="bg-input" accept="image/*" hidden>
       </div>
@@ -410,7 +410,7 @@
           <span data-i18n="шаг1.минусовка.текст">Необязательно: готовый файл без вокала (например, из UVR5) — звучит заметно лучше встроенного приглушения</span>
         </div>
         <span class="inst-status hidden" id="inst-status" data-i18n="шаг1.минусовка.готова">✓ загружена</span>
-        <button class="btn btn-ghost btn-small" id="btn-inst-add">Выбрать</button>
+        <button class="btn btn-ghost btn-small" id="btn-inst-add" data-i18n="минусовка.выбрать">Выбрать</button>
         <button class="btn btn-ghost btn-small hidden" id="btn-inst-remove" data-i18n="шаг1.убрать">Убрать</button>
         <input type="file" id="inst-input" accept="audio/*" hidden>
       </div>
@@ -794,7 +794,7 @@
       </p>
       <div class="timeline-legend">
         <span class="tl-key"><i class="sw sw-orig"></i> <span data-i18n="ред.легенда.оригинал">здесь звучит оригинал</span></span>
-        <span class="tl-key"><i class="sw sw-voice"></i> <span data-i18n="ред.легенда.голос">голос</span> <b id="tl-voice-note">— только в приложении после удаления вокала</b></span>
+        <span class="tl-key"><i class="sw sw-voice"></i> <span data-i18n="ред.легенда.голос">голос</span> <b id="tl-voice-note" data-i18n="ред.голос.нет">— только в приложении после удаления вокала</b></span>
         <span class="tl-key"><i class="sw sw-line"></i> <span data-i18n="ред.легенда.строка">строка</span></span>
         <span class="tl-key"><i class="sw sw-guess"></i> <span data-i18n="ред.легенда.глазок">≈ время на глазок</span></span>
         <span class="tl-key"><i class="sw sw-word"></i> <span data-i18n="ред.легенда.слова">слова выбранной строки</span></span>
@@ -863,8 +863,9 @@
       <span class="ed-group" id="shift-all">
         <span class="tl-shift-label" data-i18n="ред.сдвинуть">сдвинуть всё</span>
         <button class="nudge-btn" data-shift="-1">−1</button>
-        <button class="nudge-btn" data-shift="-0.1">−0,1</button>
-        <button class="nudge-btn" data-shift="0.1">+0,1</button>
+        <!-- Десятичный разделитель у языков разный: −0,1 против −0.1 -->
+        <button class="nudge-btn" data-shift="-0.1" data-i18n="ред.сдвиг.минус">−0,1</button>
+        <button class="nudge-btn" data-shift="0.1" data-i18n="ред.сдвиг.плюс">+0,1</button>
         <button class="nudge-btn" data-shift="1">+1</button>
       </span>
       <span class="ed-group ed-right">
@@ -933,7 +934,7 @@
           <div class="insp-actions">
             <button class="nudge-btn" id="btn-sel-play" data-i18n="ред.прослушать" data-i18n-title="ред.прослушать.подсказка"
               title="Прослушать эту строку (Enter)">▶ прослушать</button>
-            <button class="nudge-btn" id="btn-sel-words" data-i18n-title="ред.слова.подсказка"
+            <button class="nudge-btn" id="btn-sel-words" data-i18n="ред.словаКнопка" data-i18n-title="ред.слова.подсказка"
               title="Простучать слова внутри строки">♪ слова</button>
             <button class="nudge-btn" id="btn-sel-words-reset" data-i18n="ред.сброс.слова" data-i18n-title="ред.сброс.слова.подсказка"
               title="Вернуть автоматическое деление слов">⨯ сбросить слова</button>
@@ -942,7 +943,8 @@
             <button class="nudge-btn" id="btn-sel-del" data-i18n="ред.удалить" data-i18n-title="ред.удалить.подсказка"
               title="Убрать эту строку из караоке">🗑 удалить</button>
           </div>
-          <label class="sel-vocal" title="В редакторе по умолчанию звучит оригинал: размечать на слух без голоса невозможно">
+          <label class="sel-vocal" data-i18n-title="ред.вокал.есть"
+            title="В редакторе по умолчанию звучит оригинал: размечать на слух без голоса невозможно">
             <input type="checkbox" id="sel-vocal" checked>
             <span data-i18n="ред.слышу">слышу оригинал</span>
           </label>

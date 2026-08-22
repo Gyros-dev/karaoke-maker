@@ -445,6 +445,8 @@ I18N.EN = {
   'ред.магнит': '🧲 snap',
   'ред.магнит.подсказка': 'Snapping: edges stick to neighbouring lines, to the playhead, to original stretches and to the real vocal onset. The S key turns it off for good, holding Alt suspends it for one drag',
   'ред.сдвинуть': 'shift everything',
+  'ред.сдвиг.минус': '−0.1',
+  'ред.сдвиг.плюс': '+0.1',
   'ред.отдалить': 'Zoom out (key −)',
   'ред.масштаб': 'zoom',
   'ред.приблизить': 'Zoom in (key +)',
@@ -736,6 +738,8 @@ I18N.СТРОКИ = {
 
   /* ---------- Обновления ---------- */
   'обновление.вышла': { ru: 'Вышла новая версия студии — {v}', en: 'A new version of the studio is out — {v}' },
+  // То же без номера: стоит в разметке до того, как обновление найдено
+  'обновление.вышлаБезНомера': { ru: 'Вышла новая версия студии', en: 'A new version of the studio is out' },
   'обновление.обновить': { ru: 'Обновить', en: 'Update' },
   'обновление.версия': { ru: 'Вышла версия {v} — у тебя {текущая}', en: 'Version {v} is out — you have {текущая}' },
   'обновление.версияПросто': { ru: 'Вышла версия {v}', en: 'Version {v} is out' },
