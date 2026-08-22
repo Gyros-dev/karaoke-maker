@@ -3710,11 +3710,74 @@ function selPanelNudge(what, delta) {
   drawTimeline();
 }
 
-$('sel-panel').addEventListener('click', (e) => {
-  const start = e.target.closest('[data-sel-start]');
-  if (start) { selPanelNudge('start', +start.dataset.selStart); return; }
-  const end = e.target.closest('[data-sel-end]');
-  if (end) { selPanelNudge('end', +end.dataset.selEnd); return; }
+/* ---------- Начало и конец строки: поля со значениями ----------
+
+   Правка идёт тем же путём, что перетаскивание границы на дорожке:
+   считаем, на сколько человек сдвинул число, и передаём этот сдвиг
+   в selPanelNudge. Значит, и ограничения те же самые — не раньше
+   предыдущей строки, не позже следующей, конец не раньше начала,
+   всё в пределах песни (см. setLineTime и setLineEnd). И в отмену
+   правка попадает наравне с перетаскиванием: снимок кладёт
+   selPanelNudge, а пустой снимок сам же и убирает.
+
+   Значение зажимается молча, а поле после правки перезаполняется
+   тем, что получилось: человек сразу видит, куда его число улеглось,
+   и не гадает, применилось оно или нет. */
+function читатьСекунды(текст) {
+  // Запятая наравне с точкой: на русской раскладке её набирают чаще
+  const t = String(текст).trim().replace(',', '.');
+  if (!t) return null;
+  const v = Number(t);
+  return Number.isFinite(v) ? v : null;
+}
+
+function применитьПолеСтроки(какой) {
+  const поле = $(какой === 'start' ? 'sel-start' : 'sel-end');
+  if (!поле) return;
+  const sp = spanOfRow(editor.sel);
+  if (!sp) { updateSelInfo(); return; }
+  const v = читатьСекунды(поле.value);
+  // Не число или отрицательное время — поле краснеет, набранное
+  // остаётся на месте, разметка не трогается
+  if (v == null || v < 0) { поле.classList.add('bad'); return; }
+  поле.classList.remove('bad');
+  const было = какой === 'start' ? sp.start : sp.end;
+  delete поле.dataset.набирают;   // набор закончен, поле снова можно обновлять
+  if (Math.abs(v - было) >= 0.005) selPanelNudge(какой, v - было);
+  updateSelInfo();
+  /* Поле перезаполняем и когда оно в фокусе (updateSelInfo такие
+     обходит): иначе после Enter в нём осталось бы набранное число,
+     а следом пришедшее событие change приняло бы его за новую правку
+     и сдвинуло строку второй раз. */
+  const стало = spanOfRow(editor.sel);
+  if (стало) поле.value = (какой === 'start' ? стало.start : стало.end).toFixed(2);
+}
+
+['sel-start', 'sel-end'].forEach((id) => {
+  const поле = $(id);
+  const какой = id === 'sel-start' ? 'start' : 'end';
+  // Пока в поле набирают, панель его не перезаписывает
+  поле.addEventListener('input', () => { поле.dataset.набирают = '1'; });
+  // change срабатывает и на Enter, и при уходе из поля
+  поле.addEventListener('change', () => применитьПолеСтроки(какой));
+  поле.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); применитьПолеСтроки(какой); }
+    // Escape — забыть набранное и вернуть то, что было
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      delete поле.dataset.набирают;
+      поле.classList.remove('bad');
+      поле.blur();
+      updateSelInfo();
+    }
+  });
+  // Ушли из поля, ничего не применив (Escape уже вернул) — показать
+  // настоящее значение, а не оборванный набор
+  поле.addEventListener('blur', () => {
+    delete поле.dataset.набирают;
+    поле.classList.remove('bad');
+    updateSelInfo();
+  });
 });
 
 $('btn-sel-play').addEventListener('click', () => {
@@ -4813,23 +4876,41 @@ function showTime(sp) {
   }
 }
 
-/* Подпись и кнопки панели выбранной строки */
+/* Подпись и поля панели выбранной строки.
+
+   Времена лежат в полях, а не в подписи: раньше строка вида
+   «№26: 87.74 → 90.30 с · 2.56 с» была только для чтения, а править
+   их приходилось восемью кнопками ±1/±0,1. Теперь в подписи остаётся
+   один номер строки, а числа правятся прямо там, где показаны. */
 function updateSelInfo() {
   const el = $('tl-sel');
   if (!el) return;
   const sp = spanOfRow(editor.sel);
   const line = sp ? sp.line : null;
-  if (!sp) {
-    el.textContent = 'Строка не выбрана';
-  } else {
-    const dur = Math.max(0, sp.end - sp.start);
-    el.textContent = `№${sp.row + 1}: ${sp.start.toFixed(2)} → ${sp.end.toFixed(2)} с`
-      + ` · ${dur.toFixed(2)} с${line.сомнительная ? ' · ≈' : ''}`;
-  }
+  el.textContent = !sp ? 'Строка не выбрана'
+    : `Строка №${sp.row + 1}${line.сомнительная ? ' · время на глазок' : ''}`;
+
+  /* Поле, в котором прямо сейчас набирают, не трогаем: панель
+     обновляется и по ходу воспроизведения, и затирать набранное
+     на полуслове было бы худшим, что можно сделать с полем ввода.
+     Именно набирают, а не просто «стоит курсор»: иначе отмена при
+     курсоре в поле оставляла бы в нём отменённое число. */
+  const заполнить = (id, v) => {
+    const поле = $(id);
+    if (!поле) return;
+    поле.disabled = !sp;
+    if (document.activeElement === поле && поле.dataset.набирают) return;
+    поле.classList.remove('bad');
+    поле.value = sp ? v.toFixed(2) : '';
+  };
+  заполнить('sel-start', sp ? sp.start : 0);
+  заполнить('sel-end', sp ? sp.end : 0);
+  const dur = $('sel-dur');
+  if (dur) dur.textContent = sp ? Math.max(0, sp.end - sp.start).toFixed(2) : '—';
+
   // Пока строка не выбрана, работать не с чем — кнопки гаснут
   const panel = $('sel-panel');
   panel.classList.toggle('empty', !sp);
-  panel.querySelectorAll('[data-sel-start], [data-sel-end]').forEach((b) => { b.disabled = !sp; });
   $('btn-sel-play').disabled = !sp;
   $('btn-sel-words').disabled = !sp;
   $('btn-sel-del').disabled = !state.lines.length;

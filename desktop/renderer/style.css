@@ -774,9 +774,47 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    сбоку, и здесь так же — работа со строкой собрана в одном месте
    и не расползается по ширине экрана. */
 .sel-panel.empty { opacity: 0.75; }
-.insp-row { display: flex; flex-direction: column; gap: 0.2rem; }
-.insp-row .nudge { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.25rem; }
-.insp-row .nudge-btn { min-width: 0; padding: 0.25rem 0.1rem; text-align: center; }
+/* Начало, конец и длительность: подпись слева, значение справа —
+   ряд читается слева направо, а не столбиком, как было при кнопках.
+   Ряды невысокие: панель должна быть тихой, значения в ней смотрят
+   чаще, чем правят. */
+.insp-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.sel-field { display: flex; align-items: center; gap: 0.25rem; }
+.sel-unit { color: var(--text-dim); font-size: 0.75rem; }
+/* Поле со значением. Рамка почти не видна, пока в поле не вошли:
+   инспектор не должен выглядеть анкетой. */
+.sel-num {
+  width: 4.6rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  line-height: 1.35;
+}
+input.sel-num:hover:not(:disabled) { border-color: var(--border); }
+input.sel-num:focus { outline: none; border-color: #34d399; background: rgba(16, 185, 129, 0.12); }
+input.sel-num:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Введено недопустимое — поле краснеет, но значение не пропадает:
+   человек видит, что именно он набрал, и может поправить */
+input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12); }
+/* Длительность — показ, а не поле: менять её надо через границы */
+.sel-num-ro { background: none; color: var(--text-dim); }
+/* Стрелочки у числового поля: место занимают, а шаг у них всё равно
+   не тот, что нужен строке. Подстройка живёт на дорожке и на стрелках
+   клавиатуры. */
+.sel-num::-webkit-outer-spin-button,
+.sel-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sel-num { -moz-appearance: textfield; appearance: textfield; }
 .insp-actions { display: flex; flex-direction: column; gap: 0.3rem; }
 .insp-actions .nudge-btn { text-align: left; padding: 0.3rem 0.5rem; }
 .sel-panel .ed-pane-body { gap: 0.45rem; }

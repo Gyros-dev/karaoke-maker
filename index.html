@@ -763,22 +763,36 @@
         <header class="ed-pane-head">Строка</header>
         <div class="ed-pane-body">
           <span class="tl-sel" id="tl-sel">Строка не выбрана</span>
+          <!-- Начало и конец — поля со значениями, как в инспекторах
+               Logic Pro и Final Cut: число правится прямо в нём. Восьми
+               кнопок ±1/±0,1 здесь больше нет — то же самое делается
+               перетаскиванием границ на дорожке и стрелками с клавиатуры,
+               а панель от них шумела. Длительность осталась показом:
+               менять её правильнее через границы, иначе непонятно,
+               какой край поехал. -->
           <div class="insp-row">
-            <span class="sel-label">начало</span>
-            <span class="nudge">
-              <button class="nudge-btn" data-sel-start="-1">−1</button>
-              <button class="nudge-btn" data-sel-start="-0.1">−0,1</button>
-              <button class="nudge-btn" data-sel-start="0.1">+0,1</button>
-              <button class="nudge-btn" data-sel-start="1">+1</button>
+            <label class="sel-label" for="sel-start">начало</label>
+            <span class="sel-field">
+              <input class="sel-num" id="sel-start" type="number" step="0.01"
+                     inputmode="decimal" autocomplete="off" disabled
+                     title="Начало строки в секундах. Enter — применить, Esc — вернуть как было">
+              <span class="sel-unit">с</span>
             </span>
           </div>
           <div class="insp-row">
-            <span class="sel-label">конец</span>
-            <span class="nudge">
-              <button class="nudge-btn" data-sel-end="-1">−1</button>
-              <button class="nudge-btn" data-sel-end="-0.1">−0,1</button>
-              <button class="nudge-btn" data-sel-end="0.1">+0,1</button>
-              <button class="nudge-btn" data-sel-end="1">+1</button>
+            <label class="sel-label" for="sel-end">конец</label>
+            <span class="sel-field">
+              <input class="sel-num" id="sel-end" type="number" step="0.01"
+                     inputmode="decimal" autocomplete="off" disabled
+                     title="Конец строки в секундах. Enter — применить, Esc — вернуть как было">
+              <span class="sel-unit">с</span>
+            </span>
+          </div>
+          <div class="insp-row">
+            <span class="sel-label">длительность</span>
+            <span class="sel-field">
+              <span class="sel-num sel-num-ro" id="sel-dur">—</span>
+              <span class="sel-unit">с</span>
             </span>
           </div>
           <div class="insp-actions">
