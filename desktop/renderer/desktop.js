@@ -199,7 +199,7 @@
 
   /* ---------- Оценка для разделения вокала ---------- */
   function обновитьВремяРазделения() {
-    const проходов = Number($('ai-quality').value) || 3;
+    const проходов = Number($('ai-quality').value) || 1;
     const длина = длинаПесни();
     const хвост = проходов > 1
       ? 'Стоит лучшее качество: песня проходится трижды, поэтому и дольше.'
@@ -300,7 +300,7 @@
       if (!(await ensureModel())) { busy = false; return; }
 
       // Умолчание — лучшее качество, три прохода
-      const shifts = Number($('ai-quality').value) || 3;
+      const shifts = Number($('ai-quality').value) || 1;
       const длина = длинаПесни();
       const прикидка = времяСловами(оценкаРазделения(длина, shifts), замеры().разделение > 0);
 
