@@ -401,9 +401,9 @@ function createWindow() {
               && в(o.распознаваниеОбычная, 60, 160)
               && в(o.распознаваниеКрупная, 130, 290)
               && в(o.распознаваниеПоВокалу, 240, 480)
-              && /минут/.test(o.словами)
-              && o.короткое === 'меньше минуты'
-              && o.пустое === 'несколько минут'
+              && /(минут|minute)/.test(o.словами)
+              && o.короткое === t('время.меньшеМинуты')
+              && o.пустое === t('время.несколькоМинут')
               && document.getElementById('ai-eta').textContent.length > 20
               && document.getElementById('asr-eta').textContent.length > 20,
           };
@@ -683,6 +683,81 @@ function createWindow() {
         сайтоваяСтрокаСкрыта: [...document.querySelectorAll('.only-web')]
           .every((el) => getComputedStyle(el).display === 'none'),
 
+        /* Переключение языка. Проверяем не наличие кнопок, а итог:
+           при английском в ключевых местах стоят английские надписи,
+           при русском — русские, и в видимой части студии не остаётся
+           букв чужого алфавита. Текст песни и содержимое поля сюда
+           не входят — это данные человека, их не переводят.
+           Язык в конце возвращаем каким был. */
+        язык: (() => {
+          const былЯзык = I18N.язык();
+          const КИР = /[А-Яа-яЁё]/;
+          const ключевые = () => ({
+            шаг3: document.querySelector('.step-tab[data-step="3"]').textContent.trim(),
+            вокал: document.getElementById('btn-ai-run').textContent,
+            разметка: document.getElementById('btn-asr-run').textContent,
+            оценкаРазделения: document.getElementById('ai-eta').textContent,
+            оценкаРазметки: document.getElementById('asr-eta').textContent,
+            строка: document.getElementById('tl-sel').textContent,
+            минусовка: document.getElementById('btn-inst-add').textContent,
+            подсказкаОтмены: document.getElementById('tl-undo').title,
+            поле: document.getElementById('lyrics-input').placeholder,
+          });
+          /* Сколько надписей набора не того алфавита, какого ждём:
+             при английском кириллицы быть не должно вовсе, при русском
+             она обязана быть в каждой — иначе перевод где-то залип. */
+          const чужих = (о, ждёмКириллицу) => Object.values(о)
+            .filter((v) => КИР.test(String(v)) !== ждёмКириллицу).length;
+          const следы = [];
+          const чужаяАзбукаВСтудии = (ждёмКириллицу) => {
+            const w = document.createTreeWalker(
+              document.getElementById('studio'), NodeFilter.SHOW_TEXT);
+            let n, счёт = 0;
+            while ((n = w.nextNode())) {
+              const t = n.nodeValue.trim();
+              if (!t) continue;
+              const p = n.parentElement;
+              if (p.closest('script,style')) continue;
+              // Текст песни и всё, что набрал человек, не переводится
+              if (p.closest('#edit-list, #lyrics-stage, #edit-stage, #tap-mode, #word-tap')) continue;
+              if (КИР.test(t) && !ждёмКириллицу) {
+                счёт++;
+                следы.push((p.id || p.className || p.tagName) + ': ' + t.slice(0, 60));
+              }
+            }
+            return счёт;
+          };
+          I18N.установить('en');
+          const en = ключевые();
+          const langEn = document.documentElement.lang;
+          const кириллицыПриАнглийском = чужаяАзбукаВСтудии(false);
+          I18N.установить('ru');
+          const ru = ключевые();
+          const langRu = document.documentElement.lang;
+          I18N.установить(былЯзык);
+          return {
+            en, ru, langEn, langRu, кириллицыПриАнглийском, следы,
+            вернулиЯзык: I18N.язык() === былЯзык,
+            переключателей: document.querySelectorAll('.lang-switch').length,
+            вНорме: langEn === 'en' && langRu === 'ru'
+              && I18N.язык() === былЯзык
+              && document.querySelectorAll('.lang-switch').length === 2
+              && кириллицыПриАнглийском === 0
+              // При английском ни в одном ключевом месте нет кириллицы…
+              && чужих(en, false) === 0
+              // …а при русском она есть везде, то есть перевод не залип
+              && чужих(ru, true) === 0
+              && en.шаг3.includes('Editor') && ru.шаг3.includes('Редактор')
+              && en.вокал === 'Remove vocals' && ru.вокал === 'Убрать вокал'
+              && en.разметка === 'Transcribe the lyrics'
+              && ru.разметка === 'Распознать текст'
+              && en.минусовка === 'Choose' && ru.минусовка === 'Выбрать'
+              /* Ни одна ключевая надпись не осталась той же самой:
+                 так ловится ключ, который есть в разметке, но которому
+                 забыли положить перевод, — он молча отдавал бы русский. */
+              && Object.keys(en).every((k) => en[k] !== ru[k]),
+          };
+        })(),
         /* Модификатор в подписях: на Маке Cmd, на Windows и Linux Ctrl.
            Проверяем и текст под дорожкой, и подсказку кнопки отмены —
            они наполняются разными путями (span и data-mod-title). */

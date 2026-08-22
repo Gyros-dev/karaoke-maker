@@ -509,6 +509,16 @@
     updateAsrSource();
   });
 
+  /* Подписи моделей на текущем языке. Отдельно от fillAsrModels,
+     потому что та спрашивает систему и ждёт ответа: при смене языка
+     список успел бы остаться на прежнем языке до конца ожидания. */
+  function перевестиМодели() {
+    [...$('asr-model').options].forEach((o) => {
+      const label = t('asr.модель.' + o.value);
+      o.textContent = o.dataset.готова ? t('asr.модель.скачана', { label }) : label;
+    });
+  }
+
   async function fillAsrModels() {
     const st = await window.desktop.asrStatus();
     const sel = $('asr-model');
@@ -520,11 +530,13 @@
       const opt = document.createElement('option');
       opt.value = m.key;
       /* Подпись переводим здесь, а не в главном процессе: там про
-         выбранный язык не знают, а список всё равно пересобирается. */
-      const label = t('asr.модель.' + m.key);
-      opt.textContent = m.ready ? t('asr.модель.скачана', { label }) : label;
+         выбранный язык не знают, а список всё равно пересобирается.
+         Скачанность держим на самом пункте — по ней перевод потом
+         соберёт подпись заново, не спрашивая систему второй раз. */
+      opt.dataset.готова = m.ready ? '1' : '';
       sel.appendChild(opt);
     });
+    перевестиМодели();
     // Выбор человека важнее, но по умолчанию — лучшая модель
     if (was && st.models.some((m) => m.key === was)) sel.value = was;
     else if (st.models.some((m) => m.key === ASR_ЛУЧШАЯ)) sel.value = ASR_ЛУЧШАЯ;
@@ -1077,7 +1089,7 @@
      здесь — подписи моделей, оценки времени, метка о готовой разметке
      и подпись главной кнопки, — надо переставить руками. */
   document.addEventListener('i18n', () => {
-    fillAsrModels().catch(() => {});
+    перевестиМодели();
     обновитьВремяРазделения();
     обновитьВремяРаспознавания();
     updateAsrSource();
