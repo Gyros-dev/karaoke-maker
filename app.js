@@ -14,6 +14,7 @@ const state = {
   originalBuffer: null,     // AudioBuffer исходной песни
   instrumentalBuffer: null, // AudioBuffer с приглушённым вокалом (null для моно)
   lines: [],                // [{ text, time|null, end:number|null }]
+  origSpans: [],            // отрезки, где вместо минусовки звучит оригинал
   vocalMix: 0,              // 0..1 — громкость вокала в караоке
   bgImage: null,            // dataURL картинки-фона для караоке
   eq: { low: 0, mid: 0, high: 0 }, // эквалайзер, дБ (−12…+12)
@@ -158,6 +159,108 @@ function усиленияМикса(vocalMix, hasInst, forceVocal) {
   return { вокал: v, минусовка: hasInst ? 1 - v : 0 };
 }
 
+/* ---------- Отрезки, где звучит оригинал ----------
+
+   Человек размечает на дорожке куски, в которых вместо минусовки
+   должна звучать сама песня со словами: во вступлении «Кирпичей»
+   поёт оригинал, а дальше поёт он сам. Нейросеть тут ни при чём —
+   обе дорожки уже есть, отрезок только выбирает, какая играет.
+
+   Источник переключается не перекоммутацией узлов, а расписанием на
+   тех же двух усилениях, что и ползунок вокала. Поэтому одно и то же
+   расписание годится и живому плееру, и OfflineAudioContext в
+   экспорте: считает его одна функция — расхождению взяться неоткуда.
+
+   ПРАВИЛО ГРОМКОСТИ. Внутри отрезка оригинал звучит целиком, как бы
+   ни стоял ползунок «Вокал»: отрезок для того и ставится, чтобы
+   услышать оригинальные слова. Снаружи ползунок работает как раньше.
+
+   ПОЧЕМУ НЕ ЩЁЛКАЕТ. Оригинал ≈ минусовка + вокал, а усиления в
+   перекрёстном затухании всё время дают в сумме единицу: вокал идёт
+   вне→1, минусовка одновременно (1−вне)→0. Значит музыкальная часть
+   на переходе не меняется вовсе, а голос вводится ровным линейным
+   нарастанием за 50 мс. Скачку между соседними отсчётами взяться
+   неоткуда — это проверяется числами в самопроверке. */
+const ОТРЕЗОК_ФЕЙД = 0.05;   // перекрёстное затухание на границе, с
+const ОТРЕЗОК_МИН = 0.2;     // короче отрезок не делаем
+
+/* Отрезки в порядок: выкинуть вырожденные, отсортировать, слить
+   наложенные и слишком близкие. Меньше двух затуханий между соседями
+   не оставляем — иначе на стыке вышел бы дребезг вместо перехода. */
+function нормОтрезки(spans, длина) {
+  const предел = длина > 0 ? длина : Infinity;
+  const годные = [];
+  for (const s of spans || []) {
+    const a = Math.max(0, Math.min(+s.start, +s.end));
+    const b = Math.min(предел, Math.max(+s.start, +s.end));
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b - a < 0.01) continue;
+    годные.push({ start: a, end: b });
+  }
+  годные.sort((p, q) => p.start - q.start);
+  const итог = [];
+  for (const s of годные) {
+    const пред = итог[итог.length - 1];
+    if (пред && s.start - пред.end < ОТРЕЗОК_ФЕЙД * 2) пред.end = Math.max(пред.end, s.end);
+    else итог.push(s);
+  }
+  return итог;
+}
+
+/* Отрезки текущего проекта — всегда уже приведённые в порядок */
+function отрезкиОригинала() {
+  return state.origSpans || [];
+}
+
+/* Доля оригинала в момент t: 1 внутри отрезка, 0 снаружи, линейно
+   между — это и есть перекрёстное затухание. Затухание лежит СНАРУЖИ
+   отрезка (вход [start−f, start], выход [end, end+f]), поэтому всё,
+   что человек отметил, звучит оригиналом целиком и без огрызков. */
+function доляОригинала(t, spans) {
+  const f = ОТРЕЗОК_ФЕЙД;
+  for (const s of spans) {
+    if (t <= s.start - f || t >= s.end + f) continue;
+    if (t >= s.start && t <= s.end) return 1;
+    if (t < s.start) return (t - (s.start - f)) / f;
+    return 1 - (t - s.end) / f;
+  }
+  return 0;
+}
+
+/* Переломы расписания: начало и конец каждого затухания. Начало песни
+   обрезаем нулём — до неё звука нет, а точки обязаны идти по возрастанию. */
+function точкиОтрезков(spans) {
+  const pts = [];
+  for (const s of spans) {
+    pts.push(Math.max(0, s.start - ОТРЕЗОК_ФЕЙД), s.start, s.end, s.end + ОТРЕЗОК_ФЕЙД);
+  }
+  return pts;
+}
+
+/* Расписание переключения источника на усилениях смеси.
+   t0 — момент контекста, в который звучит нулевая секунда песни.
+   Годится и живому контексту (t0 = audio.startedAt), и офлайнному
+   (t0 = 0), и записи видео (t0 = момент запуска источников). */
+function расписатьОтрезки(ctx, vGain, iGain, база, spans, t0) {
+  const сейчас = ctx.currentTime;
+  const от = сейчас - t0;   // какая секунда песни звучит прямо сейчас
+  const пары = [
+    [vGain.gain, база.вокал, 1],
+    [iGain.gain, база.минусовка, 0],
+  ];
+  const знач = (доля, вне, внутри) => вне + (внутри - вне) * доля;
+  for (const [param, вне, внутри] of пары) {
+    param.cancelScheduledValues(сейчас);
+    param.setValueAtTime(знач(доляОригинала(от, spans), вне, внутри), сейчас);
+  }
+  for (const t of точкиОтрезков(spans)) {
+    if (t <= от) continue;
+    const доля = доляОригинала(t, spans);
+    for (const [param, вне, внутри] of пары) {
+      param.linearRampToValueAtTime(знач(доля, вне, внутри), t0 + t);
+    }
+  }
+}
+
 /* ---------- Аудио-движок ---------- */
 const audio = {
   ctx: null,
@@ -248,7 +351,6 @@ const audio = {
     const fade = ctx.createGain();
     смесь.output.connect(fade);
     fade.connect(ctx.destination);
-    this.applyMix();
 
     const orig = ctx.createBufferSource();
     orig.buffer = state.originalBuffer;
@@ -269,6 +371,9 @@ const audio = {
     this.sources.forEach((s) => s.start(t, this.offset));
     this.startedAt = t - this.offset;
     this.playing = true;
+    /* Громкости расставляем ПОСЛЕ startedAt: расписание отрезков
+       считается от него, и без него оригинал заиграл бы не там */
+    this.applyMix();
     this.checkAudible();
 
     orig.onended = () => {
@@ -305,11 +410,22 @@ const audio = {
     });
   },
 
+  /* Громкости смеси. Пока играем — не голыми значениями, а расписанием:
+     на размеченных отрезках источник переключается на оригинал. Ползунок
+     вокала можно двигать прямо во время игры, расписание пересчитается
+     от текущей секунды. */
   applyMix() {
     if (!this.vocalGain) return;
-    const g = усиленияМикса(state.vocalMix, !!state.instrumentalBuffer, this.forceVocal);
-    this.vocalGain.gain.value = g.вокал;
-    this.instGain.gain.value = g.минусовка;
+    const база = усиленияМикса(state.vocalMix, !!state.instrumentalBuffer, this.forceVocal);
+    if (!this.playing) {
+      this.vocalGain.gain.cancelScheduledValues(0);
+      this.instGain.gain.cancelScheduledValues(0);
+      this.vocalGain.gain.value = база.вокал;
+      this.instGain.gain.value = база.минусовка;
+      return;
+    }
+    расписатьОтрезки(this.ctx, this.vocalGain, this.instGain, база,
+      отрезкиОригинала(), this.startedAt);
   },
 };
 
@@ -897,6 +1013,16 @@ function saveProject() {
     // Строки, чьё время нейросеть подобрала на глазок при подгонке текста
     guess: state.lines.length ? state.lines.map((l) => !!l.сомнительная)
       : (keepPrev && prev.guess) || [],
+    /* Отрезки, где вместо минусовки звучит оригинал. Умолчание — пустой
+       список, так что переносить между поколениями оформления (STYLE_GEN)
+       тут нечего: старый проект просто приходит без отрезков.
+
+       Условие такое же, как у времён: пока строки в памяти не разобраны,
+       проект ещё не открыт — и стирать чужую разметку нельзя. А когда
+       открыт, пустой список означает «человек убрал все отрезки», и это
+       обязано сохраниться, а не подмениться прежними. */
+    origSpans: state.lines.length ? отрезкиОригинала().map((s) => ({ ...s }))
+      : (keepPrev && prev.origSpans) || [],
     bg: state.bgImage,
     // Огибающая голоса: по ней сцена знает конец строки и проигрыши
     voice: voice.level ? voiceToText(voice.level) : ((keepPrev && prev.voice) || null),
@@ -1028,6 +1154,7 @@ async function handleFile(file) {
     }
     // Времена прежней песни новой не годятся: строки стоят не на своих местах
     state.lines = [];
+    state.origSpans = [];   // и отрезки оригинала — они тоже про прежнюю песню
     editor.sel = -1;
     editor.peaks = null;
     clearHistory();
@@ -1070,6 +1197,8 @@ async function handleFile(file) {
     if (saved && saved.name === file.name) {
       if (saved.lyrics) $('lyrics-input').value = saved.lyrics;
       if (saved.bg) setBgImage(saved.bg);
+      // Отрезки оригинала: длину знаем только сейчас — по ней и обрезаем
+      state.origSpans = нормОтрезки(saved.origSpans, buffer.duration);
       // Огибающая голоса от прошлого разделения этой же песни
       if (saved.voice) restoreVoiceTrack(saved.voice, buffer.duration);
       if (saved.eq) {
@@ -2733,13 +2862,43 @@ function bufferToWav(buffer) {
   return new Blob([ab], { type: 'audio/wav' });
 }
 
-$('btn-export-wav').addEventListener('click', () => {
+/* Минусовка на выгрузку — с оригиналом на размеченных отрезках.
+
+   Считаем офлайн тем же расписанием, что играет в колонки: если в файле
+   окажется не то, что человек слышал в караоке, — это провал. Цепь тут
+   короче плеерной (без эквалайзера и лимитера): выгружается дорожка
+   аккомпанемента, а не готовая смесь, и такой она была всегда. */
+async function собратьМинусовку() {
+  const inst = state.instrumentalBuffer;
+  if (!inst) return null;
+  const spans = отрезкиОригинала();
+  if (!spans.length) return inst;
+
+  const orig = state.originalBuffer;
+  const SR = inst.sampleRate;
+  const каналов = Math.max(inst.numberOfChannels, orig.numberOfChannels);
+  const ctx = new OfflineAudioContext(каналов, Math.max(inst.length, orig.length), SR);
+  const vGain = ctx.createGain();
+  const iGain = ctx.createGain();
+  vGain.connect(ctx.destination);
+  iGain.connect(ctx.destination);
+  const o = ctx.createBufferSource(); o.buffer = orig; o.connect(vGain);
+  const i = ctx.createBufferSource(); i.buffer = inst; i.connect(iGain);
+  // Ползунок вокала в этот файл не входит: снаружи отрезков — чистая
+  // минусовка, внутри — оригинал целиком
+  расписатьОтрезки(ctx, vGain, iGain, усиленияМикса(0, true, false), spans, 0);
+  o.start(); i.start();
+  return ctx.startRendering();
+}
+
+$('btn-export-wav').addEventListener('click', async () => {
   if (!state.instrumentalBuffer) {
     alert('Для моно-файла минусовку сделать нельзя.');
     return;
   }
   const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
-  download(bufferToWav(state.instrumentalBuffer), `${name} (минус).wav`);
+  const buf = await собратьМинусовку();
+  download(bufferToWav(buf), `${name} (минус).wav`);
 });
 
 /* ============================================================
@@ -4881,6 +5040,9 @@ async function exportVideo() {
 
   const duration = audio.duration;
   const t0 = ctx.currentTime + 0.1;
+  /* Отрезки оригинала — тем же расписанием, что и в плеере: в видео
+     должно попасть ровно то, что человек слышал в караоке */
+  расписатьОтрезки(ctx, vGain, iGain, g, отрезкиОригинала(), t0);
   const cleanup = () => {
     sources.forEach((s) => { try { s.stop(); } catch (e) { /* уже остановлен */ } });
     try { videoTrack.stop(); } catch (e) { /* уже остановлен */ }
@@ -5146,6 +5308,8 @@ document.addEventListener('keydown', (e) => {
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
   if (saved && saved.style) state.style = styleFromSaved(saved);
+  // Отрезки оригинала: длины песни ещё не знаем, обрежем её при загрузке файла
+  if (saved && saved.origSpans) state.origSpans = нормОтрезки(saved.origSpans, 0);
   if (saved && saved.eq) {
     state.eq = {
       low: +saved.eq.low || 0, mid: +saved.eq.mid || 0, high: +saved.eq.high || 0,
