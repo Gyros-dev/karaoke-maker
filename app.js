@@ -129,15 +129,17 @@ function styleFromSaved(saved) {
   return { ...defaultStyle(), ...style };
 }
 
-/* Шрифты: только системные, чтобы сайт остался автономным */
+/* Шрифты: только системные, чтобы сайт остался автономным.
+   Подпись — не строка, а ключ словаря: список пересобирается
+   при смене языка, см. заполнитьШрифты(). */
 const FONTS = {
-  system: { label: 'Системный', css: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif' },
-  impact: { label: 'Плакатный (Impact)', css: 'Impact, "Haettenschweiler", "Arial Narrow Bold", sans-serif' },
-  arial: { label: 'Гротеск (Arial)', css: 'Arial, "Helvetica Neue", Helvetica, sans-serif' },
-  verdana: { label: 'Широкий (Verdana)', css: 'Verdana, Geneva, sans-serif' },
-  trebuchet: { label: 'Мягкий (Trebuchet)', css: '"Trebuchet MS", "Lucida Grande", sans-serif' },
-  georgia: { label: 'Книжный (Georgia)', css: 'Georgia, "Times New Roman", serif' },
-  courier: { label: 'Печатная машинка', css: '"Courier New", Courier, monospace' },
+  system: { ключ: 'шрифт.system', css: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif' },
+  impact: { ключ: 'шрифт.impact', css: 'Impact, "Haettenschweiler", "Arial Narrow Bold", sans-serif' },
+  arial: { ключ: 'шрифт.arial', css: 'Arial, "Helvetica Neue", Helvetica, sans-serif' },
+  verdana: { ключ: 'шрифт.verdana', css: 'Verdana, Geneva, sans-serif' },
+  trebuchet: { ключ: 'шрифт.trebuchet', css: '"Trebuchet MS", "Lucida Grande", sans-serif' },
+  georgia: { ключ: 'шрифт.georgia', css: 'Georgia, "Times New Roman", serif' },
+  courier: { ключ: 'шрифт.courier', css: '"Courier New", Courier, monospace' },
 };
 
 /* ---------- Где нужен оригинал с вокалом ----------
@@ -315,12 +317,7 @@ const audio = {
     setTimeout(() => {
       if (this.playing && this.ctx && this.ctx.state !== 'running' && !this._warnedBlocked) {
         this._warnedBlocked = true;
-        alert('Браузер блокирует звук на этом сайте.\n\n' +
-          'Проверь:\n' +
-          '• не заглушена ли вкладка (правый клик по вкладке → «Включить звук»);\n' +
-          '• в Brave — нажми на значок льва и отключи Shields для этого сайта ' +
-          '(строгая защита от фингерпринтинга глушит Web Audio);\n' +
-          '• в Safari — Настройки → Веб-сайты → Автовоспроизведение: разреши для этого сайта.');
+        alert(t('звук.заблокирован'));
       }
     }, 600);
   },
@@ -1493,11 +1490,8 @@ async function handleFile(file) {
       ? prev.times.filter((t) => t != null).length : 0;
     const размечено = своих || (prev && prev.name === прежняя ? вПроекте : 0);
     if (размечено) {
-      const ок = confirm(
-        `Сейчас в студии песня «${прежняя}», размечено строк: ${размечено}.\n`
-        + 'Студия помнит одну песню за раз — если открыть другую, вернуть '
-        + 'разметку прежней будет нельзя.\n\n'
-        + `Открыть «${file.name}»?`);
+      const ок = confirm(t('песня.другая',
+        { прежняя, n: размечено, новая: file.name }));
       if (!ок) {
         fileInput.value = '';
         return;
@@ -1514,15 +1508,15 @@ async function handleFile(file) {
   dropzone.classList.add('hidden');
   $('track-info').classList.add('hidden');
   $('processing').classList.remove('hidden');
-  $('processing-text').textContent = 'Читаем файл…';
+  $('processing-text').textContent = t('песня.читаем');
 
   try {
     const data = await file.arrayBuffer();
-    $('processing-text').textContent = 'Декодируем аудио…';
+    $('processing-text').textContent = t('песня.декодируем');
     const ctx = audio.ensureCtx();
     const buffer = await ctx.decodeAudioData(data);
 
-    $('processing-text').textContent = 'Приглушаем вокал…';
+    $('processing-text').textContent = t('песня.приглушаем');
     const instrumental = await makeInstrumental(buffer);
     state.customInst = false;
     state.instName = null;
@@ -1537,8 +1531,11 @@ async function handleFile(file) {
     clearVoiceTrack();   // чужая огибающая новой песне не годится
 
     $('track-name').textContent = file.name.replace(/\.[^.]+$/, '');
-    $('track-meta').textContent =
-      `${fmtTime(buffer.duration)} · ${buffer.numberOfChannels === 1 ? 'моно' : 'стерео'} · ${(buffer.sampleRate / 1000).toFixed(1)} кГц`;
+    $('track-meta').textContent = [
+      fmtTime(buffer.duration),
+      t(buffer.numberOfChannels === 1 ? 'песня.моно' : 'песня.стерео'),
+      t('песня.кгц', { v: (buffer.sampleRate / 1000).toFixed(1) }),
+    ].join(' · ');
     $('mono-warning').classList.toggle('hidden', !!instrumental);
     $('processing').classList.add('hidden');
     $('track-info').classList.remove('hidden');
@@ -1565,7 +1562,7 @@ async function handleFile(file) {
   } catch (err) {
     $('processing').classList.add('hidden');
     dropzone.classList.remove('hidden');
-    alert('Не удалось прочитать этот файл как аудио. Попробуй другой формат (MP3, WAV, OGG).');
+    alert(t('песня.неПрочиталась'));
   }
 }
 
@@ -1577,12 +1574,12 @@ function updateInstUI() {
   $('inst-status').classList.toggle('hidden', !custom);
   $('inst-status').textContent = custom ? `✓ ${state.instName}` : '';
   $('btn-inst-remove').classList.toggle('hidden', !custom);
-  $('btn-inst-add').textContent = custom ? 'Заменить' : 'Выбрать';
+  $('btn-inst-add').textContent = t(custom ? 'минусовка.заменить' : 'минусовка.выбрать');
 }
 
 async function handleInstFile(file) {
   if (!state.originalBuffer) {
-    alert('Сначала загрузи саму песню.');
+    alert(t('минусовка.сначалаПесня'));
     return;
   }
   try {
@@ -1590,10 +1587,11 @@ async function handleInstFile(file) {
     const buffer = await audio.ensureCtx().decodeAudioData(data);
     const diff = Math.abs(buffer.duration - state.originalBuffer.duration);
     if (diff > 1.5) {
-      const ok = confirm(
-        `Длительность минусовки (${fmtTime(buffer.duration)}) отличается от песни ` +
-        `(${fmtTime(state.originalBuffer.duration)}) на ${diff.toFixed(1)} с. ` +
-        'Текст может разъехаться. Всё равно использовать?');
+      const ok = confirm(t('минусовка.длина', {
+        'минус': fmtTime(buffer.duration),
+        'песня': fmtTime(state.originalBuffer.duration),
+        'разница': diff.toFixed(1),
+      }));
       if (!ok) return;
     }
     audio.stop();
@@ -1603,7 +1601,7 @@ async function handleInstFile(file) {
     $('mono-warning').classList.add('hidden');
     updateInstUI();
   } catch (e) {
-    alert('Не удалось прочитать этот файл как аудио. Попробуй MP3, WAV или OGG.');
+    alert(t('минусовка.неПрочиталась'));
   }
 }
 
@@ -1662,14 +1660,14 @@ function setBgImage(dataUrl) {
     preview.src = dataUrl;
     preview.classList.remove('hidden');
     $('btn-bg-remove').classList.remove('hidden');
-    $('btn-bg-add').textContent = 'Заменить';
+    $('btn-bg-add').textContent = t('минусовка.заменить');
   } else {
     stage.classList.remove('has-bg');
     stage.style.backgroundImage = '';
     preview.removeAttribute('src');
     preview.classList.add('hidden');
     $('btn-bg-remove').classList.add('hidden');
-    $('btn-bg-add').textContent = 'Выбрать';
+    $('btn-bg-add').textContent = t('минусовка.выбрать');
   }
   saveProject();
 }
@@ -1682,7 +1680,7 @@ $('bg-input').addEventListener('change', async () => {
   try {
     setBgImage(await shrinkImage(file));
   } catch (e) {
-    alert('Не удалось открыть эту картинку. Попробуй JPG или PNG.');
+    alert(t('фон.неОткрылась'));
   }
 });
 
@@ -1784,21 +1782,11 @@ function linesFromProject(saved) {
   });
 }
 
-/* Сколько строк — «1 строка», «2 строки», «5 строк» */
-function поРусски(n, одна, две, много) {
-  const a = Math.abs(n) % 100;
-  const b = a % 10;
-  if (a > 10 && a < 20) return много;
-  if (b > 1 && b < 5) return две;
-  if (b === 1) return одна;
-  return много;
-}
-
 $('btn-to-editor').addEventListener('click', () => {
   const raw = $('lyrics-input').value;
   const texts = raw.split('\n').map((s) => s.trim()).filter(Boolean);
   if (!texts.length) {
-    alert('Сначала вставь текст песни — хотя бы пару строк.');
+    alert(t('текст.пусто'));
     return;
   }
 
@@ -1819,12 +1807,11 @@ $('btn-to-editor').addEventListener('click', () => {
     const пропали = было.filter((l, k) => l.time != null && !спасены.has(k));
     if (пропали.length) {
       const n = пропали.length;
-      const слово = поРусски(n, 'строки', 'строк', 'строк');
       const примеры = пропали.slice(0, 3).map((l) => `• ${l.text}`).join('\n');
       const ок = confirm(
-        `Разметка ${n} ${слово} потеряется — в новом тексте таких строк нет:\n\n`
-        + примеры + (n > 3 ? `\n…и ещё ${n - 3}` : '')
-        + '\n\nПрименить новый текст? Отменить правку можно будет в редакторе кнопкой «↶ отменить».');
+        t('текст.потеряется', { n })
+        + примеры + (n > 3 ? t('текст.ещё', { n: n - 3 }) : '')
+        + t('текст.применить'));
       if (!ок) return;
     }
 
@@ -1985,14 +1972,14 @@ function refreshTimes() {
     if (!line) return;
     el.classList.toggle('empty', !line.ручнойКонец);
     el.textContent = line.time == null
-      ? '–:––' : `до ${fmtTime(lineEnd(synced, synced.indexOf(line)))}`;
+      ? '–:––' : t('ред.до', { t: fmtTime(lineEnd(synced, synced.indexOf(line))) });
   });
   document.querySelectorAll('#edit-list .dur-ts[data-dur-i]').forEach((el) => {
     const line = state.lines[+el.dataset.durI];
     if (!line) return;
     const i = synced.indexOf(line);
     el.textContent = line.time == null
-      ? '' : `${(lineEnd(synced, i) - lineStart(synced, i)).toFixed(1)} с`;
+      ? '' : t('ред.длина', { v: (lineEnd(synced, i) - lineStart(synced, i)).toFixed(1) });
   });
   updateSelInfo();
 }
@@ -2726,7 +2713,11 @@ function renderStage() {
   const stage = $('lyrics-stage');
   const lines = syncedLines();
   if (!lines.length) {
-    stage.innerHTML = '<p class="stage-empty">Нет синхронизированных строк</p>';
+    stage.textContent = '';
+    const пусто = document.createElement('p');
+    пусто.className = 'stage-empty';
+    пусто.textContent = t('сцена.пусто');
+    stage.appendChild(пусто);
     return;
   }
   if (stage.querySelector('.stage-empty')) stage.innerHTML = '';
@@ -2922,7 +2913,8 @@ function updateStyleUI() {
   $('st-letter').value = s.letter;
   $('st-letter-val').textContent = s.letter;
   $('st-line').value = s.line;
-  $('st-line-val').textContent = (s.line / 10).toFixed(1).replace('.', ',');
+  $('st-line-val').textContent = I18N.английский()
+    ? (s.line / 10).toFixed(1) : (s.line / 10).toFixed(1).replace('.', ',');
   $('st-pad').value = s.pad;
   $('st-pad-val').textContent = `${s.pad}%`;
   $('st-swap').checked = s.swapLines;
@@ -2959,14 +2951,22 @@ function setStyle(key, value) {
   saveProject();
 }
 
-// Список шрифтов
-Object.entries(FONTS).forEach(([key, f]) => {
-  const opt = document.createElement('option');
-  opt.value = key;
-  opt.textContent = f.label;
-  opt.style.fontFamily = f.css;
-  $('st-font').appendChild(opt);
-});
+/* Список шрифтов. Пересобирается при смене языка — выбор при этом
+   сохраняем: подписи меняются, а выбранный шрифт остаётся тем же. */
+function заполнитьШрифты() {
+  const sel = $('st-font');
+  const было = sel.value || (state.style && state.style.font);
+  sel.innerHTML = '';
+  Object.entries(FONTS).forEach(([key, f]) => {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = t(f.ключ);
+    opt.style.fontFamily = f.css;
+    sel.appendChild(opt);
+  });
+  if (было) sel.value = было;
+}
+заполнитьШрифты();
 
 $('st-font').addEventListener('change', () => setStyle('font', $('st-font').value));
 [['st-size', 'size'], ['st-weight', 'weight'], ['st-outline', 'outline'],
@@ -3028,7 +3028,7 @@ function setStageFull(on) {
   document.body.classList.toggle('stage-full', !!on);
   const btn = $('btn-stage-full');
   btn.textContent = on ? '⤡' : '⤢';
-  btn.title = on ? 'Свернуть предпросмотр (Esc)' : 'Развернуть предпросмотр (F)';
+  btn.title = t(on ? 'сцена.свернуть' : 'сцена.развернуть');
   btn.setAttribute('aria-label', btn.title);
   // Сцена стала другого размера: кегль и точки отсчёта считаем заново
   fitStageLines($('lyrics-stage'));
@@ -3060,7 +3060,7 @@ function updateEqUI() {
   EQ_BANDS.forEach((band) => {
     const v = state.eq[band];
     $(`eq-${band}`).value = v;
-    $(`eq-${band}-val`).textContent = `${v > 0 ? '+' : ''}${v} дБ`;
+    $(`eq-${band}-val`).textContent = t('сцена.дБ', { 'знак': v > 0 ? '+' : '', v });
   });
 }
 
@@ -3103,10 +3103,10 @@ function bufferLevel(buffer, fromSec = 0, seconds = 1) {
 }
 
 $('btn-sound-check').addEventListener('click', async () => {
-  if (!state.originalBuffer) { alert('Сначала загрузи песню.'); return; }
+  if (!state.originalBuffer) { alert(t('проверка.сначалаПесня')); return; }
   const btn = $('btn-sound-check');
   const label = btn.textContent;
-  btn.textContent = 'Слушаем…';
+  btn.textContent = t('проверка.слушаем');
   btn.disabled = true;
 
   const wasPlaying = audio.playing;
@@ -3146,35 +3146,31 @@ $('btn-sound-check').addEventListener('click', async () => {
   const hasInst = !!state.instrumentalBuffer;
   const instShort = hasInst && state.instrumentalBuffer.duration < audio.duration - 0.5;
   const src = hasInst
-    ? (state.customInst ? `своя минусовка (${state.instName})` : 'встроенное приглушение вокала')
-    : 'минусовки нет, играет оригинал';
+    ? (state.customInst
+      ? t('проверка.источник.своя', { 'имя': state.instName })
+      : t('проверка.источник.встроенное'))
+    : t('проверка.источник.нет');
 
   const lines = [
-    `Позиция: ${fmtTime(at)} из ${fmtTime(audio.duration)}`,
-    `Источник: ${src}`,
-    `Громкость вокала: ${Math.round(state.vocalMix * 100)}%`,
+    t('проверка.позиция', { at: fmtTime(at), 'всего': fmtTime(audio.duration) }),
+    t('проверка.источник', { src }),
+    t('проверка.громкость', { v: Math.round(state.vocalMix * 100) }),
     '',
-    `Сигнал в песне: ${songPeak == null ? '—' : songPeak.toFixed(3)}`,
-    `Сигнал в минусовке: ${instPeak == null ? '—' : instPeak.toFixed(3)}`,
-    `Сигнал на выходе: ${outPeak.toFixed(3)}`,
-    `Состояние аудио: ${ctx.state}, частота ${Math.round(ctx.sampleRate)} Гц`,
+    t('проверка.сигналПесня', { v: songPeak == null ? '—' : songPeak.toFixed(3) }),
+    t('проверка.сигналМинус', { v: instPeak == null ? '—' : instPeak.toFixed(3) }),
+    t('проверка.сигналВыход', { v: outPeak.toFixed(3) }),
+    t('проверка.состояние', { state: ctx.state, rate: Math.round(ctx.sampleRate) }),
     '',
   ];
 
   if (hasInst && instPeak !== null && instPeak < 0.001) {
-    lines.push('❗ В минусовке на этом месте тишина. Возможно, файл не тот ' +
-      '(например, дорожка с одним вокалом) или он короче песни. ' +
-      'Попробуй убрать свою минусовку или подвинуть позицию.');
+    lines.push(t('проверка.тишинаВМинусе'));
   } else if (instShort) {
-    lines.push('❗ Минусовка короче песни — ближе к концу будет тишина.');
+    lines.push(t('проверка.минусКороче'));
   } else if (outPeak < 0.001) {
-    lines.push('❗ Данные звука есть, но на выходе тишина — звук глушит браузер.\n' +
-      'В Brave: значок льва → отключи Shields для сайта.\n' +
-      'В Safari: правый клик по вкладке → «Включить звук», и Настройки → ' +
-      'Веб-сайты → Автовоспроизведение → «Разрешить все».');
+    lines.push(t('проверка.браузерГлушит'));
   } else {
-    lines.push('✅ Звук идёт нормально. Если не слышно — проверь громкость системы, ' +
-      'выбранное устройство вывода и не заглушена ли вкладка.');
+    lines.push(t('проверка.всёХорошо'));
   }
   alert(lines.join('\n'));
 });
@@ -3182,7 +3178,7 @@ $('btn-sound-check').addEventListener('click', async () => {
 /* ---------- Экспорт LRC ---------- */
 $('btn-export-lrc').addEventListener('click', () => {
   const lines = syncedLines();
-  if (!lines.length) { alert('Сначала синхронизируй текст.'); return; }
+  if (!lines.length) { alert(t('экспорт.нетСтрок')); return; }
   const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
   const lrc = [
     `[ti:${name}]`,
@@ -3199,7 +3195,7 @@ $('btn-export-lrc').addEventListener('click', () => {
    иначе автоматическое деление по длине слов. */
 $('btn-export-lrc-words').addEventListener('click', () => {
   const lines = syncedLines();
-  if (!lines.length) { alert('Сначала синхронизируй текст.'); return; }
+  if (!lines.length) { alert(t('экспорт.нетСтрок')); return; }
   const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
   const body = lines.map((l, i) => {
     const span = lineSpan(lines, i);
@@ -3216,7 +3212,7 @@ $('btn-export-lrc-words').addEventListener('click', () => {
     '[by:Karaoke Punch]',
     ...body,
   ].join('\n');
-  download(new Blob([lrc], { type: 'text/plain;charset=utf-8' }), `${name} (по словам).lrc`);
+  download(new Blob([lrc], { type: 'text/plain;charset=utf-8' }), t('экспорт.имяСлова', { 'имя': name }));
 });
 
 /* ---------- Экспорт WAV (минусовка) ---------- */
@@ -3288,12 +3284,12 @@ async function собратьМинусовку() {
 
 $('btn-export-wav').addEventListener('click', async () => {
   if (!state.instrumentalBuffer) {
-    alert('Для моно-файла минусовку сделать нельзя.');
+    alert(t('экспорт.моно'));
     return;
   }
   const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
   const buf = await собратьМинусовку();
-  download(bufferToWav(buf), `${name} (минус).wav`);
+  download(bufferToWav(buf), t('экспорт.имяМинус', { 'имя': name }));
 });
 
 /* ============================================================
@@ -3575,16 +3571,10 @@ function openEditor() {
   updateSelInfo();
   /* Переключатель вокала имеет смысл, только если есть чем заменить
      оригинал: у моно-файла минусовки нет, и звучит он всегда как есть */
-  const вокалЕсть = !!state.instrumentalBuffer;
   const пер = $('sel-vocal');
   пер.checked = editor.hearVocal;
-  пер.disabled = !вокалЕсть;
-  пер.parentElement.title = вокалЕсть
-    ? 'В редакторе по умолчанию звучит оригинал: размечать на слух без голоса невозможно'
-    : 'Файл моно — минусовки нет, оригинал звучит всегда';
-  $('tl-voice-note').textContent = voiceReady()
-    ? '— видно, где на самом деле поют'
-    : '— появится, когда уберёшь вокал нейросетью';
+  пер.disabled = !state.instrumentalBuffer;
+  обновитьПодписиРедактора();
   resizeTimeline();
   $('edit-total').textContent = fmtTime(audio.duration);
   drawTimeline();
@@ -3629,14 +3619,14 @@ function renderEditList() {
     const end = document.createElement('span');
     end.className = 'ts end-ts' + (line.ручнойКонец ? '' : ' empty');
     end.dataset.endTsI = i;
-    end.textContent = line.time == null ? '–:––' : `до ${fmtTime(lineEnd(synced, j))}`;
+    end.textContent = line.time == null ? '–:––' : t('ред.до', { t: fmtTime(lineEnd(synced, j)) });
 
     // Длительность: по ней сразу видно строку, которой не хватило места
     const dur = document.createElement('span');
     dur.className = 'ts dur-ts';
     dur.dataset.durI = i;
     dur.textContent = line.time == null
-      ? '' : `${(lineEnd(synced, j) - lineStart(synced, j)).toFixed(1)} с`;
+      ? '' : t('ред.длина', { v: (lineEnd(synced, j) - lineStart(synced, j)).toFixed(1) });
 
     /* Тихая пометка: время этой строки нейросеть подобрала на глазок.
        На дорожке такой блок тоже нарисован иначе. */
@@ -3645,7 +3635,7 @@ function renderEditList() {
       guess = document.createElement('span');
       guess.className = 'guess-mark';
       guess.textContent = '≈';
-      guess.title = 'Время подобрано приблизительно — послушай и поправь';
+      guess.title = t('ред.глазок.подсказка');
     }
 
     const text = document.createElement('div');
@@ -3661,7 +3651,7 @@ function renderEditList() {
       mark = document.createElement('span');
       mark.className = 'word-mark';
       mark.textContent = '♪';
-      mark.title = 'Слова этой строки размечены вручную';
+      mark.title = t('ред.слова.помечены');
     }
 
     li.append(num, ts, end, dur);
@@ -3829,10 +3819,10 @@ function deleteLine(row) {
   const line = state.lines[row];
   if (!line) return;
   if (state.lines.length <= 1) {
-    alert('Это последняя строка — удалять нечего. Текст правится на шаге «Текст».');
+    alert(t('ред.последняяСтрока'));
     return;
   }
-  if (!confirm(`Убрать строку «${line.text}» из караоке?\n\nОтменяется через ${МОД}+Z.`)) return;
+  if (!confirm(t('ред.удалитьСтроку', { 'текст': line.text, 'мод': МОД }))) return;
   pushHistory();
   state.lines.splice(row, 1);
   editor.histLines = state.lines.length;
@@ -3896,7 +3886,7 @@ function updateWordExportBtn() {
 function startWordTap(i) {
   const line = state.lines[i];
   if (!line || line.time == null) {
-    alert('Сначала простучи начало этой строки: кнопка «✎ простучать заново» в панели выбранной строки.');
+    alert(t('ред.сначалаПростучи'));
     return;
   }
   const chunks = splitWords(line.text);
@@ -3932,7 +3922,7 @@ function renderWordTap() {
     box.appendChild(span);
   });
   $('word-tap-count').textContent =
-    `${wordTap.marks.length} из ${wordTap.chunks.length}`;
+    t('ред.словСчёт', { n: wordTap.marks.length, 'всего': wordTap.chunks.length });
 }
 
 function tapWord() {
@@ -4088,10 +4078,10 @@ function startTapMode(from) {
 function renderTapMode() {
   const total = state.lines.length;
   const done = state.lines.filter((l) => l.time != null).length;
-  $('tap-count').textContent = `размечено ${done} из ${total}`;
+  $('tap-count').textContent = t('ред.размечено', { n: done, 'всего': total });
   const cur = state.lines[tap.index];
   const next = state.lines[tap.index + 1];
-  $('tap-now').textContent = cur ? cur.text : 'Все строки размечены';
+  $('tap-now').textContent = cur ? cur.text : t('ред.всёРазмечено');
   $('tap-next').textContent = next ? next.text : '';
   $('btn-tap-undo').disabled = !tap.done.length;
 }
@@ -4196,10 +4186,7 @@ function проверитьПорядокПослеЗахода() {
     if (state.lines[i].time != null) { k = i; break; }
   }
   if (k < 0 || state.lines[k].time > t) return;
-  const ok = confirm(
-    `Строка ${k + 1} размечена раньше, чем та, которую ты только что простучал.\n\n` +
-    `Стереть метки с ${k + 1}-й строки и дальше, чтобы простучать их заново?\n` +
-    `Всё вместе с этим заходом отменяется через ${МОД}+Z.`);
+  const ok = confirm(t('ред.порядок', { k: k + 1, 'мод': МОД }));
   if (!ok) return;
   for (let i = k; i < state.lines.length; i++) {
     const l = state.lines[i];
@@ -4439,8 +4426,7 @@ function drawOrigLane(g, lane, W) {
     g.fillStyle = 'rgba(251, 113, 133, 0.55)';
     g.font = '10px sans-serif';
     g.textAlign = 'left';
-    g.fillText('оригинал: протяни мышью — на этом куске зазвучат настоящие слова',
-      6, lane.y + lane.h / 2 + 3);
+    g.fillText(t('дорожка.оригинал.пусто'), 6, lane.y + lane.h / 2 + 3);
     return;
   }
 
@@ -4468,7 +4454,7 @@ function drawOrigLane(g, lane, W) {
 
     const крестик = w >= ORIG_DEL_W + 26;
     g.fillStyle = '#ffe4e6';
-    const txt = clipText(g, 'оригинал', w - 8 - (крестик ? ORIG_DEL_W : 0));
+    const txt = clipText(g, t('дорожка.оригинал'), w - 8 - (крестик ? ORIG_DEL_W : 0));
     if (txt) g.fillText(txt, x0 + 4, lane.y + lane.h / 2);
     if (крестик) {
       g.textAlign = 'center';
@@ -4516,7 +4502,7 @@ function drawVoiceLane(g, lane, W) {
   g.fillStyle = 'rgba(56, 189, 248, 0.5)';
   g.font = '9px sans-serif';
   g.textAlign = 'left';
-  g.fillText('голос', 4, lane.y + 10);
+  g.fillText(t('дорожка.голос'), 4, lane.y + 10);
 }
 
 /* ---------- Полоса волны ---------- */
@@ -4618,7 +4604,7 @@ function drawWordBlocks(g, lane, W) {
     g.fillStyle = 'rgba(154, 154, 176, 0.6)';
     g.font = '10px sans-serif';
     g.textAlign = 'left';
-    g.fillText('выбери строку — здесь появятся её слова', 6, lane.y + lane.h / 2 + 3);
+    g.fillText(t('дорожка.словаПусто'), 6, lane.y + lane.h / 2 + 3);
     return;
   }
   const manual = hasWords(sp.line);
@@ -4911,8 +4897,9 @@ function updateSelInfo() {
   if (!el) return;
   const sp = spanOfRow(editor.sel);
   const line = sp ? sp.line : null;
-  el.textContent = !sp ? 'Строка не выбрана'
-    : `Строка №${sp.row + 1}${line.сомнительная ? ' · время на глазок' : ''}`;
+  el.textContent = !sp ? t('ред.строкаНеВыбрана')
+    : t('ред.строкаНомер', { n: sp.row + 1 })
+      + (line.сомнительная ? t('ред.строкаГлазок') : '');
 
   /* Поле, в котором прямо сейчас набирают, не трогаем: панель
      обновляется и по ходу воспроизведения, и затирать набранное
@@ -4940,7 +4927,7 @@ function updateSelInfo() {
   $('btn-sel-del').disabled = !state.lines.length;
   const marked = !!(line && hasWords(line));
   $('btn-sel-words').classList.toggle('marked', marked);
-  $('btn-sel-words').textContent = marked ? '♪ слова ✓' : '♪ слова';
+  $('btn-sel-words').textContent = t(marked ? 'ред.словаКнопкаГотово' : 'ред.словаКнопка');
   $('btn-sel-words-reset').classList.toggle('hidden', !marked);
 }
 
@@ -5821,7 +5808,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
 async function exportVideo() {
   if (videoExport.active || !state.originalBuffer) return;
   const lines = syncedLines();
-  if (!lines.length) { alert('Сначала синхронизируй текст.'); return; }
+  if (!lines.length) { alert(t('экспорт.нетСтрок')); return; }
 
   audio.pause();
   updatePlayerUI();
@@ -5829,7 +5816,7 @@ async function exportVideo() {
   videoExport.cancelled = false;
   $('export-overlay').classList.remove('hidden');
   $('export-fill').style.width = '0%';
-  $('export-status').textContent = 'Записываем видео…';
+  $('export-status').textContent = t('экспорт.записываем');
 
   // Логотип для угла кадра — грузим заранее, чтобы не мигал
   const watermark = await new Promise((resolve) => {
@@ -5863,9 +5850,9 @@ async function exportVideo() {
      и если начать писать раньше, первые секунды видео уйдут запасным
      шрифтом, а дальше надпись сменится на Bungee Shade. На экране
      такого не увидишь — разнобой остаётся только в файле. */
-  $('export-status').textContent = 'Готовим шрифт…';
+  $('export-status').textContent = t('экспорт.готовимШрифт');
   await дождатьсяЗнака(H);
-  $('export-status').textContent = 'Записываем видео…';
+  $('export-status').textContent = t('экспорт.записываем');
 
   // Звук: та же смесь, что в плеере, но в MediaStream вместо колонок
   const ctx = audio.ensureCtx();
@@ -5930,7 +5917,7 @@ async function exportVideo() {
     if (videoExport.cancelled || !chunks.length) return;
     const ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
     const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
-    download(new Blob(chunks, { type: mime || 'video/webm' }), `${name} (караоке).${ext}`);
+    download(new Blob(chunks, { type: mime || 'video/webm' }), t('экспорт.имяВидео', { 'имя': name, ext }));
   };
 
   sources.forEach((s) => s.start(t0));
@@ -5958,8 +5945,8 @@ async function exportVideo() {
     if (typeof videoTrack.requestFrame === 'function') videoTrack.requestFrame();
     const pct = Math.min(100, (pos / duration) * 100);
     $('export-fill').style.width = `${pct.toFixed(1)}%`;
-    $('export-status').textContent =
-      `Записываем видео… ${fmtTime(Math.max(0, pos))} / ${fmtTime(duration)}`;
+    $('export-status').textContent = t('экспорт.записываемХод',
+      { at: fmtTime(Math.max(0, pos)), 'всего': fmtTime(duration) });
   };
   ticker.start();
 }
@@ -6074,6 +6061,10 @@ function showUpdateBar(text, actionLabel) {
   $('update-bar').classList.remove('hidden');
 }
 
+/* Как собрать полосу заново на другом языке. Ставится тем, кто её
+   показал (здесь — checkWebUpdate, в приложении — desktop.js). */
+updater.перерисовать = null;
+
 async function checkWebUpdate() {
   if (updater.handled) return;
   try {
@@ -6083,7 +6074,9 @@ async function checkWebUpdate() {
     if (!data.version || data.version === APP_VERSION) return;
     if (localStorage.getItem('karaoke-skip-version') === data.version) return;
     updater.latest = data.version;
-    showUpdateBar(`Вышла новая версия студии — ${data.version}`, 'Обновить');
+    updater.перерисовать = () => showUpdateBar(
+    t('обновление.вышла', { v: data.version }), t('обновление.обновить'));
+  updater.перерисовать();
   } catch (e) { /* нет сети — не мешаем работать */ }
 }
 
@@ -6165,13 +6158,89 @@ $('whatsnew-close').addEventListener('click', hideWhatsNew);
 $('whatsnew').addEventListener('click', (e) => {
   if (e.target === $('whatsnew')) hideWhatsNew();
 });
-// Ссылка на скачивание закрывает окно, иначе оно перекроет нужный раздел
-$('whatsnew-link').addEventListener('click', hideWhatsNew);
+/* Ссылка на скачивание закрывает окно, иначе оно перекроет нужный
+   раздел. Слушаем окно целиком, а не саму ссылку: абзац с ней
+   пересобирается при смене языка, и обработчик на узле бы пропал. */
+$('whatsnew').addEventListener('click', (e) => {
+  if (e.target.closest && e.target.closest('#whatsnew-link')) hideWhatsNew();
+});
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('whatsnew').classList.contains('hidden')) {
     e.preventDefault();
     hideWhatsNew();
   }
+});
+
+/* ============================================================
+   Переключение языка
+
+   Словарь и сама подстановка живут в i18n.js — здесь только то,
+   что знает про эту страницу: как выглядит переключатель и что
+   нужно перерисовать, когда язык сменили.
+
+   Перерисовывать приходится всё, что собрано кодом: разметка
+   с ключами обновляется сама, а подписи, которые ставит app.js
+   (шрифты, значения ползунков, список строк, дорожка), — нет.
+   ============================================================ */
+
+/* Подписи редактора, зависящие от языка. Вынесены из openEditor,
+   чтобы их можно было обновить и без пересборки всего редактора. */
+function обновитьПодписиРедактора() {
+  const пер = $('sel-vocal');
+  if (пер && пер.parentElement) {
+    пер.parentElement.title = t(state.instrumentalBuffer ? 'ред.вокал.есть' : 'ред.вокал.моно');
+  }
+  const нота = $('tl-voice-note');
+  if (нота) нота.textContent = t(voiceReady() ? 'ред.голос.есть' : 'ред.голос.нет');
+}
+
+/* Переключатель: две кнопки без флагов — флаг обозначает страну,
+   а не язык. Собирается кодом и в шапке, и в студии: разметка
+   у них одна, а мест два. */
+function собратьПереключателиЯзыка() {
+  document.querySelectorAll('.lang-switch').forEach((узел) => {
+    узел.textContent = '';
+    I18N.ЯЗЫКИ.forEach((код) => {
+      const кнопка = document.createElement('button');
+      кнопка.type = 'button';
+      кнопка.className = 'lang-btn';
+      кнопка.dataset.lang = код;
+      кнопка.textContent = t('язык.' + код);
+      кнопка.title = t('язык.' + код + '.полно');
+      кнопка.setAttribute('aria-label', кнопка.title);
+      const свой = код === I18N.язык();
+      кнопка.classList.toggle('active', свой);
+      кнопка.setAttribute('aria-pressed', свой ? 'true' : 'false');
+      кнопка.addEventListener('click', () => I18N.установить(код));
+      узел.appendChild(кнопка);
+    });
+  });
+}
+
+/* Всё, что надо переставить после смены языка. Порядок важен только
+   в одном месте: модификаторы расставляются после перевода разметки,
+   потому что пустые <span class="mod-key"> приезжают вместе с ней. */
+document.addEventListener('i18n', () => {
+  расставитьМодификаторы();
+  собратьПереключателиЯзыка();
+  заполнитьШрифты();
+  updateStyleUI();
+  updateEqUI();
+  updateInstUI();
+  $('btn-bg-add').textContent = t(state.bgImage ? 'минусовка.заменить' : 'минусовка.выбрать');
+  // Подпись кнопки «развернуть» ставится кодом, а не разметкой
+  const полный = stageFullOn();
+  $('btn-stage-full').title = t(полный ? 'сцена.свернуть' : 'сцена.развернуть');
+  $('btn-stage-full').setAttribute('aria-label', $('btn-stage-full').title);
+  обновитьПодписиРедактора();
+  if ($('edit-list').children.length) renderEditList();
+  refreshTimes();
+  updateSelInfo();
+  drawTimeline();
+  if (tap.active) renderTapMode();
+  if (wordTap.active) renderWordTap();
+  if ($('step-4').classList.contains('active')) renderStage();
+  if (updater.перерисовать) updater.перерисовать();
 });
 
 /* ---------- Восстановление проекта при загрузке страницы ----------
@@ -6181,6 +6250,7 @@ document.addEventListener('keydown', (e) => {
    поверх них нули и отсутствие картинки. */
 (function init() {
   расставитьМодификаторы();
+  собратьПереключателиЯзыка();
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
   if (saved && saved.style) state.style = styleFromSaved(saved);

@@ -47,21 +47,21 @@ const CSP_DESKTOP =
    заполняет desktop.js: там считается, сколько это займёт. */
 const AI_BLOCK = `      <div class="bg-upload hidden" id="ai-block">
         <div class="bg-upload-text">
-          <b>🧠 Убрать вокал нейросетью</b>
-          <span>Локальная модель UVR-MDX-NET-Inst_HQ_3 — та же, которой считает UVR5. Всё посчитается прямо на компьютере</span>
+          <b data-i18n="ии.заголовок">🧠 Убрать вокал нейросетью</b>
+          <span data-i18n="ии.текст">Локальная модель UVR-MDX-NET-Inst_HQ_3 — та же, которой считает UVR5. Всё посчитается прямо на компьютере</span>
         </div>
-        <button class="btn btn-primary btn-small" id="btn-ai-run">Убрать вокал</button>
+        <button class="btn btn-primary btn-small" id="btn-ai-run" data-i18n="ии.кнопка">Убрать вокал</button>
         <p class="ai-eta" id="ai-eta"></p>
         <details class="ai-more">
-          <summary>Ещё варианты</summary>
+          <summary data-i18n="ии.ещё">Ещё варианты</summary>
           <div class="ai-more-body">
-            <label class="btn btn-ghost btn-small export-quality" for="ai-quality">Качество
+            <label class="btn btn-ghost btn-small export-quality" for="ai-quality"><span data-i18n="ии.качество">Качество</span>
               <select id="ai-quality">
-                <option value="1" selected>Один проход</option>
-                <option value="3">Три прохода — дольше втрое</option>
+                <option value="1" selected data-i18n="ии.один">Один проход</option>
+                <option value="3" data-i18n="ии.три">Три прохода — дольше втрое</option>
               </select>
             </label>
-            <p>Мы замерили: три прохода со сдвигом дают тот же результат, что один.
+            <p data-i18n="ии.пояснение">Мы замерили: три прохода со сдвигом дают тот же результат, что один.
               Расхождение между ними −31 дБ, остаток голоса совпадает до сотых.
               Раньше здесь стояло три прохода и обещалось лучшее качество — это
               оказалось неправдой, ждать приходилось втрое дольше ни за что.
@@ -74,10 +74,10 @@ const AI_BLOCK = `      <div class="bg-upload hidden" id="ai-block">
 
 const AI_OVERLAY = `<div class="export-overlay hidden" id="ai-overlay">
   <div class="export-box">
-    <p id="ai-status">Готовим модель…</p>
+    <p id="ai-status" data-i18n="ии.готовим">Готовим модель…</p>
     <div class="export-bar"><div id="ai-fill"></div></div>
-    <p class="export-hint" id="ai-hint">Считает на твоём компьютере, ничего не отправляется в интернет.</p>
-    <button class="btn btn-ghost" id="btn-ai-cancel">Отменить</button>
+    <p class="export-hint" id="ai-hint" data-i18n="ии.локально">Считает на твоём компьютере, ничего не отправляется в интернет.</p>
+    <button class="btn btn-ghost" id="btn-ai-cancel" data-i18n="ии.отменить">Отменить</button>
   </div>
 </div>
 
@@ -97,11 +97,11 @@ const AI_OVERLAY = `<div class="export-overlay hidden" id="ai-overlay">
    попадаться на глаза сразу, а не после прокрутки длинных пояснений. */
 const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
       <div class="asr-head">
-        <b>🗣 Разметка текста нейросетью</b>
+        <b data-i18n="asr.заголовок">🗣 Разметка текста нейросетью</b>
         <span class="asr-source" id="asr-source"></span>
       </div>
       <p class="asr-result hidden" id="asr-result"><b id="asr-result-head"></b><span id="asr-result-note"></span></p>
-      <p class="asr-warning hidden" id="asr-about-fit">
+      <p class="asr-warning hidden" id="asr-about-fit" data-i18n-html="asr.подгонка">
         <b>Текст на месте — нейросеть расставит по нему времена.</b> Она послушает
         песню, найдёт, где какое слово поётся, и разложит по этим меткам ваши строки:
         буквы остаются вашими, от нейросети берётся только время. Так надёжнее, чем
@@ -109,7 +109,7 @@ const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
         Точнее выходит, если сначала убрать вокал нейросетью на первом шаге:
         тогда она слушает чистый голос, а не микс.
       </p>
-      <p class="asr-warning" id="asr-about-fresh">
+      <p class="asr-warning" id="asr-about-fresh" data-i18n-html="asr.сНуля">
         <b>Текста песни нет под рукой?</b> Нейросеть напишет его сама. Честно:
         распознавание <b>пения</b> работает заметно хуже, чем распознавание речи —
         гласные тянутся, мешают бэк-вокал и музыка, рифм модель не знает, так что
@@ -118,30 +118,31 @@ const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
         нейросети останется только расставить времена.
       </p>
       <div class="asr-controls">
-        <label class="btn btn-ghost btn-small export-quality" for="asr-lang">Язык
+        <label class="btn btn-ghost btn-small export-quality" for="asr-lang"><span data-i18n="asr.язык">Язык</span>
           <select id="asr-lang">
-            <option value="">Определить сам</option>
-            <option value="russian" selected>Русский</option>
-            <option value="english">Английский</option>
-            <option value="ukrainian">Украинский</option>
-            <option value="german">Немецкий</option>
-            <option value="french">Французский</option>
-            <option value="spanish">Испанский</option>
-            <option value="italian">Итальянский</option>
+            <option value="" data-i18n="asr.язык.сам">Определить сам</option>
+            <option value="russian" selected data-i18n="asr.язык.ru">Русский</option>
+            <option value="english" data-i18n="asr.язык.en">Английский</option>
+            <option value="ukrainian" data-i18n="asr.язык.uk">Украинский</option>
+            <option value="german" data-i18n="asr.язык.de">Немецкий</option>
+            <option value="french" data-i18n="asr.язык.fr">Французский</option>
+            <option value="spanish" data-i18n="asr.язык.es">Испанский</option>
+            <option value="italian" data-i18n="asr.язык.it">Итальянский</option>
           </select>
         </label>
         <button class="btn btn-primary btn-small" id="btn-asr-run">Распознать текст</button>
         <button class="btn btn-ghost btn-small hidden" id="btn-asr-fresh"
+          data-i18n="asr.сНуля.кнопка" data-i18n-title="asr.сНуля.подсказка"
           title="Нейросеть напишет текст сама и заменит им то, что в поле">Распознать с нуля</button>
       </div>
       <p class="asr-eta" id="asr-eta"></p>
       <details class="asr-more">
-        <summary>Ещё варианты</summary>
+        <summary data-i18n="asr.ещё">Ещё варианты</summary>
         <div class="asr-more-body">
-          <label class="btn btn-ghost btn-small export-quality" for="asr-model">Модель
+          <label class="btn btn-ghost btn-small export-quality" for="asr-model"><span data-i18n="asr.модель">Модель</span>
             <select id="asr-model"></select>
           </label>
-          <p>По умолчанию стоит крупная модель — она разбирает пение лучше всех,
+          <p data-i18n="asr.модель.пояснение">По умолчанию стоит крупная модель — она разбирает пение лучше всех,
             что у нас есть, но считает примерно вдвое дольше обычной и весит втрое
             больше. Обычную имеет смысл взять, если ждать некогда: для подгонки
             своего текста ей чаще всего хватает, ведь от нейросети там нужны только
@@ -153,10 +154,10 @@ const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
 
 const ASR_OVERLAY = `<div class="export-overlay hidden" id="asr-overlay">
   <div class="export-box">
-    <p id="asr-status">Готовим модель…</p>
+    <p id="asr-status" data-i18n="asr.готовим">Готовим модель…</p>
     <div class="export-bar"><div id="asr-fill"></div></div>
-    <p class="export-hint" id="asr-hint">Считает на твоём компьютере, ничего не отправляется в интернет.</p>
-    <button class="btn btn-ghost" id="btn-asr-cancel">Отменить</button>
+    <p class="export-hint" id="asr-hint" data-i18n="asr.локально">Считает на твоём компьютере, ничего не отправляется в интернет.</p>
+    <button class="btn btn-ghost" id="btn-asr-cancel" data-i18n="asr.отменить">Отменить</button>
   </div>
 </div>
 
@@ -176,7 +177,7 @@ function patchHtml(src) {
   s = s.replace('<span class="logo-icon hidden" id="logo-fallback">', '<span class="logo-icon" id="logo-fallback">');
 
   // 3. Версии в путях к файлам не нужны — тут нет кэша браузера
-  s = s.replace(/(href|src)="(style\.css|app\.js)\?v=[^"]*"/g, '$1="$2"');
+  s = s.replace(/(href|src)="(style\.css|app\.js|i18n\.js)\?v=[^"]*"/g, '$1="$2"');
 
   // 4. Блок удаления вокала — после блока своей минусовки
   const anchor = '        <input type="file" id="inst-input" accept="audio/*" hidden>\n      </div>\n';
@@ -308,10 +309,13 @@ try {
   const html = patchHtml(fs.readFileSync(path.join(WEB, 'index.html'), 'utf8'));
   const css = patchCss(fs.readFileSync(path.join(WEB, 'style.css'), 'utf8'));
   const js = fs.readFileSync(path.join(WEB, 'app.js'), 'utf8');
+  // Словарь перевода общий с сайтом, настольных отличий у него нет
+  const i18n = fs.readFileSync(path.join(WEB, 'i18n.js'), 'utf8');
 
   fs.writeFileSync(path.join(OUT, 'index.html'), html);
   fs.writeFileSync(path.join(OUT, 'style.css'), css);
   fs.writeFileSync(path.join(OUT, 'app.js'), js);
+  fs.writeFileSync(path.join(OUT, 'i18n.js'), i18n);
 
   /* Фирменные шрифты. Их подключает style.css относительным путём
      fonts/…, и без этих файлов приложение молча рисовало бы имя
@@ -335,6 +339,7 @@ try {
   console.log('  index.html — политика безопасности, блок нейросети, скрипты');
   console.log('  style.css  — полоса прогресса нейросети');
   console.log('  app.js     — без изменений');
+  console.log('  i18n.js    — без изменений');
   console.log('  fonts/     — Bungee, Bungee Shade и лицензия OFL');
 } catch (err) {
   console.error('Не получилось:', err.message);
