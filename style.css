@@ -384,27 +384,42 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    под двести знаков: читать неудобно. Поэтому в приложении блок
    встаёт слева отдельной колонкой, как настройки в караоке, а поле
    занимает остаток. На сайте этого блока нет, поле занимает шаг
-   целиком — правило просто не срабатывает. */
+   целиком — правило просто не срабатывает.
+
+   Колонка нарочно широкая, а поле текста уже. Беда была в обратном:
+   в колонке 360 px тот же текст занимал вдвое больше строк, ряд
+   «Язык — Распознать — Распознать с нуля» переносился на две строки,
+   и на ноутбуке 1280×720 блок не помещался по высоте — внутри него
+   появлялась своя полоса прокрутки. Замеры на 1280×720: в колонке
+   360 px содержимому нужно было 588 px при 432 доступных, в колонке
+   640 px нужно 384 — помещается целиком. Поле текста при этом всё
+   равно шире, чем строка любой песни.
+
+   Подсказка «Вставь текст песни…» переехала в правую колонку, к полю,
+   о котором она и говорит: в левой она отъедала у блока 64 px высоты,
+   которых как раз не хватало. */
 #step-2.active { gap: 0.8rem 1rem; }
 #step-2 > .panel-hint { margin-bottom: 0; }
 #step-2 > .panel-actions { margin-top: 0.2rem; }
 #step-2.active:has(> .asr-block) {
   display: grid;
-  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  grid-template-columns: clamp(18rem, 54%, 40rem) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 #step-2.active:has(> .asr-block) > .panel-hint {
-  grid-area: 1 / 1 / 2 / 2;
+  grid-area: 1 / 2 / 2 / 3;
   align-self: start;
   text-align: left;
 }
 #step-2.active:has(> .asr-block) > .asr-block {
-  grid-area: 2 / 1 / 3 / 2;
+  grid-area: 1 / 1 / 3 / 2;
   margin-bottom: 0;
   min-height: 0;
+  /* Прокрутка остаётся страховкой на совсем низкое окно, но в рабочих
+     размерах содержимое помещается целиком и полосы не видно */
   overflow-y: auto;
 }
-#step-2.active:has(> .asr-block) > #lyrics-input { grid-area: 1 / 2 / 3 / 3; }
+#step-2.active:has(> .asr-block) > #lyrics-input { grid-area: 2 / 2 / 3 / 3; }
 #step-2.active:has(> .asr-block) > .panel-actions { grid-area: 3 / 1 / 4 / 3; }
 .panel-hint { color: var(--text-dim); margin-bottom: 1rem; text-align: center; }
 .panel-actions { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap; }
