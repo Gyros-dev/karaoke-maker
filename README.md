@@ -1,4 +1,4 @@
-# Бэнэнгская Рапсодия
+# Karaoke Punch
 
 Караоке-студия: загрузить песню, убрать вокал, разметить текст, спеть
 и сохранить видео. Работает в браузере и отдельным приложением
@@ -361,7 +361,7 @@ grep -c codesign desktop/build/afterPack.js    # должно быть боль�
 ### 3. Проверить сборку
 
 ```bash
-codesign --verify --deep --strict "desktop/dist/mac-arm64/Бэнэнгская Рапсодия.app"
+codesign --verify --deep --strict "desktop/dist/mac-arm64/Karaoke Punch.app"
 ```
 
 Тишина в ответ — значит всё хорошо.
@@ -373,7 +373,7 @@ codesign --verify --deep --strict "desktop/dist/mac-arm64/Бэнэнгская �
 - Тег: `v1.2.0` (обязательно с буквой `v`)
 - Приложить оба файла из `desktop/dist/`
 - **Переименовать их латиницей** перед загрузкой, например
-  `Benengskaya-Rapsodiya-1.2.0-macOS-arm64.dmg`. С кириллицей в имени
+  `Karaoke-Punch-1.2.0-macOS-arm64.dmg`. С кириллицей в имени
   прямые ссылки ломаются на кодировке.
 
 ### 5. Обновить ссылки на сайте
@@ -415,7 +415,7 @@ git add -A && git commit -m "Выпуск 1.2.0" && git push
 первом запуске — оно не заверено у Apple. Лечится один раз:
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/Бэнэнгская Рапсодия.app"
+xattr -dr com.apple.quarantine "/Applications/Karaoke Punch.app"
 ```
 
 **Сайт вечно предлагает обновиться.** Разъехались `app.js` и

@@ -216,7 +216,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 640,
     backgroundColor: '#0a0a0f',
-    title: 'Бэнэнгская Рапсодия',
+    title: 'Karaoke Punch',
     // Явно задаём иконку окну: без этого в dev-режиме Electron показывает
     // стандартную иконку, хотя installer уже использует нашу.
     icon: process.platform === 'win32'
@@ -352,8 +352,11 @@ function createWindow() {
             applyStyle();
             const сцена = document.getElementById('lyrics-stage');
             const cs = getComputedStyle(сцена);
-            const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-            const базовый = parseFloat(cs.getPropertyValue('--st-size')) * rem;
+            /* Кегль теперь готовым числом лежит в --st-fs. Раньше читали
+               --st-size (доля от rem), и с переходом на единый кегль
+               признак замолчал: базовый всегда выходил null, «совпадает»
+               всегда false — при любом состоянии программы. */
+            const базовый = parseFloat(cs.getPropertyValue('--st-fs'));
             const размеры = [...сцена.querySelectorAll('.stage-line')]
               .map((el) => parseFloat(getComputedStyle(el).fontSize));
             return {
@@ -750,6 +753,32 @@ function createWindow() {
   }
 }
 
+/* ---------- Переезд со старого имени ----------
+   Программа называлась «Бэнэнгская Рапсодия», и папка настроек звалась
+   по видимому имени. После переименования в Karaoke Punch приложение
+   стало бы смотреть в новую, пустую папку — а в старой остаются
+   скачанные модели (больше 400 МБ) и всё хранилище с сохранёнными
+   проектами. То есть человек после обновления обнаружил бы, что его
+   разметка пропала, а нейросети качаются заново.
+
+   Поэтому один раз, до первого обращения к папке, переносим старую
+   целиком. Если новая уже есть — не трогаем ничего: значит, переезд
+   был или человек начал с нового имени. */
+function перенестиСтаруюПапку() {
+  try {
+    const новая = app.getPath('userData');
+    if (fs.existsSync(новая)) return;
+    const старая = path.join(app.getPath('appData'), 'Бэнэнгская Рапсодия');
+    if (!fs.existsSync(старая)) return;
+    fs.renameSync(старая, новая);
+    console.log('Папка настроек перенесена со старого имени');
+  } catch (e) {
+    /* Не вышло — не беда: приложение просто начнёт с чистой папки
+       и предложит скачать модели. Ронять запуск из-за этого нельзя. */
+  }
+}
+перенестиСтаруюПапку();
+
 /* Вторая копия на одной папке настроек только вредит: проекты живут
    в localStorage профиля, и копии затирают правки друг друга — у той,
    что запустилась второй, сохранение может тихо не доехать. Поэтому
@@ -819,7 +848,7 @@ function downloadModel(dest) {
     const get = (url, redirects = 0) => {
       if (завершено) return;
       if (redirects > 5) return finish(new Error('Слишком много перенаправлений'));
-      req = https.get(url, { headers: { 'User-Agent': 'benengskaya' }, timeout: 30000 }, (res) => {
+      req = https.get(url, { headers: { 'User-Agent': 'karaoke-punch' }, timeout: 30000 }, (res) => {
         if (завершено) { res.resume(); return; }
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
@@ -901,7 +930,7 @@ function fetchTo(url, dest, onChunk) {
     const get = (u, redirects = 0) => {
       if (завершено) return;
       if (redirects > 8) return finish(new Error('Слишком много перенаправлений'));
-      req = https.get(u, { headers: { 'User-Agent': 'benengskaya' }, timeout: 30000 }, (res) => {
+      req = https.get(u, { headers: { 'User-Agent': 'karaoke-punch' }, timeout: 30000 }, (res) => {
         if (завершено) { res.resume(); return; }
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
@@ -1076,7 +1105,7 @@ function compareVersions(a, b) {
 function fetchLatestRelease() {
   return new Promise((resolve, reject) => {
     const req = https.get(RELEASES_API, {
-      headers: { 'User-Agent': 'benengskaya', Accept: 'application/vnd.github+json' },
+      headers: { 'User-Agent': 'karaoke-punch', Accept: 'application/vnd.github+json' },
       timeout: 10000,
     }, (res) => {
       if (res.statusCode !== 200) {

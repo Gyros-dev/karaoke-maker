@@ -1,7 +1,7 @@
 {
-  "name": "benengskaya-rapsodiya",
-  "productName": "Бэнэнгская Рапсодия",
-  "version": "1.8.1",
+  "name": "karaoke-punch",
+  "productName": "Karaoke Punch",
+  "version": "1.8.2",
   "description": "Караоке-студия с удалением вокала нейросетью",
   "main": "main.js",
   "author": "Gyros-dev",
@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "dev.gyros.benengskaya",
-    "productName": "Бэнэнгская Рапсодия",
+    "productName": "Karaoke Punch",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -49,7 +49,7 @@
       "category": "public.app-category.music",
       "identity": null,
       "icon": "build/icon.icns",
-      "artifactName": "Benengskaya-Rapsodiya-${version}-macOS-${arch}.${ext}"
+      "artifactName": "Karaoke-Punch-${version}-macOS-${arch}.${ext}"
     },
     "win": {
       "target": [
@@ -62,7 +62,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "Benengskaya-Rapsodiya-${version}-Windows-Setup.${ext}"
+      "artifactName": "Karaoke-Punch-${version}-Windows-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -76,6 +76,6 @@
         "repo": "karaoke-maker"
       }
     ],
-    "artifactName": "Benengskaya-Rapsodiya-${version}-${os}-${arch}.${ext}"
+    "artifactName": "Karaoke-Punch-${version}-${os}-${arch}.${ext}"
   }
 }

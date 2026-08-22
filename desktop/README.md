@@ -1,4 +1,4 @@
-# Бэнэнгская Рапсодия — настольная версия
+# Karaoke Punch — настольная версия
 
 Караоке-студия с удалением вокала нейросетью. Всё считается на твоём
 компьютере: ни звук, ни текст никуда не отправляются.
@@ -18,8 +18,8 @@
 
 ## Установка
 
-- **macOS (Apple Silicon)**: `Бэнэнгская Рапсодия-1.0.0-arm64.dmg`
-- **Windows (x64 и ARM)**: `Бэнэнгская Рапсодия Setup 1.0.0.exe`
+- **macOS (Apple Silicon)**: `Karaoke Punch-1.0.0-arm64.dmg`
+- **Windows (x64 и ARM)**: `Karaoke Punch Setup 1.0.0.exe`
 
 Приложение подписано «для себя» (ad-hoc), но не заверено у Apple —
 сертификат разработчика платный. Поэтому первый запуск требует одного
@@ -32,7 +32,7 @@
    Терминал и выполни:
 
    ```bash
-   xattr -dr com.apple.quarantine "/Applications/Бэнэнгская Рапсодия.app"
+   xattr -dr com.apple.quarantine "/Applications/Karaoke Punch.app"
    ```
 
 3. Запускай как обычно.
@@ -54,8 +54,8 @@ SmartScreen покажет синее окно → «Подробнее» → «
 При первом нажатии «Убрать вокал» приложение предложит скачать модель —
 172 МБ, один раз. Дальше она лежит на диске и интернет больше не нужен:
 
-- macOS: `~/Library/Application Support/Бэнэнгская Рапсодия/htdemucs.onnx`
-- Windows: `%APPDATA%\Бэнэнгская Рапсодия\htdemucs.onnx`
+- macOS: `~/Library/Application Support/Karaoke Punch/htdemucs.onnx`
+- Windows: `%APPDATA%\Karaoke Punch\htdemucs.onnx`
 
 ## Сколько ждать
 
