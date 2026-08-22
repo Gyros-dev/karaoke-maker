@@ -1172,8 +1172,20 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-dim);
   font-size: 0.95rem;
 }
-.mixer-icon { font-size: 1.2rem; }
-.mixer-value { font-variant-numeric: tabular-nums; min-width: 3rem; text-align: right; }
+.mixer-icon { font-size: 1.2rem; flex: 0 0 auto; }
+.mixer label { flex: 0 0 auto; }
+/* Ползунок в полосе должен уметь ужиматься: у полей ввода собственная
+   ширина около 129 px, и с min-width: auto флекс её не отнимал — ряд
+   не влезал в свои 250 px, а значение процентов выезжало за правый край. */
+.mixer input[type="range"] { flex: 1 1 auto; min-width: 0; }
+/* Место под число отведено заранее и не зависит от того, «0%» там
+   или «100%»: ползунок не дёргается, пока его тянут. */
+.mixer-value {
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  width: 3rem;
+  text-align: right;
+}
 
 .export-row {
   display: flex;
