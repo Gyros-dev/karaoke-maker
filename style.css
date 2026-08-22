@@ -171,7 +171,12 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  padding: 0.35rem 0.7rem;
+  /* Ширина постоянная, поля только сверху и снизу: подписи «Рус» и
+     «Rus» разной длины, и при переключении языка обойма прыгала бы
+     вместе со всей шапкой. 4em с запасом хватает на обе. */
+  width: 4em;
+  padding: 0.35rem 0;
+  text-align: center;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
 }
@@ -223,7 +228,13 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .footer-brand { display: inline-flex; align-items: center; gap: 0.5rem; }
 .footer-brand .logo-img { width: 24px; height: 24px; border-radius: 6px; }
 .footer-brand .logo-text { font-size: 0.9rem; }
-.site-nav { display: flex; gap: 1.5rem; }
+/* Меню занимает всю середину шапки, а ссылки в нём стоят по центру.
+   Так свободное место шапки собрано в одном месте — внутри меню,
+   а не поделено между всеми четырьмя углами: правый край кнопки
+   «Открыть студию» и переключатель языка перестают ездить, когда
+   перевод меняет длину подписей. Замер на 1440 px: раньше при смене
+   языка переключатель уезжал на 51 px, теперь стоит на месте. */
+.site-nav { display: flex; flex: 1; justify-content: center; gap: 1.5rem; }
 .site-nav a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; transition: color 0.15s; }
 .site-nav a:hover { color: var(--text); }
 
