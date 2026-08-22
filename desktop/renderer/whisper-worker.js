@@ -163,7 +163,9 @@ function post(msg) {
 async function ensurePipe(modelId) {
   if (pipe && pipeId === modelId) return pipe;
   if (pipe) { await pipe.dispose().catch(() => {}); pipe = null; }
-  post({ type: 'progress', percent: 2, text: 'Загружаем модель распознавания…' });
+  /* Как и в разделении: воркер отдаёт ключ, строку складывает
+     desktop.js — словарь живёт там. */
+  post({ type: 'progress', percent: 2, ключ: 'asr.загружаемМодель' });
   pipe = await pipeline('automatic-speech-recognition', modelId, {
     // На wasm по умолчанию q8 — те самые файлы *_quantized.onnx
     device: 'wasm',
@@ -176,7 +178,7 @@ async function ensurePipe(modelId) {
         post({
           type: 'progress',
           percent: 2 + (p.loaded / p.total) * 8,
-          text: 'Загружаем модель распознавания…',
+          ключ: 'asr.загружаемМодель',
         });
       }
     },
@@ -192,7 +194,7 @@ async function transcribe({ modelId, audio, language }) {
   const asr = await ensurePipe(modelId);
   if (cancelled) throw new Error('отменено');
 
-  post({ type: 'progress', percent: 10, text: 'Слушаем песню…' });
+  post({ type: 'progress', percent: 10, ключ: 'asr.слушаем' });
 
   /* Прогресс и отмена идут через streamer: библиотека дёргает его на
      каждом порождённом токене. (Старое `callback_function` в generate
@@ -215,7 +217,7 @@ async function transcribe({ modelId, audio, language }) {
   let ticks = 0;
   let lastPost = 0;
   // Не null, пока окно слушается повторно: тогда полоса честно стоит
-  let retryText = null;
+  let попытка = null;   // какой заход переслушивания идёт сейчас (или null)
 
   const streamer = {
     put(rows) {
@@ -241,14 +243,17 @@ async function transcribe({ modelId, audio, language }) {
          нельзя: с упёршейся полосой и обещанием «около 10 с» это
          выглядит намертво повисшей программой. Поэтому говорим прямо,
          чем заняты, и не обещаем срок, которого не знаем. */
-      const переслушиваем = retryText != null;
+      const переслушиваем = попытка != null;
       post({
         type: 'progress',
         percent: 10 + frac * 88,
-        text: переслушиваем ? retryText : 'Разбираем слова…',
-        eta: переслушиваем || rest <= 5 || frac >= 0.98
-          ? ''
-          : `осталось около ${rest < 60 ? Math.ceil(rest / 10) * 10 + ' с' : Math.ceil(rest / 60) + ' мин'}`,
+        'ключ': переслушиваем ? 'asr.трудныйКусок' : 'asr.разбираем',
+        'парам': переслушиваем ? попытка : null,
+        осталось: переслушиваем || rest <= 5 || frac >= 0.98
+          ? null
+          : (rest < 60
+            ? { n: Math.ceil(rest / 10) * 10, 'единица': 'с' }
+            : { n: Math.ceil(rest / 60), 'единица': 'мин' }),
       });
     },
     /* Раньше здесь считали куски, но end() срабатывает не по разу на
@@ -299,9 +304,9 @@ async function transcribe({ modelId, audio, language }) {
           };
 
       inChunk = 0;
-      retryText = attempt === 0
+      попытка = attempt === 0
         ? null
-        : `Трудный кусок, слушаем заново (${attempt} из ${FALLBACK_TEMPS.length})…`;
+        : { n: attempt, 'всего': FALLBACK_TEMPS.length };
       const out = await originalGenerate({ ...args, ...extra });
       if (cancelled) throw new Error('отменено');
 
@@ -322,7 +327,7 @@ async function transcribe({ modelId, audio, language }) {
     }
 
     if (bestJudge && bestJudge.bad) loopsLeft++;
-    retryText = null;   // окно закрыто, дальше полоса снова едет
+    попытка = null;     // окно закрыто, дальше полоса снова едет
     windowIdx++;
     return best;
   };

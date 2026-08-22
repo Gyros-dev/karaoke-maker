@@ -31,18 +31,17 @@
   let updateUrl = null;
 
   $('update-action').addEventListener('click', async () => {
-    const label = $('update-action').textContent;
-    if (autoReady && label === 'Перезапустить') {
+    if (autoReady && готовоКУстановке) {
       window.desktop.installUpdate();
       return;
     }
     if (autoReady) {
       $('update-action').disabled = true;
-      $('update-text').textContent = 'Скачиваем обновление…';
+      $('update-text').textContent = t('обновление.скачиваем');
       const res = await window.desktop.downloadUpdate();
       if (!res.ok) {
         $('update-action').disabled = false;
-        $('update-text').textContent = 'Не удалось скачать обновление';
+        $('update-text').textContent = t('обновление.неСкачалось');
       }
       return;
     }
@@ -56,30 +55,43 @@
       if (localStorage.getItem('karaoke-skip-version') === res.latest) return;
       updater.latest = res.latest;
       updateUrl = res.url;
-      showUpdateBar(
-        `Вышла версия ${res.latest} — у тебя ${res.current}`,
-        'Скачать');
+      updater.перерисовать = () => showUpdateBar(
+        t('обновление.версия', { v: res.latest, 'текущая': res.current }),
+        t('обновление.скачать'));
+      updater.перерисовать();
     } catch (e) { /* нет сети — не мешаем работать */ }
   }
 
   /* Windows умеет обновляться сам: там показываем не ссылку,
      а кнопку, которая скачивает и ставит новую версию. */
   let autoReady = false;
+  /* Готовность к установке держим отдельным признаком, а не сверяем
+     подпись кнопки со словом «Перезапустить»: подпись переводится,
+     и на английском такое сравнение молча перестало бы срабатывать. */
+  let готовоКУстановке = false;
 
   window.desktop.onAutoUpdate((m) => {
     if (m.stage === 'available') {
       autoReady = true;
+      готовоКУстановке = false;
       updater.latest = m.version;
-      showUpdateBar(`Вышла версия ${m.version}`, 'Обновить');
+      updater.перерисовать = () => showUpdateBar(
+        t('обновление.версияПросто', { v: m.version }), t('обновление.обновить'));
+      updater.перерисовать();
     } else if (m.stage === 'progress') {
-      $('update-text').textContent = `Скачиваем обновление… ${m.percent}%`;
+      updater.перерисовать = null;
+      $('update-text').textContent = t('обновление.скачиваемПроцент', { p: m.percent });
     } else if (m.stage === 'ready') {
-      $('update-text').textContent = `Версия ${m.version} готова к установке`;
-      $('update-action').textContent = 'Перезапустить';
+      готовоКУстановке = true;
+      updater.перерисовать = () => showUpdateBar(
+        t('обновление.готово', { v: m.version }), t('обновление.перезапустить'));
+      updater.перерисовать();
       $('update-action').disabled = false;
     } else if (m.stage === 'error') {
-      $('update-text').textContent = 'Не удалось обновиться автоматически';
-      $('update-action').textContent = 'Скачать вручную';
+      готовоКУстановке = false;
+      updater.перерисовать = () => showUpdateBar(
+        t('обновление.неАвто'), t('обновление.вручную'));
+      updater.перерисовать();
       autoReady = false;
     }
   });
@@ -91,6 +103,23 @@
       setInterval(checkDesktopUpdate, 6 * 60 * 60 * 1000);
     }
   });
+
+  /* ---------- Надписи прогресса из фоновых потоков ----------
+     Воркеры лежат отдельными файлами, словаря у них нет и про
+     выбранный язык они не знают, поэтому шлют ключ и числа.
+     Строку складываем здесь. */
+  function текстПрогресса(m) {
+    return m.ключ ? t(m.ключ, m.парам || {}) : (m.text || '');
+  }
+
+  /* Остаток времени воркеры округляют каждый по-своему (разделение —
+     до шести секунд, распознавание — до десяти), поэтому число и
+     единицу присылают уже готовыми, а мы только подписываем.
+     Пусто — возвращаем undefined: прежнюю подсказку тогда не трогаем. */
+  function осталосьСловами(о) {
+    if (!о) return undefined;
+    return t(о.единица === 'мин' ? 'время.осталосьМин' : 'время.осталосьСек', { n: о.n });
+  }
 
   function setProgress(percent, status, hint) {
     $('ai-fill').style.width = `${Math.max(0, Math.min(100, percent))}%`;
@@ -161,23 +190,20 @@
     return секунд * (своя > 0 ? своя : базовая) * (поВокалу ? СКОРОСТЬ.вокалДороже : 1);
   }
 
-  function словоМинут(n) {
-    const дд = n % 100, е = n % 10;
-    if (дд >= 11 && дд <= 14) return 'минут';
-    if (е >= 1 && е <= 4) return 'минуты';
-    return 'минут';
-  }
-
   /* Вилка честнее одной цифры: наши коэффициенты сняты с одной машины,
      а считать будут на самых разных. Пока своих замеров нет, разброс
-     берём шире; после первого настоящего прогона сужаем. */
+     берём шире; после первого настоящего прогона сужаем.
+
+     Склонение считает словарь: по-русски «1–2 минуты», «5–9 минут»,
+     «20–21 минуты», по-английски minute/minutes — правила разные,
+     поэтому форму выбирает Intl.PluralRules по последнему числу. */
   function времяСловами(секунд, откалибровано) {
-    if (!Number.isFinite(секунд) || секунд <= 0) return 'несколько минут';
-    if (секунд < 40) return 'меньше минуты';
+    if (!Number.isFinite(секунд) || секунд <= 0) return t('время.несколькоМинут');
+    if (секунд < 40) return t('время.меньшеМинуты');
     const мин = секунд / 60;
     const от = Math.max(1, Math.floor(мин * (откалибровано ? 0.85 : 0.75)));
     const до = Math.max(от + 1, Math.ceil(мин * (откалибровано ? 1.2 : 1.3)));
-    return `${от}–${до} ${словоМинут(до)}`;
+    return t('время.вилка', { 'от': от, n: до });
   }
 
   /* Строка оценки под блоком. Собираем узлами, а не разметкой: текст
@@ -185,7 +211,7 @@
   function поставитьОценку(el, время, хвост) {
     el.textContent = '⏳ ';
     if (время) {
-      el.append('Займёт примерно ');
+      el.append(t('время.займёт'));
       const b = document.createElement('b');
       b.textContent = время;
       el.append(b, '. ');
@@ -195,19 +221,19 @@
 
   // Та же оценка в окне прогресса — там ждать и приходится
   const подсказкаПрогресса = (время) => (время
-    ? `По прикидке это ${время}. Считает на твоём компьютере, ничего не отправляется в интернет.`
-    : 'Считает на твоём компьютере, ничего не отправляется в интернет.');
+    ? t('время.прикидка', { 'время': время })
+    : t('время.локально'));
 
   /* ---------- Оценка для разделения вокала ---------- */
   function обновитьВремяРазделения() {
     const проходов = Number($('ai-quality').value) || 1;
     const длина = длинаПесни();
     const хвост = проходов > 1
-      ? `Выбрано ${проходов} прохода — ждать во столько же раз дольше, а результат тот же.`
-      : 'Один проход. Больше проходов качества не добавляют, мы это замерили.';
+      ? t('ии.проходовМного', { n: проходов })
+      : t('ии.проходОдин');
     поставитьОценку($('ai-eta'),
       длина ? времяСловами(оценкаРазделения(длина, проходов), замеры().разделение > 0) : '',
-      длина ? хвост : 'Время посчитаем, когда загрузишь песню. ' + хвост);
+      длина ? хвост : t('время.когдаЗагрузишь') + хвост);
   }
   $('ai-quality').addEventListener('change', обновитьВремяРазделения);
   обновитьВремяРазделения();
@@ -240,13 +266,10 @@
     if (!st || !st.старая) return;
     try { if (localStorage.getItem(КЛЮЧ_СТАРОЙ)) return; } catch (e) { /* нет хранилища — спросим */ }
     try { localStorage.setItem(КЛЮЧ_СТАРОЙ, '1'); } catch (e) { /* не беда */ }
-    const ok = confirm('Вокал теперь убирает другая модель — та же, что в UVR5: '
-      + 'она и чище, и втрое легче.\n\n'
-      + `Прежняя модель Demucs осталась на компьютере и занимает ${fmtMB(st.старая.bytes)} МБ. `
-      + 'Она больше не нужна. Удалить её?');
+    const ok = confirm(t('ии.стараяМодель', { 'мб': fmtMB(st.старая.bytes) }));
     if (!ok) return;
     const res = await window.desktop.removeOldModel();
-    if (!res.ok) alert('Не получилось удалить прежнюю модель: ' + res.error);
+    if (!res.ok) alert(t('ии.стараяНеУдалилась') + res.error);
   }
 
   async function ensureModel() {
@@ -258,23 +281,20 @@
        готовым, разделение падало с английским «protobuf parsing failed»,
        и человек не понимал ни что случилось, ни что делать. */
     const ok = confirm(st.broken
-      ? `Модель на компьютере повреждена: скачано ${fmtMB(st.have)} из ${fmtMB(st.bytes)} МБ.\n\n`
-        + 'Похоже, прошлая загрузка оборвалась. Скачать заново?'
-      : `Для удаления вокала нужна модель — ${fmtMB(st.bytes)} МБ.\n\n`
-        + 'Она скачается один раз и останется на компьютере: дальше всё работает без интернета. '
-        + 'Скачать сейчас?');
+      ? t('ии.модельБитая', { 'есть': fmtMB(st.have), 'всего': fmtMB(st.bytes) })
+      : t('ии.модельНужна', { 'мб': fmtMB(st.bytes) }));
     if (!ok) return false;
 
     showOverlay(true);
-    setProgress(0, 'Скачиваем модель…', 'Это разовая загрузка, потом интернет не нужен.');
+    setProgress(0, t('ии.скачиваемМодель'), t('ии.разоваяЗагрузка'));
     window.desktop.onModelProgress(({ done, total }) => {
       setProgress((done / total) * 100,
-        `Скачиваем модель… ${fmtMB(done)} из ${fmtMB(total)} МБ`);
+        t('ии.скачиваемХод', { 'есть': fmtMB(done), 'всего': fmtMB(total) }));
     });
     const res = await window.desktop.downloadModel();
     if (!res.ok) {
       showOverlay(false);
-      alert('Не удалось скачать модель: ' + res.error);
+      alert(t('ии.модельНеСкачалась') + res.error);
       return false;
     }
     return true;
@@ -289,7 +309,7 @@
       sepWorker.onmessage = (e) => {
         const m = e.data;
         if (m.type === 'progress') {
-          setProgress(m.percent, m.text, m.eta || undefined);
+          setProgress(m.percent, текстПрогресса(m), осталосьСловами(m.осталось));
         } else if (m.type === 'done') {
           resolve({ ok: true, left: m.left, right: m.right, vocal: m.vocal, sampleRate: m.sampleRate });
           sepWorker.terminate();
@@ -301,7 +321,7 @@
         }
       };
       sepWorker.onerror = (err) => {
-        resolve({ ok: false, error: err.message || 'сбой в потоке расчёта' });
+        resolve({ ok: false, error: err.message || t('ии.сбойПотока') });
       };
       const l = left.slice();
       const r = right.slice();
@@ -313,7 +333,7 @@
 
   async function removeVocals() {
     if (busy) return;
-    if (!state.originalBuffer) { alert('Сначала загрузи песню.'); return; }
+    if (!state.originalBuffer) { alert(t('ии.сначалаПесня')); return; }
 
     busy = true;
     try {
@@ -325,22 +345,22 @@
       const прикидка = времяСловами(оценкаРазделения(длина, shifts), замеры().разделение > 0);
 
       showOverlay(true);
-      setProgress(0, 'Готовим звук…', подсказкаПрогресса(прикидка));
+      setProgress(0, t('ии.готовимЗвук'), подсказкаПрогресса(прикидка));
 
       audio.pause();
       const src44 = await resample(state.originalBuffer, MODEL_SR);
       const { left, right } = toStereo(src44);
 
-      setProgress(0, 'Загружаем модель…', подсказкаПрогресса(прикидка));
+      setProgress(0, t('ии.загружаемМодель'), подсказкаПрогресса(прикидка));
       const modelBytes = await window.desktop.modelBytes();
-      if (!modelBytes) throw new Error('Модель не найдена');
+      if (!modelBytes) throw new Error(t('ии.модельНеНайдена'));
 
       const началоСчёта = Date.now();
       const res = await runSeparation(modelBytes, left, right, shifts);
       if (!res.ok) {
         showOverlay(false);
         busy = false;
-        if (res.error !== 'отменено') alert('Не получилось убрать вокал: ' + res.error);
+        if (res.error !== 'отменено') alert(t('ии.неПолучилось') + res.error);
         return;
       }
 
@@ -350,7 +370,7 @@
           ((Date.now() - началоСчёта) / 1000) / (длина * shifts));
       }
 
-      setProgress(100, 'Почти готово…', 'Возвращаем исходное качество звука.');
+      setProgress(100, t('ии.почтиГотово'), t('ии.возвращаемКачество'));
 
       // Чистый вокал не выбрасываем: распознавание текста по нему
       // ошибается заметно реже, чем по полному миксу, а огибающая его
@@ -379,21 +399,19 @@
       state.instrumentalBuffer = buf;
       state.customInst = true;
       state.instName = shifts > 1
-        ? `нейросеть (UVR-MDX-NET-Inst_HQ_3, ${shifts} прохода)`
-        : 'нейросеть (UVR-MDX-NET-Inst_HQ_3)';
+        ? t('ии.имяНесколько', { n: shifts })
+        : t('ии.имя');
       $('mono-warning').classList.add('hidden');
       updateInstUI();
       $('inst-input').value = '';
 
       showOverlay(false);
       busy = false;
-      alert('Готово! Вокал убран нейросетью.\n\n' +
-        'Минусовка уже подставлена — можно идти дальше. ' +
-        'Если захочешь вернуть обычное приглушение, нажми «Убрать» в блоке минусовки.');
+      alert(t('ии.готово'));
     } catch (err) {
       showOverlay(false);
       busy = false;
-      alert('Ошибка при удалении вокала: ' + (err && err.message ? err.message : err));
+      alert(t('ии.ошибка') + (err && err.message ? err.message : err));
     }
   }
 
@@ -451,9 +469,7 @@
   }
 
   function updateAsrSource() {
-    $('asr-source').textContent = asr.vocal
-      ? '✓ слушаем чистый вокал'
-      : '';
+    $('asr-source').textContent = asr.vocal ? t('asr.чистыйВокал') : '';
     // По чистому вокалу нейросеть возится дольше — оценку надо пересчитать
     обновитьВремяРаспознавания();
   }
@@ -463,14 +479,12 @@
     const ключ = $('asr-model').value || ASR_ЛУЧШАЯ;
     const длина = длинаПесни();
     const поВокалу = !!asr.vocal;
-    let хвост = ключ === 'base'
-      ? 'Выбрана обычная модель: примерно вдвое быстрее крупной, но и слышит хуже.'
-      : 'Стоит крупная модель — она разбирает пение лучше всех, что у нас есть, но считает примерно вдвое дольше обычной.';
-    if (поВокалу) хвост += ' Слушаем чистый вокал: по нему точнее, но дольше, чем по миксу.';
+    let хвост = t(ключ === 'base' ? 'asr.хвост.обычная' : 'asr.хвост.крупная');
+    if (поВокалу) хвост += t('asr.хвост.вокал');
     поставитьОценку($('asr-eta'),
       длина ? времяСловами(оценкаРаспознавания(длина, ключ, поВокалу),
         замеры()['распознавание:' + ключ] > 0) : '',
-      длина ? хвост : 'Время посчитаем, когда загрузишь песню. ' + хвост);
+      длина ? хвост : t('время.когдаЗагрузишь') + хвост);
   }
 
   /* app.js общий с сайтом, править его нельзя, а про новую песню знать
@@ -505,7 +519,10 @@
     st.models.forEach((m) => {
       const opt = document.createElement('option');
       opt.value = m.key;
-      opt.textContent = m.ready ? `${m.label} · скачана` : m.label;
+      /* Подпись переводим здесь, а не в главном процессе: там про
+         выбранный язык не знают, а список всё равно пересобирается. */
+      const label = t('asr.модель.' + m.key);
+      opt.textContent = m.ready ? t('asr.модель.скачана', { label }) : label;
       sel.appendChild(opt);
     });
     // Выбор человека важнее, но по умолчанию — лучшая модель
@@ -534,22 +551,19 @@
     if (!model) return false;
     if (model.ready) return true;
 
-    const ok = confirm(
-      `Для распознавания нужна модель — около ${fmtMB(model.bytes)} МБ.\n\n` +
-      'Она скачается один раз и останется на компьютере: дальше всё работает без интернета. ' +
-      'Скачать сейчас?');
+    const ok = confirm(t('asr.модельНужна', { 'мб': fmtMB(model.bytes) }));
     if (!ok) return false;
 
     showAsrOverlay(true);
-    setAsrProgress(0, 'Скачиваем модель распознавания…', 'Это разовая загрузка, потом интернет не нужен.');
+    setAsrProgress(0, t('asr.скачиваемМодель'), t('ии.разоваяЗагрузка'));
     window.desktop.onAsrProgress(({ done, total }) => {
       setAsrProgress((done / total) * 100,
-        `Скачиваем модель… ${fmtMB(done)} из ${fmtMB(total)} МБ`);
+        t('ии.скачиваемХод', { 'есть': fmtMB(done), 'всего': fmtMB(total) }));
     });
     const res = await window.desktop.asrDownload(key);
     if (!res.ok) {
       showAsrOverlay(false);
-      if (res.error !== 'отменено') alert('Не удалось скачать модель: ' + res.error);
+      if (res.error !== 'отменено') alert(t('asr.модельНеСкачалась') + res.error);
       return false;
     }
     await fillAsrModels();
@@ -572,7 +586,7 @@
         const m = e.data;
         if (m.type === 'progress') {
           asr.percent = m.percent;
-          setAsrProgress(m.percent, m.text, m.eta || undefined);
+          setAsrProgress(m.percent, текстПрогресса(m), осталосьСловами(m.осталось));
         } else if (m.type === 'done') {
           finish({ ok: true, text: m.text, words: m.words, отладка: m.отладка });
         } else if (m.type === 'error') {
@@ -580,7 +594,7 @@
         }
       };
       asr.worker.onerror = (err) => {
-        finish({ ok: false, error: err.message || 'сбой в потоке распознавания' });
+        finish({ ok: false, error: err.message || t('asr.сбойПотока') });
       };
       const copy = pcm.slice();
       asr.worker.postMessage(
@@ -666,7 +680,7 @@
       замеры()['распознавание:' + key] > 0);
 
     showAsrOverlay(true);
-    setAsrProgress(0, 'Готовим звук…', подсказкаПрогресса(прикидка));
+    setAsrProgress(0, t('asr.готовимЗвук'), подсказкаПрогресса(прикидка));
     audio.pause();
 
     // Чистый вокал точнее, но если его нет — слушаем полный микс
@@ -699,21 +713,31 @@
 
      Текст кладём только через textContent: политика безопасности
      запрещает вставлять разметку строкой. */
-  function показатьИтогРазметки(заголовок, пояснение) {
+  /* Метку помним не строками, а тем, как её собрать: при смене языка
+     она обязана перевестись вместе со всем остальным. Поэтому сюда
+     передают не текст, а функцию, отдающую пару «заголовок, пояснение»
+     на текущем языке (или null — тогда метка прячется). */
+  let собратьИтог = null;
+
+  function показатьИтогРазметки(собрать, безПрокрутки) {
+    собратьИтог = собрать || null;
     const узел = $('asr-result');
     if (!узел) return;
+    const о = собратьИтог ? собратьИтог() : null;
+    const заголовок = о ? о.заголовок : '';
+    const пояснение = о ? о.пояснение : '';
     $('asr-result-head').textContent = заголовок || '';
     $('asr-result-note').textContent = заголовок ? (пояснение || '') : '';
     узел.classList.toggle('hidden', !заголовок);
     /* Блок разметки прокручивается внутри своей колонки, и метка могла
        оказаться выше видимой части. Подводим её к глазам — «nearest»,
        чтобы не дёргать заодно всю страницу. */
-    if (заголовок) узел.scrollIntoView({ block: 'nearest' });
+    if (заголовок && !безПрокрутки) узел.scrollIntoView({ block: 'nearest' });
   }
 
   async function recognizeLyrics() {
     if (asr.busy || busy) return;
-    if (!state.originalBuffer) { alert('Сначала загрузи песню.'); return; }
+    if (!state.originalBuffer) { alert(t('asr.сначалаПесня')); return; }
 
     const key = $('asr-model').value || ASR_ЛУЧШАЯ;
     asr.busy = true;
@@ -722,7 +746,7 @@
       if (!res.ok) {
         showAsrOverlay(false);
         asr.busy = false;
-        if (res.error !== 'отменено') alert('Не получилось распознать текст: ' + res.error);
+        if (res.error !== 'отменено') alert(t('asr.неРаспозналось') + res.error);
         return;
       }
 
@@ -731,9 +755,7 @@
       asr.busy = false;
 
       if (!lines.length) {
-        alert('Распознавание ничего не разобрало.\n\n' +
-          'Попробуй сначала убрать вокал нейросетью на первом шаге — ' +
-          'по чистому голосу получается заметно лучше. Ещё помогает выбрать язык вручную.');
+        alert(t('asr.ничегоНеРазобрало'));
         return;
       }
 
@@ -743,17 +765,16 @@
       $('lyrics-input').value = lines.map((l) => l.text).join('\n');
       $('lyrics-input').dispatchEvent(new Event('input'));
       window.__asrLines = lines;
-      показатьИтогРазметки(`Текст распознан: ${lines.length} строк.`,
-        ' Времена строк и слов проставлены. Это черновик: строки стоит вычитать.');
+      показатьИтогРазметки(() => ({
+        заголовок: t('asr.меткаРаспознано', { n: lines.length }),
+        пояснение: t('asr.меткаРаспознаноХвост'),
+      }));
 
-      alert(`Распознано строк: ${lines.length}.\n\n` +
-        'Это черновик: пение распознаётся хуже речи, часть строк наверняка ' +
-        'придётся поправить прямо в поле текста. Времена строк и слов уже проставлены — ' +
-        'если текст не менять, простукивать в редакторе ничего не придётся.');
+      alert(t('asr.итогРаспознано', { n: lines.length }));
     } catch (err) {
       showAsrOverlay(false);
       asr.busy = false;
-      alert('Ошибка при распознавании: ' + (err && err.message ? err.message : err));
+      alert(t('asr.ошибка') + (err && err.message ? err.message : err));
     }
   }
 
@@ -762,9 +783,9 @@
      нейросети. Сама раскладка живёт в align.js. */
   async function fitLyrics() {
     if (asr.busy || busy) return;
-    if (!state.originalBuffer) { alert('Сначала загрузи песню.'); return; }
+    if (!state.originalBuffer) { alert(t('asr.сначалаПесня')); return; }
     const text = $('lyrics-input').value;
-    if (!text.trim()) { alert('Сначала вставь текст песни в поле ниже.'); return; }
+    if (!text.trim()) { alert(t('asr.сначалаТекст')); return; }
 
     const key = $('asr-model').value || ASR_ЛУЧШАЯ;
     asr.busy = true;
@@ -773,20 +794,17 @@
       if (!res.ok) {
         showAsrOverlay(false);
         asr.busy = false;
-        if (res.error !== 'отменено') alert('Не получилось послушать песню: ' + res.error);
+        if (res.error !== 'отменено') alert(t('asr.неПослушалось') + res.error);
         return;
       }
 
-      setAsrProgress(99, 'Раскладываем твой текст по песне…', '');
+      setAsrProgress(99, t('asr.раскладываем'), '');
       const fit = Align.fit(text, res.words || [], { duration: state.originalBuffer.duration });
       showAsrOverlay(false);
       asr.busy = false;
 
       if (!fit.ok) {
-        alert('Не получилось подогнать текст: ' + fit.error + '.\n\n' +
-          'Чаще всего дело в звуке: попробуй сначала убрать вокал нейросетью ' +
-          'на первом шаге и выбрать язык вручную. Ещё проверь, что в поле — ' +
-          'текст именно этой песни.');
+        alert(t('asr.неПодогналось', { 'ошибка': t(fit.error) }));
         return;
       }
 
@@ -797,25 +815,23 @@
 
       const с = fit.статистика;
       const процент = Math.round(с.доляОпор * 100);
-      показатьИтогРазметки(
-        `Времена проставлены: ${с.строк} строк, ${с.словТекста} слов.`,
-        ` Нейросеть точно расслышала ${процент}% слов.` + (с.сомнительныхСтрок
-          ? ` Строк с временем на глазок: ${с.сомнительныхСтрок} — в редакторе они помечены знаком ≈.`
-          : ' Строк с временем на глазок нет.'));
-      let итог = `Текст разложен по песне: ${с.строк} строк, ${с.словТекста} слов.\n\n` +
-        `Нейросеть точно расслышала ${процент}% слов — их время настоящее. ` +
-        'Остальные расставлены между ними по числу слогов.';
+      показатьИтогРазметки(() => ({
+        заголовок: t('asr.меткаВремена', { 'строк': с.строк, 'слов': с.словТекста }),
+        пояснение: t('asr.меткаРасслышала', { 'процент': процент }) + (с.сомнительныхСтрок
+          ? t('asr.меткаСомнительных', { n: с.сомнительныхСтрок })
+          : t('asr.меткаБезСомнительных')),
+      }));
+      let итог = t('asr.итогРазложено',
+        { 'строк': с.строк, 'слов': с.словТекста, 'процент': процент });
       if (с.сомнительныхСтрок) {
-        итог += `\n\nСтрок, которые нейросеть почти не расслышала: ${с.сомнительныхСтрок}. ` +
-          'В редакторе они помечены знаком ≈ — их стоит проверить и поправить ' +
-          'в панели выбранной строки или прямо на дорожке.';
+        итог += t('asr.итогСомнительные', { n: с.сомнительныхСтрок });
       }
-      итог += '\n\nВремена уже проставлены — простукивать в редакторе ничего не придётся.';
+      итог += t('asr.итогХвост');
       alert(итог);
     } catch (err) {
       showAsrOverlay(false);
       asr.busy = false;
-      alert('Ошибка при подгонке текста: ' + (err && err.message ? err.message : err));
+      alert(t('asr.ошибкаПодгонки') + (err && err.message ? err.message : err));
     }
   }
 
@@ -824,14 +840,14 @@
      что произойдёт, и не затёр свой текст случайно. */
   function updateAsrMode() {
     const есть = !!$('lyrics-input').value.trim();
-    $('btn-asr-run').textContent = есть ? 'Подогнать мой текст' : 'Распознать текст';
+    $('btn-asr-run').textContent = t(есть ? 'asr.кнопка.подогнать' : 'asr.кнопка.распознать');
     $('btn-asr-fresh').classList.toggle('hidden', !есть);
     $('asr-about-fit').classList.toggle('hidden', !есть);
     $('asr-about-fresh').classList.toggle('hidden', есть);
     /* Поле опустошили — метка о прежней разметке врёт: размечать
        больше нечего. Правку отдельных строк она переживает: времена
        остальных строк от этого не портятся. */
-    if (!есть) показатьИтогРазметки('');
+    if (!есть) показатьИтогРазметки(null);
   }
   $('lyrics-input').addEventListener('input', updateAsrMode);
   updateAsrMode();
@@ -996,11 +1012,13 @@
       $('lyrics-input').dispatchEvent(new Event('input'));
       window.__asrLines = fit.lines;
       const с = fit.статистика;
-      показатьИтогРазметки(
-        `Времена проставлены: ${с.строк} строк, ${с.словТекста} слов.`,
-        ` Нейросеть точно расслышала ${Math.round(с.доляОпор * 100)}% слов.` + (с.сомнительныхСтрок
-          ? ` Строк с временем на глазок: ${с.сомнительныхСтрок} — в редакторе они помечены знаком ≈.`
-          : ' Строк с временем на глазок нет.'));
+      показатьИтогРазметки(() => ({
+        заголовок: t('asr.меткаВремена', { 'строк': с.строк, 'слов': с.словТекста }),
+        пояснение: t('asr.меткаРасслышала', { 'процент': Math.round(с.доляОпор * 100) })
+          + (с.сомнительныхСтрок
+            ? t('asr.меткаСомнительных', { n: с.сомнительныхСтрок })
+            : t('asr.меткаБезСомнительных')),
+      }));
       $('btn-to-editor').click();
 
       const времена = state.lines.map((l) => (l.time == null ? null : +l.time.toFixed(2)));
@@ -1043,12 +1061,7 @@
   /* Свободное распознавание при непустом поле затрёт чужую работу,
      поэтому прячем его во вторую кнопку и переспрашиваем */
   $('btn-asr-fresh').addEventListener('click', () => {
-    const ok = confirm(
-      'Распознать текст с нуля?\n\n' +
-      'Нейросеть напишет текст сама и заменит им то, что сейчас в поле. ' +
-      'Пение распознаётся хуже речи, так что это черновик — он нужен, ' +
-      'когда текста песни нет под рукой.\n\n' +
-      'Твой текст будет потерян. Продолжить?');
+    const ok = confirm(t('asr.сНуляВопрос'));
     if (ok) recognizeLyrics();
   });
   $('btn-asr-cancel').addEventListener('click', () => {
@@ -1058,4 +1071,28 @@
     showAsrOverlay(false);
     asr.busy = false;
   });
+
+  /* ---------- Смена языка ----------
+     Разметку блоков переводит i18n.js по ключам, а всё, что собрано
+     здесь — подписи моделей, оценки времени, метка о готовой разметке
+     и подпись главной кнопки, — надо переставить руками. */
+  document.addEventListener('i18n', () => {
+    fillAsrModels().catch(() => {});
+    обновитьВремяРазделения();
+    обновитьВремяРаспознавания();
+    updateAsrSource();
+    updateAsrMode();
+    показатьИтогРазметки(собратьИтог, true);
+    // Меню приложения живёт в главном процессе — оно там же и собирается
+    if (window.desktop.setLanguage) window.desktop.setLanguage(I18N.язык());
+  });
+  if (window.desktop.setLanguage) window.desktop.setLanguage(I18N.язык());
+
+  /* Язык песни на английском интерфейсе по умолчанию английский:
+     подставлять русский тому, кто читает интерфейс по-английски,
+     заведомо неверно. Выбор человека это не трогает — только
+     умолчание, и только пока его не меняли. */
+  if (I18N.английский() && $('asr-lang').value === 'russian') {
+    $('asr-lang').value = 'english';
+  }
 })();

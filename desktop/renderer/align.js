@@ -287,18 +287,20 @@
     const duration = о.duration || 0;
     const parsed = parseLyrics(text);
     const words = parsed.words;
-    if (!words.length) return { ok: false, error: 'пустой текст' };
+    /* Отдаём ключ словаря, а не готовую фразу: причину показывает
+       окно поверх страницы, а языка интерфейса здесь не знают. */
+    if (!words.length) return { ok: false, error: 'подгонка.пустойТекст' };
 
     const rec = (recWords || [])
       .map((w) => ({ n: norm(w.text), start: w.start, end: w.end }))
       .filter((w) => w.n && w.start != null);
-    if (!rec.length) return { ok: false, error: 'нейросеть не разобрала ни слова' };
+    if (!rec.length) return { ok: false, error: 'подгонка.ниСлова' };
 
     const uNorm = words.map((w) => norm(w.text));
     const rNorm = rec.map((w) => w.n);
     let pairs = align(uNorm, rNorm);
     if (!pairs.length) {
-      return { ok: false, error: 'ни одно слово текста не совпало с песней' };
+      return { ok: false, error: 'подгонка.неСовпало' };
     }
 
     /* Второй проход по дырам. В промежутке между двумя опорами и текст,
@@ -328,7 +330,7 @@
       anchors.push(p.user);
       last = start;
     }
-    if (!anchors.length) return { ok: false, error: 'опоры не сложились' };
+    if (!anchors.length) return { ok: false, error: 'подгонка.опорыНеСложились' };
 
     /* Сколько секунд занимает слог, ПОКА ПОЮТ.
 
@@ -401,7 +403,7 @@
       times[лишняя] = null;
       anchors.splice(anchors.indexOf(лишняя), 1);
     }
-    if (!anchors.length) return { ok: false, error: 'опоры не сложились' };
+    if (!anchors.length) return { ok: false, error: 'подгонка.опорыНеСложились' };
 
     const first = anchors[0];
     const lastA = anchors[anchors.length - 1];

@@ -33,6 +33,11 @@ contextBridge.exposeInMainWorld('desktop', {
 
   saveFile: (name, data) => ipcRenderer.invoke('save-file', { name, data }),
 
+  /* Язык интерфейса. Меню приложения собирается в главном процессе,
+     и о выборе, который живёт в хранилище страницы, он узнаёт только
+     отсюда: страница говорит язык при запуске и при каждой смене. */
+  setLanguage: (lang) => ipcRenderer.invoke('set-language', lang),
+
   appVersion: () => ipcRenderer.invoke('app-version'),
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),

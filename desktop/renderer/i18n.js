@@ -1,0 +1,999 @@
+/* ============================================================
+   Перевод интерфейса: русский и английский
+
+   Сборки в проекте нет — обычные index.html, style.css, app.js, —
+   поэтому и перевод сделан без неё: этот файл подключается перед
+   app.js обычным <script>, кладёт в окно I18N и t() и дальше всё
+   работает на живом дереве документа.
+
+   Два словаря, потому что у надписей два происхождения:
+
+     • РАЗМЕТКА — то, что написано прямо в index.html. Русский текст
+       остаётся в разметке (её и читать так проще, и рассинхрона
+       с переводом не бывает), а элемент помечается ключом:
+         data-i18n="ключ"            — textContent
+         data-i18n-html="ключ"       — innerHTML (там, где внутри <b>,
+                                       <a> или <span class="mod-key">)
+         data-i18n-title / -placeholder / -aria / -mod-title
+       Русский вариант снимается с документа при первом применении
+       и хранится в WeakMap, поэтому возврат на русский точен всегда.
+       В словаре EN лежит только английский.
+
+     • СТРОКИ — то, что собирается в коде (сообщения, подписи кнопок,
+       оценки времени). Здесь в документе брать нечего, поэтому
+       в словаре лежат обе стороны: { ru, en }.
+
+   data-i18n-html вставляет разметкой только НАШ собственный текст
+   из этого файла — он часть исходников, а не данные пользователя.
+   Правило проекта «пользовательский текст только через textContent»
+   в силе: имена файлов, текст песни и всё, что пришло снаружи,
+   по-прежнему ставится textContent'ом.
+
+   Подстановки: t('ключ', { n: 3 }) заменяет {n} в строке. Если
+   значение в словаре не строка, а набор форм, форма выбирается
+   через Intl.PluralRules по числу n — русские «минута/минуты/минут»
+   и английские «minute/minutes» считаются каждый по своим правилам.
+   ============================================================ */
+
+const I18N = (function () {
+  const ЯЗЫКИ = ['ru', 'en'];
+  const КЛЮЧ_ХРАНИЛИЩА = 'karaoke-lang';
+
+  /* Какой язык показать при первом заходе. Русский — только тем,
+     у кого он в настройках браузера; остальным английский. */
+  function язык_из_браузера() {
+    const список = navigator.languages && navigator.languages.length
+      ? navigator.languages : [navigator.language || ''];
+    for (const код of список) {
+      const низ = String(код).toLowerCase();
+      if (низ.startsWith('ru')) return 'ru';
+      if (низ.startsWith('en')) return 'en';
+    }
+    return 'en';
+  }
+
+  let язык = (() => {
+    try {
+      const сохранён = localStorage.getItem(КЛЮЧ_ХРАНИЛИЩА);
+      if (ЯЗЫКИ.includes(сохранён)) return сохранён;
+    } catch (e) { /* хранилище недоступно — решаем по браузеру */ }
+    return язык_из_браузера();
+  })();
+
+  /* Как элемент выглядел по-русски. Снимаем один раз, при первом
+     применении, и больше не трогаем: возврат на русский обязан
+     возвращать ровно то, что написано в index.html. */
+  const исходное = new WeakMap();
+
+  function запомнить(el, поле, значение) {
+    let о = исходное.get(el);
+    if (!о) { о = {}; исходное.set(el, о); }
+    if (!(поле in о)) о[поле] = значение;
+    return о[поле];
+  }
+
+  const множественные = {};
+  function форма(n) {
+    if (!множественные[язык]) {
+      множественные[язык] = new Intl.PluralRules(язык === 'ru' ? 'ru-RU' : 'en-US');
+    }
+    return множественные[язык].select(n);
+  }
+
+  /* Значение ключа на текущем языке. Для разметки английский лежит
+     в EN, русский приходит из документа (аргумент «русский»). */
+  function значение(ключ, русский) {
+    const своя = I18N.СТРОКИ[ключ];
+    if (своя) return своя[язык] !== undefined ? своя[язык] : своя.ru;
+    if (язык === 'en') {
+      const en = I18N.EN[ключ];
+      if (en !== undefined) return en;
+      if (!I18N.молча) console.warn('i18n: нет перевода для ключа', ключ);
+    }
+    return русский;
+  }
+
+  function подставить(строка, парам) {
+    if (typeof строка !== 'string' || !парам) return строка;
+    /* Имена подстановок бывают русскими, поэтому \w здесь не годится:
+       он не считает буквой ни «о», ни «т». */
+    return строка.replace(/\{([^{}]+)\}/g, (всё, имя) =>
+      (парам[имя] === undefined ? всё : String(парам[имя])));
+  }
+
+  /* Главная функция. t('ключ') — строка из СТРОК на текущем языке;
+     t('ключ', { n: 5 }) — она же с подстановкой и нужной формой. */
+  function t(ключ, парам) {
+    let v = значение(ключ, ключ);
+    if (v && typeof v === 'object') {
+      const n = парам && парам.n;
+      v = v[форма(Number(n) || 0)] !== undefined
+        ? v[форма(Number(n) || 0)] : v.other;
+    }
+    return подставить(v, парам);
+  }
+
+  /* ---------- Применение к документу ---------- */
+
+  const АТРИБУТЫ = [
+    ['i18nTitle', 'title'],
+    ['i18nPlaceholder', 'placeholder'],
+    ['i18nAria', 'aria-label'],
+    ['i18nAlt', 'alt'],
+    ['i18nContent', 'content'],   // описание страницы в <meta>
+    // Подсказка с модификатором: %s подставляет app.js (Cmd или Ctrl)
+    ['i18nModTitle', 'data-mod-title'],
+  ];
+
+  function применить(корень) {
+    const где = корень || document;
+
+    document.documentElement.lang = язык;
+
+    где.querySelectorAll('[data-i18n]').forEach((el) => {
+      const ключ = el.dataset.i18n;
+      el.textContent = значение(ключ, запомнить(el, 'текст', el.textContent));
+    });
+
+    где.querySelectorAll('[data-i18n-html]').forEach((el) => {
+      const ключ = el.dataset.i18nHtml;
+      el.innerHTML = значение(ключ, запомнить(el, 'html', el.innerHTML));
+    });
+
+    for (const [поле, атрибут] of АТРИБУТЫ) {
+      где.querySelectorAll(`[data-${поле.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}]`)
+        .forEach((el) => {
+          const ключ = el.dataset[поле];
+          const было = запомнить(el, атрибут, el.getAttribute(атрибут) || '');
+          el.setAttribute(атрибут, значение(ключ, было));
+        });
+    }
+
+    // Заголовок вкладки и описание страницы
+    const titleEl = document.querySelector('title[data-i18n]');
+    if (titleEl) document.title = titleEl.textContent;
+
+    document.dispatchEvent(new CustomEvent('i18n', { detail: { язык } }));
+  }
+
+  function установить(новый, корень) {
+    if (!ЯЗЫКИ.includes(новый) || новый === язык) return;
+    язык = новый;
+    try { localStorage.setItem(КЛЮЧ_ХРАНИЛИЩА, язык); } catch (e) { /* некуда писать */ }
+    применить(корень);
+  }
+
+  return {
+    ЯЗЫКИ,
+    t,
+    применить,
+    установить,
+    язык: () => язык,
+    английский: () => язык === 'en',
+    молча: false,
+    EN: {},        // разметка: ключ → английский текст
+    СТРОКИ: {},    // код: ключ → { ru, en }
+  };
+})();
+
+window.I18N = I18N;
+window.t = I18N.t;
+
+/* ============================================================
+   СЛОВАРЬ 1. Разметка: ключ → английский текст.
+   Русский берётся из index.html, поэтому здесь его нет.
+   ============================================================ */
+I18N.EN = {
+  /* ---------- Голова страницы ---------- */
+  'мета.заголовок': 'Karaoke Punch — turn any song into karaoke',
+  'мета.описание': 'Free karaoke studio in your browser: load a song, duck the vocals, time the lyrics line by line and word by word, and sing along with word-level highlighting. No servers, no sign-up.',
+
+  /* ---------- Полоса обновления ---------- */
+  'обновление.позже': 'Later',
+
+  /* ---------- Окно «Что нового» ---------- */
+  'новости.закрыть': 'Close',
+  'новости.значок': 'Update',
+  'новости.заголовок': 'What’s new in 1.8.4',
+  'новости.установщик': '<b>📦 The installer is 40 MB lighter.</b> A second copy of the neural-network engine had been slipping into the app by oversight — 131 MB that nothing ever loaded. It’s gone now: 202 MB instead of 242.',
+  'новости.клавиши': '<b>⌨️ Key names match your system.</b> On Windows the hints said “Cmd+Z” — a key that isn’t there. The code was right all along; only the labels lied.',
+  'новости.вокал': '<b>🎚 Vocal removal is cleaner and faster.</b> We switched to the very model UVR5 runs. Measured against an instrumental made by the real UVR5, the match went from 84 % to 94 %. The model is three times lighter too — 64 MB instead of 172. And the wait is shorter: the old “accurate mode” with three passes turned out to add nothing — the difference from a single pass is down at the noise floor — so one pass is now the default.',
+  'новости.имя': '<b>🥊 The studio is now called Karaoke Punch.</b> Only the name changed: every project, every timing and every downloaded model stayed put and moved across on its own.',
+  'новости.оригинал': '<b>🎤 Bring the original back where you want it.</b> Sometimes the opening should stay as it is — someone is talking, or another voice is singing — and you take over after that. On the editor timeline you mark the stretches where the original plays instead of the instrumental: drag to create, pull the edges, delete what you don’t need. Works the same in karaoke, in the exported instrumental and in the video.',
+  'новости.магнит': '<b>🧲 Edges snap.</b> While you drag a line edge it sticks to neighbouring lines, to the playhead, to the edges of original-audio stretches and to real vocal onsets. Holding Alt suspends the snap for that drag — same as Logic Pro and Final Cut.',
+  'новости.шаги': '<b>🎯 Four steps now, and tapping moved into the editor.</b> There is no separate “Sync” step any more: tapping the spacebar is a mode inside the editor. While it runs, the line list and the preview step aside, leaving the current line large on screen, the next one below it, a counter, and the timeline where marks appear as you go. You can start tapping anywhere: earlier marks are left alone, every hit undoes on its own, and the whole run undoes with the usual <span class="mod-key">Cmd</span>+Z.',
+  'новости.разметка': '<b>🗣 The network times your own lyrics.</b> Paste the lyrics and the Whisper model listens to the singing, finds where each word is sung, and lays your lines out on those marks. Line and word timings appear by themselves — no tapping needed. The words stay yours: only the timing comes from the network, and it gets timing wrong far less often than letters. Lines it barely made out are flagged with ≈ — worth a check. If you don’t have the lyrics at hand you can have them transcribed from scratch, but that’s a draft: singing transcribes much worse than speech, and some lines will need fixing by hand. Both work better if you remove the vocals first — then the network hears a clean voice instead of a mix.',
+  'новости.редактор': '<b>🎚 A real timeline in the editor.</b> Lines and words are drawn as blocks — you see length, not just a start point. Drag the edges, drag the whole block, undo and redo (<span class="mod-key">Cmd</span>+Z), loop a line, and keys for everything else. And in the <span class="only-web">desktop version</span><span class="only-desktop">app</span> a vocal envelope is laid over the timeline: you can see where the singing actually is, and edges pull towards the real onset instead of a guess.',
+  'новости.слова': '<b>✨ Highlighting follows the words.</b> The fill no longer crawls through a line at a constant speed — it steps at word boundaries, the way modern karaoke players do. Same on stage, in the editor preview and in the video.',
+  'новости.разметкаСлов': '<b>♪ Word timing by hand.</b> The selected-line panel has a “♪ words” button: the passage plays with vocals and you tap the spacebar on each word. Next to it a new export — “.lrc with words”, the extended format with a timestamp on every word.',
+  'новости.отсчёт': '<b>⏱ A count-in before you sing.</b> Three dots fade out over the three seconds before a line starts — no more guessing when to come in after an instrumental break.',
+  'новости.подача': '<b>🎨 Calmer text.</b> Lines cross-fade, inactive ones dim and, if you like, blur, and instead of darkening the whole frame there is a soft scrim under the text. All of it goes into the video too.',
+  'новости.ещё': 'And the <a href="#desktop" id="whatsnew-link">desktop version</a> has two more neural networks: lyric timing and vocal removal.',
+  'новости.ок': 'Got it',
+
+  /* ---------- Шапка ---------- */
+  'шапка.возможности': 'Features',
+  'шапка.компьютер': 'Desktop',
+  'шапка.как': 'How it works',
+  'шапка.вопросы': 'FAQ',
+  'шапка.студия': 'Open the studio',
+  'шапка.язык': 'Interface language',
+
+  /* ---------- Первый экран ---------- */
+  'герой.значок': 'Runs right in your browser · free',
+  'герой.заголовок': 'Turn any song<br><span class="grad-text">into karaoke</span>',
+  'герой.подзаголовок': 'Load a track — the studio ducks the vocals, helps you time the lyrics line by line and word by word, and runs karaoke with word-level highlighting. Nothing is uploaded anywhere: it all happens on your device.',
+  'герой.кнопка': 'Make karaoke →',
+  'герой.скачать': 'Better with the app: neural networks remove the vocals and time the lyrics',
+  'герой.мак': '🍎 Download for macOS',
+  'герой.виндоус': '🪟 Download for Windows',
+  'герой.приватно': '100% private',
+  'герой.файлы': 'files never leave your computer',
+
+  /* ---------- Возможности ---------- */
+  'возможности.заголовок': 'Everything a karaoke night needs',
+  'возможности.вокал.заголовок': 'Vocal ducking',
+  'возможности.вокал.текст': 'In the browser the voice sitting in the centre of the stereo image is cancelled straight away, and vocal level stays adjustable while you sing. Need a truly clean instrumental — load a ready one as a second file, or take the <a href="#desktop">desktop version</a> with its neural network.',
+  'возможности.текст.заголовок': 'Lyric timing',
+  'возможности.текст.текст': 'Paste the lyrics — then tap the spacebar on each line, in time with the music, right in the editor. That’s also where you fix the starts and ends of phrases, audition them one by one, drag blocks on the waveform, and use the “♪ words” button to tap out every word inside a line.',
+  'возможности.караоке.заголовок': 'Karaoke mode',
+  'возможности.караоке.текст': 'Highlighting steps word by word, and three count-in dots fade out before you come in after a break. Your own background image, font, size, colours, outline, scrim under the text, equaliser. Export what you made: video up to 2K, instrumental as WAV, lyrics as LRC — plain or with a timestamp on every word.',
+
+  /* ---------- Настольная версия ---------- */
+  'настольная.заголовок': 'Desktop version: two neural networks inside',
+  'настольная.вокал': '<b>Remove the vocals.</b> In the browser the voice is ducked the simple way — fast, but reverb tails and backing vocals stay. The desktop version strips it out with the local UVR-MDX-NET-Inst_HQ_3 model — the very one UVR5 runs. The model downloads once, weighs 64 MB, and works offline afterwards.',
+  'настольная.текст': '<b>Time the lyrics.</b> Paste the lyrics and the Whisper model listens to the singing, finds where each word is sung, and lays your lines out on those marks. Line and word timings appear by themselves — no tapping needed. The words stay yours: only the timing comes from the network, and it gets timing wrong far less often than letters. If you don’t have the lyrics at hand it will write them out too — but that’s a draft you’ll need to edit.',
+  'настольная.локально': 'Your computer does all the work; nothing goes to the internet.',
+  'настольная.мак': '🍎 Download for macOS',
+  'настольная.виндоус': '🪟 Download for Windows',
+  'настольная.заметка': 'Free and open source. Each model downloads once, on first use — after that you don’t need the internet: vocal removal is 64 MB, speech recognition a few dozen megabytes. A 3-minute track is cleaned in about 3.5 minutes.<br>macOS — Apple Silicon; Windows — x64 and ARM. <a href="https://github.com/Gyros-dev/karaoke-maker/releases/latest">All releases and release notes</a>',
+  'настольная.первыйЗапуск': 'First launch: your system will ask for confirmation',
+  'настольная.подпись': 'The app is self-signed but not notarised by Apple — a developer certificate costs money. You’ll have to allow it by hand once.',
+  'настольная.мак.как': '<b>macOS.</b> Drag the app into Applications, open Terminal and run this — it clears the “downloaded from the internet” flag:',
+  'настольная.мак.без': 'Without Terminal: try to open the app, get refused, then go to System Settings → Privacy & Security and press “Open Anyway”. The old “right-click → Open” trick no longer works on recent macOS.',
+  'настольная.виндоус.как': '<b>Windows.</b> SmartScreen shows a blue window → “More info” → “Run anyway”.',
+
+  /* ---------- Как это работает ---------- */
+  'как.заголовок': 'How it works',
+  'как.лид': 'The recommended route is four steps. Below, in collapsed blocks, the editor and everything else.',
+  'как.шаг1.заголовок': 'Add a song',
+  'как.шаг1.текст': 'MP3, WAV, OGG and M4A all work. You can pick a background image for the karaoke while you’re here.',
+  'как.шаг1.приложение': '<b>And press “Remove vocals” right away.</b> The network will work out a clean instrumental on your computer — not only nicer to sing over, but noticeably better timing on the next step, because the network will hear a voice instead of a mix. It takes a while (the estimate is under the button), which is exactly why it should go first.',
+  'как.шаг1.сайт': 'If you already have a clean instrumental — from UVR5, say — drop it into the “Your own instrumental” field: it sounds much better than the built-in ducking.',
+  'как.шаг2.заголовок': 'Paste the lyrics',
+  'как.шаг2.текст': 'One non-empty line is one karaoke phrase. Finding the lyrics and copying them takes half a minute; timing them by hand takes far longer.',
+  'как.шаг2.приложение': '<b>Then press “Fit my lyrics”.</b> The network listens to the singing, finds where each word is sung, and lays your lines out on those marks: the words stay yours, only the timing comes from the network. Line and word timings appear by themselves — no tapping needed. No lyrics at hand? There’s a “Transcribe from scratch” button, but it’s a draft: singing transcribes much worse than speech.',
+  'как.шаг3.заголовок': 'Time it in the editor',
+  'как.шаг3.сайт': '<b>Tap the song out with the spacebar.</b> The editor has a tapping mode: the song plays and you hit the spacebar at the start of each line. You can start anywhere — earlier marks are left alone.',
+  'как.шаг3.приложение': '<b>Check what the network laid out.</b> Lines it barely made out are flagged with ≈ — start there. The rest usually just needs a loop and a nudge of the edges on the timeline.',
+  'как.шаг3.дальше': 'Then polish: edit the text, drag blocks on the timeline, loop a line, time the words inside a line. More in the “Editor” block below.',
+  'как.шаг4.заголовок': 'Sing and save',
+  'как.шаг4.текст': 'The “Karaoke” step is where you set up the look of the text, the background, the vocal level and the equaliser — and then save the song as a file: .lrc, a .wav instrumental or a video for YouTube. More in the “Look and what you can save” block below.',
+  'как.редактор.заголовок': 'Editor: timeline, snapping, original-audio stretches, words, tapping',
+  'как.редактор.дорожка': '<b>Timeline.</b> Lines and words are drawn as blocks — you see length, not just a start point. Drag the edges, drag the whole block. Arrow keys nudge the selected line a little; with Alt held, a lot. <span class="mod-key">Cmd</span>+Z undoes, <span class="mod-key">Cmd</span>+Shift+Z redoes. The loop button plays the selected line round and round — the fastest way to tell whether the timing lands.',
+  'как.редактор.магнит': '<b>Snapping.</b> While you drag an edge it sticks to neighbouring lines, to the playhead, to the edges of original-audio stretches and to real vocal onsets. Holding <b>Alt</b> suspends it for that drag — same as Logic Pro and Final Cut. <span class="only-desktop">In the app a vocal envelope is drawn on the timeline as well: you can see where the singing actually is.</span>',
+  'как.редактор.отрезки': '<b>Original-audio stretches.</b> Sometimes the opening should stay as it is — someone is talking, or another voice is singing. Drag across the stretch lane: inside a stretch the original plays instead of the instrumental, the edges can be pulled, an unwanted stretch removed. Works the same in karaoke, in the exported instrumental and in the video — wherever the “Vocals” slider sits.',
+  'как.редактор.слова': '<b>Word timing.</b> If the words aren’t timed, the line’s time is split between them by length — usually enough. When you want it exact, the selected line has a <b>“♪ words”</b> button: the passage plays with vocals and you tap the spacebar on each word. Timed lines are marked green; reset brings the automatic split back.',
+  'как.редактор.простукивание': '<b>Tapping.</b> There is no separate step — it’s a mode inside the editor. While it runs, the line list and the preview step aside: the current line stays large on screen, with the next one, a counter and the timeline, where marks appear as you go. Every hit undoes on its own, and the whole run undoes with the usual <span class="mod-key">Cmd</span>+Z.',
+  'как.экспорт.заголовок': 'Look and what you can save',
+  'как.экспорт.оформление': '<b>Look.</b> Tabs down the left of the “Karaoke” step: font and size, colours, stage (where the lines sit, the scrim under the text, blur on the inactive lines, the three-dot count-in before a line) and sound (vocal level and equaliser). Everything shows up straight away in the preview on the right, and the F key blows it up full screen.',
+  'как.экспорт.lrc': '<b>.lrc</b> is the standard synced-lyrics format: a line and its time. Plenty of players read it. Next to it, “.lrc with words” — the extended variant with a timestamp on every word.',
+  'как.экспорт.wav': '<b>Instrumental .wav</b> — the audio without vocals as a single file, including the stretches where you kept the original.',
+  'как.экспорт.видео': '<b>Video for YouTube</b> — a finished clip with background, text and instrumental in HD, Full HD or 2K. It records in real time, so it takes exactly as long as the song; you can minimise the window and recording carries on.',
+  'как.экспорт.сохранение': 'Lyrics, timings, word timing and the look are saved automatically and survive closing the <span class="only-web">tab</span><span class="only-desktop">app</span>. The only thing you have to pick again is the audio file itself.',
+
+  /* ---------- Студия: шаги ---------- */
+  'студия.заголовок': 'Studio',
+  'студия.шаг1': '<span>1</span> Song',
+  'студия.шаг2': '<span>2</span> Lyrics',
+  'студия.шаг3': '<span>3</span> Editor',
+  'студия.шаг4': '<span>4</span> Karaoke',
+  'студия.справка': 'How to use it',
+  'студия.справка.подсказка': 'A short guide: the recommended route, the editor and exporting',
+  'студия.справка.aria': 'How to use it',
+
+  /* ---------- Шаг 1 ---------- */
+  'шаг1.перетащи': 'Drop an audio file here<br>or click to choose one',
+  'шаг1.форматы': 'MP3 · WAV · OGG · M4A',
+  'шаг1.обработка': 'Processing the track…',
+  'шаг1.моно': '⚠️ The file is mono — vocals can’t be ducked, but lyric timing and karaoke will work.',
+  'шаг1.фон.заголовок': 'Karaoke background',
+  'шаг1.фон.текст': 'Optional: the picture sits under the text while you sing',
+  'шаг1.фон.alt': 'Karaoke background',
+  'шаг1.выбрать': 'Choose',
+  'шаг1.убрать': 'Remove',
+  'шаг1.минусовка.заголовок': 'Your own instrumental',
+  'шаг1.минусовка.текст': 'Optional: a ready file with no vocals (from UVR5, say) — sounds much better than the built-in ducking',
+  'шаг1.минусовка.готова': '✓ loaded',
+  'шаг1.другойФайл': 'Another file',
+  'шаг1.дальше': 'To the lyrics →',
+
+  /* ---------- Шаг 1: блоки приложения ---------- */
+  'ии.заголовок': '🧠 Remove the vocals with a neural network',
+  'ии.текст': 'The local UVR-MDX-NET-Inst_HQ_3 model — the same one UVR5 runs. All of it is worked out on your computer',
+  'ии.кнопка': 'Remove vocals',
+  'ии.ещё': 'More options',
+  'ии.качество': 'Quality',
+  'ии.один': 'One pass',
+  'ии.три': 'Three passes — three times the wait',
+  'ии.пояснение': 'We measured it: three offset passes give the same result as one. They differ by −31 dB, and the vocal residue matches to the second decimal. This used to be set to three passes with a promise of better quality — which turned out to be untrue, and cost you three times the wait for nothing. The choice is left in case your recording does show a difference, but one pass is the default.',
+  'ии.готовим': 'Preparing the model…',
+  'ии.локально': 'Worked out on your computer; nothing is sent to the internet.',
+  'ии.отменить': 'Cancel',
+
+  'asr.заголовок': '🗣 Lyric timing by neural network',
+  'asr.подгонка': '<b>The lyrics are in place — the network will time them.</b> It listens to the song, finds where each word is sung, and lays your lines out on those marks: the words stay yours, only the timing comes from the network. That is more reliable than transcribing from scratch — the model gets timing wrong far less often than letters. It comes out better still if you remove the vocals on step one first: then it hears a clean voice instead of a mix.',
+  'asr.сНуля': '<b>No lyrics at hand?</b> The network will write them out itself. Honestly: transcribing <b>singing</b> works noticeably worse than transcribing speech — vowels are stretched, backing vocals and music get in the way, and the model doesn’t know the rhymes, so this is a draft that saves you typing, not a finished result. The usual route is different: find the lyrics, paste them into the field below — and all the network has to do is the timing.',
+  'asr.язык': 'Language',
+  'asr.язык.сам': 'Detect it',
+  'asr.язык.ru': 'Russian',
+  'asr.язык.en': 'English',
+  'asr.язык.uk': 'Ukrainian',
+  'asr.язык.de': 'German',
+  'asr.язык.fr': 'French',
+  'asr.язык.es': 'Spanish',
+  'asr.язык.it': 'Italian',
+  'asr.сНуля.кнопка': 'Transcribe from scratch',
+  'asr.сНуля.подсказка': 'The network writes the lyrics itself and replaces whatever is in the field',
+  'asr.ещё': 'More options',
+  'asr.модель': 'Model',
+  'asr.модель.пояснение': 'The large model is the default — it makes out singing better than anything else we have, but takes about twice as long as the regular one and weighs three times as much. The regular one is worth taking if you’re in a hurry: for fitting your own lyrics it is usually enough, since all you need from the network there is timing, not letters.',
+  'asr.готовим': 'Preparing the model…',
+  'asr.локально': 'Worked out on your computer; nothing is sent to the internet.',
+  'asr.отменить': 'Cancel',
+
+  /* ---------- Шаг 2 ---------- */
+  'шаг2.подсказка': 'Paste the lyrics. One line of text is one karaoke line. Empty lines don’t count.',
+  'шаг2.поле': 'Paste the lyrics here…\n\nEach line is\na separate karaoke line',
+  'шаг2.назад': '← Back',
+  'шаг2.дальше': 'To the editor →',
+
+  /* ---------- Шаг 4: оформление ---------- */
+  'караоке.оформление': '🎨 Look',
+  'караоке.сбросить': 'Reset',
+  'караоке.вкл.текст': 'Text',
+  'караоке.вкл.цвет': 'Colour',
+  'караоке.вкл.сцена': 'Stage',
+  'караоке.вкл.звук': 'Sound',
+  'караоке.шрифт': 'Font',
+  'караоке.размер': 'Size',
+  'караоке.размер.подсказка': '100% is the largest size at which lines still fit on one row. Larger is fine too: long lines will wrap onto two rows',
+  'караоке.жирность': 'Weight',
+  'караоке.межбуквенный': 'Letter spacing',
+  'караоке.межстрочный': 'Line spacing',
+  'караоке.поля': 'Side margins',
+  'караоке.эффект': 'Effect',
+  'караоке.эффект.заливка': 'Fill',
+  'караоке.эффект.подсветка': 'Highlight',
+  'караоке.эффект.нет': 'None',
+  'караоке.цвета': 'Colours',
+  'караоке.цвет.неактив': 'Inactive text',
+  'караоке.цвет.неактив.мини': 'inactive',
+  'караоке.цвет.актив': 'Active line',
+  'караоке.цвет.актив.мини': 'active',
+  'караоке.цвет.эффект': 'Effect colour',
+  'караоке.цвет.эффект.мини': 'effect',
+  'караоке.обводка': 'Outline',
+  'караоке.обводка.цвет': 'Outline colour',
+  'караоке.фон': 'Stage background',
+  'караоке.фон.какбыло': 'As is',
+  'караоке.фон.цветом': 'Colour',
+  'караоке.приглушение': 'Dimming',
+  'караоке.приглушение.подсказка': 'How visible the lines that aren’t being sung are',
+  'караоке.размытие': 'Blur on inactive',
+  'караоке.подложка': 'Scrim under the text',
+  'караоке.подложка.подсказка': 'A dark band under the lines, over the picture — instead of darkening the whole frame',
+  'караоке.меняются': 'Lines swap places',
+  'караоке.меняются.подсказка': 'Turn this on and lines will move up as you sing',
+  'караоке.строкВидно': 'Lines visible',
+  'караоке.местоПервой': 'First line at',
+  'караоке.местоВторой': 'Second line at',
+  'караоке.появление': 'Transition',
+  'караоке.появление.плавно': 'Fade',
+  'караоке.появление.сдвиг': 'Slide',
+  'караоке.появление.нет': 'None',
+  'караоке.выравнивание': 'Alignment',
+  'караоке.выравнивание.верх': 'Top',
+  'караоке.выравнивание.центр': 'Middle',
+  'караоке.выравнивание.низ': 'Bottom',
+  'караоке.отсчёт': 'Count-in before a line',
+  'караоке.отсчёт.подсказка': 'Three dots fade out over the three seconds before you come in — so you know when to start after a break',
+  'караоке.заметка.видео': 'The look carries over into the YouTube video',
+  'караоке.низкие': 'Low <small>bass, kick</small>',
+  'караоке.средние': 'Mid <small>guitars, voice</small>',
+  'караоке.высокие': 'High <small>cymbals, air</small>',
+  'караоке.эквалайзер.сбросить': 'Reset',
+  'караоке.эквалайзер.подсказка': 'Applies in the player and goes into the video',
+  'караоке.заметка.вокал': 'Vocal level lives under the preview — that’s where you can hear it straight away.',
+  'караоке.развернуть': 'Expand the preview (F)',
+  'караоке.вокал': 'Vocals',
+  'караоке.микшер.подсказка': 'Original-audio stretches marked in the editor play in full regardless of this slider',
+
+  /* ---------- Шаг 4: экспорт ---------- */
+  'экспорт.назад': '← Editor',
+  'экспорт.звук': '🔊 Check the sound',
+  'экспорт.lrc': '⬇ Lyrics .lrc',
+  'экспорт.lrcСлова': '⬇ .lrc with words',
+  'экспорт.lrcСлова.подсказка': 'Extended LRC: a timestamp for every word inside a line',
+  'экспорт.wav': '⬇ Instrumental .wav',
+  'экспорт.wav.подсказка': 'Instrumental with the original on the stretches marked in the editor',
+  'экспорт.качество': 'Quality',
+  'экспорт.видео': '🎬 Video for YouTube',
+  'экспорт.идёт': 'Recording the video…',
+  'экспорт.подсказка': 'Recording runs in real time. You can minimise the window: the export carries on in the background. Don’t close the page before it finishes.',
+  'экспорт.отменить': 'Cancel',
+
+  /* ---------- Шаг 3: редактор ---------- */
+  'ред.справка.заголовок': 'How to fix the timing',
+  'ред.справка.первый': 'The text is on the left — edit it in the list, double-click to jump to a line. The preview is in the middle, the selected-line inspector on the right. The timeline is at the bottom: drag a block’s edges to move a boundary, its middle to move the whole line. Line starts are tapped with the spacebar: the “✎ tap again” button.',
+  'ред.справка.оригинал': '<b>The top lane is the original.</b> Drag across it and the real words from the recording play on that stretch instead of the instrumental — handy for an intro you’d rather not sing. Pull the edges to adjust; the cross, a double-click or <kbd>Delete</kbd> removes a stretch. Inside a stretch the original is heard in full, wherever the “Vocals” slider sits in karaoke — and it goes into the .wav instrumental and the recorded video just the same. In the editor itself you won’t hear the difference: the original plays everywhere here, or there would be nothing to time against. To hear the stretches, clear “hear the original” on the right or go to karaoke.',
+  'ред.легенда.оригинал': 'original plays here',
+  'ред.легенда.голос': 'voice',
+  'ред.легенда.строка': 'line',
+  'ред.легенда.глазок': '≈ rough timing',
+  'ред.легенда.слова': 'words of the selected line',
+  'ред.легенда.своё': 'own timing, if the line was pulled to the voice',
+  'ред.справка.магнит': '<b>🧲 Snapping.</b> While you drag, edges stick to neighbouring lines, to the playhead, to the edges of original stretches, to vocal onsets and endings (when the envelope is there) and to the edges of the song. A coloured guide appears where it sticks — the colour says what it caught. The threshold is the same at any zoom. Holding <kbd>Alt</kbd> suspends the snap; the <kbd>S</kbd> key turns it off for good.',
+  'ред.клавиши': '<kbd>space</kbd> play · <kbd>↑</kbd><kbd>↓</kbd> line · <kbd>←</kbd><kbd>→</kbd> start · <kbd>[</kbd><kbd>]</kbd> end · <kbd>Shift</kbd> finer, <kbd>Alt</kbd> coarser · <kbd>Enter</kbd> audition · <kbd>L</kbd> loop · <kbd>S</kbd> snap · <kbd>Delete</kbd> remove stretch · <kbd><span class="mod-key">Cmd</span>+Z</kbd> undo · wheel scrolls, with <kbd><span class="mod-key">Cmd</span></kbd> zooms',
+  'ред.простук.клавиша': 'hit <kbd>space</kbd> at the start of a line — or click here',
+  'ред.простук.отменить': '↶ undo last',
+  'ред.простук.готово': 'Done',
+  'ред.отменить': 'Undo the last action (%s+Z)',
+  'ред.повторить': 'Redo (%s+Shift+Z)',
+  'ред.покругу': '↻ loop',
+  'ред.покругу.подсказка': 'Play the selected line round and round (key L)',
+  'ред.магнит': '🧲 snap',
+  'ред.магнит.подсказка': 'Snapping: edges stick to neighbouring lines, to the playhead, to original stretches and to the real vocal onset. The S key turns it off for good, holding Alt suspends it for one drag',
+  'ред.сдвинуть': 'shift everything',
+  'ред.отдалить': 'Zoom out (key −)',
+  'ред.масштаб': 'zoom',
+  'ред.приблизить': 'Zoom in (key +)',
+  'ред.вся': 'whole song',
+  'ред.вся.подсказка': 'Show the whole song',
+  'ред.окно.строки': 'Lines',
+  'ред.окно.просмотр': 'Preview',
+  'ред.окно.строка': 'Line',
+  'ред.начало': 'start',
+  'ред.начало.подсказка': 'Line start in seconds. Enter applies, Esc puts it back',
+  'ред.конец': 'end',
+  'ред.конец.подсказка': 'Line end in seconds. Enter applies, Esc puts it back',
+  'ред.длительность': 'length',
+  'ред.секунды': 's',
+  'ред.прослушать': '▶ audition',
+  'ред.прослушать.подсказка': 'Audition this line (Enter)',
+  'ред.слова.подсказка': 'Tap out the words inside this line',
+  'ред.сброс.слова': '⨯ reset words',
+  'ред.сброс.слова.подсказка': 'Bring back the automatic word split',
+  'ред.простучать': '✎ tap again',
+  'ред.простучать.подсказка': 'Tap this line and the ones after it again (with the spacebar)',
+  'ред.удалить': '🗑 delete',
+  'ред.удалить.подсказка': 'Remove this line from the karaoke',
+  'ред.слышу': 'hear the original',
+  'ред.слышу.подсказка': 'The editor plays the original by default: timing by ear without the voice is impossible',
+  'ред.слова.заголовок': '♪ Word timing',
+  'ред.слова.подсказка2': 'Hit <kbd>space</kbd> the moment each word starts. Esc cancels.',
+  'ред.слова.сохранить': 'Save',
+  'ред.слова.отменить': 'Cancel',
+  'ред.назад': '← Lyrics',
+  'ред.дальше': 'Karaoke →',
+
+  /* ---------- Вопросы ---------- */
+  'faq.заголовок': 'Frequently asked',
+  'faq.1.вопрос': 'Why aren’t the vocals removed completely?',
+  'faq.1.ответ': 'In the browser the studio uses the classic “centre channel subtraction” trick: the voice is usually recorded identically in the left and right channels, so it can be subtracted out. Reverb, backing vocals and processing stay — for karaoke at home that’s usually enough. Full removal is a job for neural networks, and there’s a <a href="#desktop">desktop version</a> for that.',
+  'faq.2.вопрос': 'How do I get a really clean instrumental?',
+  'faq.2.ответ1': '<b>The easiest way is the <a href="#desktop">desktop version</a>:</b> it has a “Remove the vocals with a neural network” button that does everything for you. It uses the local UVR-MDX-NET-Inst_HQ_3 model — the very one UVR5 runs, so the result is the same: we compared our instrumental against one from the real UVR5 and came within 6 % by amplitude, and almost all of that difference is not vocal residue but a different way of cutting the song into chunks.',
+  'faq.2.ответ2': 'If you’d rather not install anything, run the song through a neural network separately and load the finished file into the “Your own instrumental” field on step one. The free option is <b>Ultimate Vocal Remover (UVR5)</b>: it runs locally — pick an MDX-Net model (the same UVR-MDX-NET-Inst_HQ_3, for instance) and save the “Instrumental” track. Among paid services, LALAL.AI and Moises give comparable quality.',
+  'faq.2.ответ3': 'The instrumental file has to be the same song at the same length as the original — otherwise the lyrics will drift.',
+  'faq.3.вопрос': 'Are my files uploaded anywhere?',
+  'faq.3.ответ': 'No. It all happens in your browser through the Web Audio API. The site has no server at all — you can even go offline after the page loads. The desktop version is the same: the neural networks run on your computer and no audio is sent anywhere. The only thing the app downloads is the models themselves, and only once.',
+  'faq.4.вопрос': 'What is word-level highlighting, and why time the words?',
+  'faq.4.ответ1': 'The fill doesn’t crawl through the line at a constant speed — it steps at word boundaries, the way modern karaoke players do. If a line’s words aren’t timed, its time is split between them in proportion to length: a long word is sung longer than a short one. That’s usually enough.',
+  'faq.4.ответ2': 'When you want it exact, the editor has a <b>“♪ words”</b> button on the selected line: the passage plays with vocals and you tap the spacebar on each word. Timed lines are marked green; reset brings the automatic split back. The marks travel with the line when you shift it and are saved into the project.',
+  'faq.5.вопрос': 'Where do I get the lyrics?',
+  'faq.5.ответ1': 'On the website you paste the lyrics yourself — copy them from anywhere and drop them into the field on step two.',
+  'faq.5.ответ2': 'The lyrics to any song take half a minute to find — timing them by hand takes far longer. That’s what the <a href="#desktop">desktop version</a> does: you paste your own lyrics, the Whisper model listens to the singing and lays your lines out on the marks it found. The words stay yours, only the timing comes from the network — and it gets timing wrong far less often than letters. Lines it barely made out are flagged with ≈: worth a check.',
+  'faq.5.ответ3': 'If you really don’t have the lyrics at hand, the same place can transcribe them from scratch. But honestly: that’s a draft. Singing transcribes much worse than speech — vowels are stretched, backing vocals and music get in the way, and the model doesn’t know the rhymes — so some lines will need fixing by hand. Either way it comes out noticeably better if you remove the vocals first: then the network hears a clean voice instead of a mix.',
+  'faq.6.вопрос': 'What is an .lrc file?',
+  'faq.6.ответ1': 'It’s the standard format for synced lyrics: every line is tagged with a time. Plenty of players and karaoke programs read these files.',
+  'faq.6.ответ2': 'The “⬇ .lrc with words” button saves the extended variant — with a timestamp on every word inside a line. Players that don’t understand it will still read the lyrics line by line; the ones that do will highlight word by word.',
+  'faq.7.вопрос': 'How do I upload the video to YouTube?',
+  'faq.7.ответ': 'The “Video for YouTube” button records a finished clip with background, text and instrumental — quality is chosen next to it: HD 1280×720, Full HD 1920×1080 or 2K 2560×1440. The whole stage look and the equaliser go into the recording. The file is WebM — YouTube takes it directly, no conversion. Recording runs in real time, so it takes as long as the song; you can minimise the window and the export carries on in the background.',
+  'faq.8.вопрос': 'Will my project be saved?',
+  'faq.8.ответ': 'Lyrics, line timings, word timing, the look, the equaliser and the background image are saved in the browser automatically. You’ll have to pick the audio file again next time — browsers don’t keep large files.',
+
+  /* ---------- Подвал ---------- */
+  'подвал.сделано': 'Made with love for music · runs without servers',
+  'подвал.новости': 'What’s new in 1.8.4',
+};
+
+/* ============================================================
+   СЛОВАРЬ 2. Строки, которые собираются в коде.
+   ============================================================ */
+I18N.СТРОКИ = {
+  /* ---------- Переключатель языка ---------- */
+  'язык.ru': { ru: 'Рус', en: 'Rus' },
+  'язык.en': { ru: 'Eng', en: 'Eng' },
+  'язык.ru.полно': { ru: 'Русский язык интерфейса', en: 'Russian interface' },
+  'язык.en.полно': { ru: 'Английский язык интерфейса', en: 'English interface' },
+
+  /* ---------- Шрифты сцены ---------- */
+  'шрифт.system': { ru: 'Системный', en: 'System' },
+  'шрифт.impact': { ru: 'Плакатный (Impact)', en: 'Poster (Impact)' },
+  'шрифт.arial': { ru: 'Гротеск (Arial)', en: 'Sans (Arial)' },
+  'шрифт.verdana': { ru: 'Широкий (Verdana)', en: 'Wide (Verdana)' },
+  'шрифт.trebuchet': { ru: 'Мягкий (Trebuchet)', en: 'Soft (Trebuchet)' },
+  'шрифт.georgia': { ru: 'Книжный (Georgia)', en: 'Serif (Georgia)' },
+  'шрифт.courier': { ru: 'Печатная машинка', en: 'Typewriter' },
+
+  /* ---------- Звук ---------- */
+  'звук.заблокирован': {
+    ru: 'Браузер блокирует звук на этом сайте.\n\n'
+      + 'Проверь:\n'
+      + '• не заглушена ли вкладка (правый клик по вкладке → «Включить звук»);\n'
+      + '• в Brave — нажми на значок льва и отключи Shields для этого сайта '
+      + '(строгая защита от фингерпринтинга глушит Web Audio);\n'
+      + '• в Safari — Настройки → Веб-сайты → Автовоспроизведение: разреши для этого сайта.',
+    en: 'Your browser is blocking audio on this site.\n\n'
+      + 'Check:\n'
+      + '• whether the tab is muted (right-click the tab → “Unmute site”);\n'
+      + '• in Brave — click the lion icon and turn Shields off for this site '
+      + '(strict fingerprinting protection kills Web Audio);\n'
+      + '• in Safari — Settings → Websites → Auto-Play: allow it for this site.',
+  },
+
+  /* ---------- Шаг 1: загрузка песни ---------- */
+  'песня.другая': {
+    ru: 'Сейчас в студии песня «{прежняя}», размечено строк: {n}.\n'
+      + 'Студия помнит одну песню за раз — если открыть другую, вернуть '
+      + 'разметку прежней будет нельзя.\n\n'
+      + 'Открыть «{новая}»?',
+    en: 'The studio currently holds “{прежняя}”, with {n} lines timed.\n'
+      + 'It remembers one song at a time — open another and the timing for '
+      + 'this one is gone for good.\n\n'
+      + 'Open “{новая}”?',
+  },
+  'песня.читаем': { ru: 'Читаем файл…', en: 'Reading the file…' },
+  'песня.декодируем': { ru: 'Декодируем аудио…', en: 'Decoding the audio…' },
+  'песня.приглушаем': { ru: 'Приглушаем вокал…', en: 'Ducking the vocals…' },
+  'песня.моно': { ru: 'моно', en: 'mono' },
+  'песня.стерео': { ru: 'стерео', en: 'stereo' },
+  'песня.кгц': { ru: '{v} кГц', en: '{v} kHz' },
+  'песня.неПрочиталась': {
+    ru: 'Не удалось прочитать этот файл как аудио. Попробуй другой формат (MP3, WAV, OGG).',
+    en: 'Couldn’t read this file as audio. Try another format (MP3, WAV, OGG).',
+  },
+
+  /* ---------- Своя минусовка ---------- */
+  'минусовка.заменить': { ru: 'Заменить', en: 'Replace' },
+  'минусовка.выбрать': { ru: 'Выбрать', en: 'Choose' },
+  'минусовка.сначалаПесня': { ru: 'Сначала загрузи саму песню.', en: 'Load the song itself first.' },
+  'минусовка.длина': {
+    ru: 'Длительность минусовки ({минус}) отличается от песни ({песня}) на {разница} с. '
+      + 'Текст может разъехаться. Всё равно использовать?',
+    en: 'The instrumental ({минус}) differs in length from the song ({песня}) by {разница} s. '
+      + 'The lyrics may drift. Use it anyway?',
+  },
+  'минусовка.неПрочиталась': {
+    ru: 'Не удалось прочитать этот файл как аудио. Попробуй MP3, WAV или OGG.',
+    en: 'Couldn’t read this file as audio. Try MP3, WAV or OGG.',
+  },
+
+  /* ---------- Картинка-фон ---------- */
+  'фон.неОткрылась': {
+    ru: 'Не удалось открыть эту картинку. Попробуй JPG или PNG.',
+    en: 'Couldn’t open this image. Try JPG or PNG.',
+  },
+
+  /* ---------- Шаг 2: текст ---------- */
+  'текст.пусто': {
+    ru: 'Сначала вставь текст песни — хотя бы пару строк.',
+    en: 'Paste the lyrics first — a couple of lines at least.',
+  },
+  'текст.потеряется': {
+    ru: {
+      one: 'Разметка {n} строки потеряется — в новом тексте такой строки нет:\n\n',
+      few: 'Разметка {n} строк потеряется — в новом тексте таких строк нет:\n\n',
+      many: 'Разметка {n} строк потеряется — в новом тексте таких строк нет:\n\n',
+      other: 'Разметка {n} строк потеряется — в новом тексте таких строк нет:\n\n',
+    },
+    en: {
+      one: 'The timing of {n} line will be lost — the new text has no such line:\n\n',
+      other: 'The timing of {n} lines will be lost — the new text has no such lines:\n\n',
+    },
+  },
+  'текст.ещё': { ru: '\n…и ещё {n}', en: '\n…and {n} more' },
+  'текст.применить': {
+    ru: '\n\nПрименить новый текст? Отменить правку можно будет в редакторе кнопкой «↶ отменить».',
+    en: '\n\nApply the new text? You can undo the edit in the editor with the “↶ undo” button.',
+  },
+
+  /* ---------- Сцена ---------- */
+  'сцена.пусто': { ru: 'Нет синхронизированных строк', en: 'No timed lines yet' },
+  'сцена.свернуть': { ru: 'Свернуть предпросмотр (Esc)', en: 'Collapse the preview (Esc)' },
+  'сцена.развернуть': { ru: 'Развернуть предпросмотр (F)', en: 'Expand the preview (F)' },
+  'сцена.дБ': { ru: '{знак}{v} дБ', en: '{знак}{v} dB' },
+
+  /* ---------- Проверка звука ---------- */
+  'проверка.сначалаПесня': { ru: 'Сначала загрузи песню.', en: 'Load a song first.' },
+  'проверка.слушаем': { ru: 'Слушаем…', en: 'Listening…' },
+  'проверка.источник.своя': { ru: 'своя минусовка ({имя})', en: 'your own instrumental ({имя})' },
+  'проверка.источник.встроенное': { ru: 'встроенное приглушение вокала', en: 'built-in vocal ducking' },
+  'проверка.источник.нет': { ru: 'минусовки нет, играет оригинал', en: 'no instrumental, playing the original' },
+  'проверка.позиция': { ru: 'Позиция: {at} из {всего}', en: 'Position: {at} of {всего}' },
+  'проверка.источник': { ru: 'Источник: {src}', en: 'Source: {src}' },
+  'проверка.громкость': { ru: 'Громкость вокала: {v}%', en: 'Vocal level: {v}%' },
+  'проверка.сигналПесня': { ru: 'Сигнал в песне: {v}', en: 'Signal in the song: {v}' },
+  'проверка.сигналМинус': { ru: 'Сигнал в минусовке: {v}', en: 'Signal in the instrumental: {v}' },
+  'проверка.сигналВыход': { ru: 'Сигнал на выходе: {v}', en: 'Signal at the output: {v}' },
+  'проверка.состояние': { ru: 'Состояние аудио: {state}, частота {rate} Гц', en: 'Audio state: {state}, sample rate {rate} Hz' },
+  'проверка.тишинаВМинусе': {
+    ru: '❗ В минусовке на этом месте тишина. Возможно, файл не тот '
+      + '(например, дорожка с одним вокалом) или он короче песни. '
+      + 'Попробуй убрать свою минусовку или подвинуть позицию.',
+    en: '❗ The instrumental is silent at this point. The file may be the wrong one '
+      + '(a vocals-only track, say) or shorter than the song. '
+      + 'Try removing your instrumental or moving the position.',
+  },
+  'проверка.минусКороче': {
+    ru: '❗ Минусовка короче песни — ближе к концу будет тишина.',
+    en: '❗ The instrumental is shorter than the song — it will go silent towards the end.',
+  },
+  'проверка.браузерГлушит': {
+    ru: '❗ Данные звука есть, но на выходе тишина — звук глушит браузер.\n'
+      + 'В Brave: значок льва → отключи Shields для сайта.\n'
+      + 'В Safari: правый клик по вкладке → «Включить звук», и Настройки → '
+      + 'Веб-сайты → Автовоспроизведение → «Разрешить все».',
+    en: '❗ The audio data is there but the output is silent — the browser is muting it.\n'
+      + 'In Brave: lion icon → turn Shields off for this site.\n'
+      + 'In Safari: right-click the tab → “Unmute site”, and Settings → '
+      + 'Websites → Auto-Play → “Allow All”.',
+  },
+  'проверка.всёХорошо': {
+    ru: '✅ Звук идёт нормально. Если не слышно — проверь громкость системы, '
+      + 'выбранное устройство вывода и не заглушена ли вкладка.',
+    en: '✅ Audio is flowing fine. If you still hear nothing, check the system volume, '
+      + 'the selected output device and whether the tab is muted.',
+  },
+
+  /* ---------- Экспорт ---------- */
+  'экспорт.нетСтрок': { ru: 'Сначала синхронизируй текст.', en: 'Time the lyrics first.' },
+  'экспорт.имяСлова': { ru: '{имя} (по словам).lrc', en: '{имя} (word by word).lrc' },
+  'экспорт.имяМинус': { ru: '{имя} (минус).wav', en: '{имя} (instrumental).wav' },
+  'экспорт.имяВидео': { ru: '{имя} (караоке).{ext}', en: '{имя} (karaoke).{ext}' },
+  'экспорт.моно': {
+    ru: 'Для моно-файла минусовку сделать нельзя.',
+    en: 'An instrumental can’t be made from a mono file.',
+  },
+  'экспорт.готовимШрифт': { ru: 'Готовим шрифт…', en: 'Preparing the font…' },
+  'экспорт.записываем': { ru: 'Записываем видео…', en: 'Recording the video…' },
+  'экспорт.записываемХод': { ru: 'Записываем видео… {at} / {всего}', en: 'Recording the video… {at} / {всего}' },
+
+  /* ---------- Редактор ---------- */
+  'ред.вокал.есть': {
+    ru: 'В редакторе по умолчанию звучит оригинал: размечать на слух без голоса невозможно',
+    en: 'The editor plays the original by default: timing by ear without the voice is impossible',
+  },
+  'ред.вокал.моно': {
+    ru: 'Файл моно — минусовки нет, оригинал звучит всегда',
+    en: 'Mono file — there is no instrumental, so the original always plays',
+  },
+  'ред.голос.есть': { ru: '— видно, где на самом деле поют', en: '— shows where the singing actually is' },
+  'ред.голос.нет': {
+    ru: '— появится, когда уберёшь вокал нейросетью',
+    en: '— appears once you remove the vocals with the neural network',
+  },
+  'ред.до': { ru: 'до {t}', en: 'to {t}' },
+  'ред.длина': { ru: '{v} с', en: '{v} s' },
+  'ред.глазок.подсказка': {
+    ru: 'Время подобрано приблизительно — послушай и поправь',
+    en: 'This timing is a rough guess — listen and fix it',
+  },
+  'ред.слова.помечены': {
+    ru: 'Слова этой строки размечены вручную',
+    en: 'The words of this line are timed by hand',
+  },
+  'ред.последняяСтрока': {
+    ru: 'Это последняя строка — удалять нечего. Текст правится на шаге «Текст».',
+    en: 'This is the last line — there is nothing to delete. Edit the text on the “Lyrics” step.',
+  },
+  'ред.удалитьСтроку': {
+    ru: 'Убрать строку «{текст}» из караоке?\n\nОтменяется через {мод}+Z.',
+    en: 'Remove the line “{текст}” from the karaoke?\n\nUndo with {мод}+Z.',
+  },
+  'ред.сначалаПростучи': {
+    ru: 'Сначала простучи начало этой строки: кнопка «✎ простучать заново» в панели выбранной строки.',
+    en: 'Tap out the start of this line first: the “✎ tap again” button in the selected-line panel.',
+  },
+  'ред.словСчёт': { ru: '{n} из {всего}', en: '{n} of {всего}' },
+  'ред.размечено': { ru: 'размечено {n} из {всего}', en: '{n} of {всего} timed' },
+  'ред.всёРазмечено': { ru: 'Все строки размечены', en: 'Every line is timed' },
+  'ред.порядок': {
+    ru: 'Строка {k} размечена раньше, чем та, которую ты только что простучал.\n\n'
+      + 'Стереть метки с {k}-й строки и дальше, чтобы простучать их заново?\n'
+      + 'Всё вместе с этим заходом отменяется через {мод}+Z.',
+    en: 'Line {k} is timed earlier than the one you have just tapped.\n\n'
+      + 'Clear the marks from line {k} onwards so you can tap them again?\n'
+      + 'That, together with this run, undoes with {мод}+Z.',
+  },
+  'ред.строкаНеВыбрана': { ru: 'Строка не выбрана', en: 'No line selected' },
+  'ред.строкаНомер': { ru: 'Строка №{n}', en: 'Line {n}' },
+  'ред.строкаГлазок': { ru: ' · время на глазок', en: ' · rough timing' },
+  'ред.словаКнопка': { ru: '♪ слова', en: '♪ words' },
+  'ред.словаКнопкаГотово': { ru: '♪ слова ✓', en: '♪ words ✓' },
+
+  /* ---------- Подписи на дорожке ---------- */
+  'дорожка.оригинал.пусто': {
+    ru: 'оригинал: протяни мышью — на этом куске зазвучат настоящие слова',
+    en: 'original: drag across — the real words will play on that stretch',
+  },
+  'дорожка.оригинал': { ru: 'оригинал', en: 'original' },
+  'дорожка.голос': { ru: 'голос', en: 'voice' },
+  'дорожка.словаПусто': {
+    ru: 'выбери строку — здесь появятся её слова',
+    en: 'select a line — its words will appear here',
+  },
+
+  /* ---------- Обновления ---------- */
+  'обновление.вышла': { ru: 'Вышла новая версия студии — {v}', en: 'A new version of the studio is out — {v}' },
+  'обновление.обновить': { ru: 'Обновить', en: 'Update' },
+  'обновление.версия': { ru: 'Вышла версия {v} — у тебя {текущая}', en: 'Version {v} is out — you have {текущая}' },
+  'обновление.версияПросто': { ru: 'Вышла версия {v}', en: 'Version {v} is out' },
+  'обновление.скачать': { ru: 'Скачать', en: 'Download' },
+  'обновление.скачиваем': { ru: 'Скачиваем обновление…', en: 'Downloading the update…' },
+  'обновление.скачиваемПроцент': { ru: 'Скачиваем обновление… {p}%', en: 'Downloading the update… {p}%' },
+  'обновление.готово': { ru: 'Версия {v} готова к установке', en: 'Version {v} is ready to install' },
+  'обновление.перезапустить': { ru: 'Перезапустить', en: 'Restart' },
+  'обновление.неСкачалось': { ru: 'Не удалось скачать обновление', en: 'Couldn’t download the update' },
+  'обновление.неАвто': { ru: 'Не удалось обновиться автоматически', en: 'Couldn’t update automatically' },
+  'обновление.вручную': { ru: 'Скачать вручную', en: 'Download by hand' },
+
+  /* ============================================================
+     Настольная часть
+     ============================================================ */
+
+  /* ---------- Оценка времени ---------- */
+  'время.несколькоМинут': { ru: 'несколько минут', en: 'a few minutes' },
+  'время.меньшеМинуты': { ru: 'меньше минуты', en: 'under a minute' },
+  'время.вилка': {
+    ru: {
+      one: '{от}–{n} минуты',
+      few: '{от}–{n} минуты',
+      many: '{от}–{n} минут',
+      other: '{от}–{n} минут',
+    },
+    en: {
+      one: '{от}–{n} minute',
+      other: '{от}–{n} minutes',
+    },
+  },
+  'время.займёт': { ru: 'Займёт примерно ', en: 'Takes roughly ' },
+  'время.прикидка': {
+    ru: 'По прикидке это {время}. Считает на твоём компьютере, ничего не отправляется в интернет.',
+    en: 'Rough estimate: {время}. It runs on your computer; nothing is sent to the internet.',
+  },
+  'время.локально': {
+    ru: 'Считает на твоём компьютере, ничего не отправляется в интернет.',
+    en: 'It runs on your computer; nothing is sent to the internet.',
+  },
+  'время.когдаЗагрузишь': {
+    ru: 'Время посчитаем, когда загрузишь песню. ',
+    en: 'We’ll work out the time once you load a song. ',
+  },
+  'время.осталосьСек': { ru: 'осталось около {n} с', en: 'about {n} s left' },
+  'время.осталосьМин': { ru: 'осталось около {n} мин', en: 'about {n} min left' },
+
+  /* ---------- Разделение вокала ---------- */
+  'ии.проходовМного': {
+    ru: 'Выбрано {n} прохода — ждать во столько же раз дольше, а результат тот же.',
+    en: '{n} passes selected — the wait grows by the same factor and the result is the same.',
+  },
+  'ии.проходОдин': {
+    ru: 'Один проход. Больше проходов качества не добавляют, мы это замерили.',
+    en: 'One pass. More passes add no quality — we measured it.',
+  },
+  'ии.стараяМодель': {
+    ru: 'Вокал теперь убирает другая модель — та же, что в UVR5: '
+      + 'она и чище, и втрое легче.\n\n'
+      + 'Прежняя модель Demucs осталась на компьютере и занимает {мб} МБ. '
+      + 'Она больше не нужна. Удалить её?',
+    en: 'Vocals are now removed by a different model — the same one UVR5 uses: '
+      + 'cleaner, and three times lighter.\n\n'
+      + 'The old Demucs model is still on your computer, taking up {мб} MB. '
+      + 'It is no longer needed. Delete it?',
+  },
+  'ии.стараяНеУдалилась': {
+    ru: 'Не получилось удалить прежнюю модель: ',
+    en: 'Couldn’t delete the old model: ',
+  },
+  'ии.модельБитая': {
+    ru: 'Модель на компьютере повреждена: скачано {есть} из {всего} МБ.\n\n'
+      + 'Похоже, прошлая загрузка оборвалась. Скачать заново?',
+    en: 'The model on your computer is damaged: {есть} of {всего} MB downloaded.\n\n'
+      + 'The previous download seems to have been cut short. Download it again?',
+  },
+  'ии.модельНужна': {
+    ru: 'Для удаления вокала нужна модель — {мб} МБ.\n\n'
+      + 'Она скачается один раз и останется на компьютере: дальше всё работает без интернета. '
+      + 'Скачать сейчас?',
+    en: 'Vocal removal needs a model — {мб} MB.\n\n'
+      + 'It downloads once and stays on your computer: everything works offline afterwards. '
+      + 'Download it now?',
+  },
+  'ии.скачиваемМодель': { ru: 'Скачиваем модель…', en: 'Downloading the model…' },
+  'ии.разоваяЗагрузка': {
+    ru: 'Это разовая загрузка, потом интернет не нужен.',
+    en: 'A one-time download; after this you don’t need the internet.',
+  },
+  'ии.скачиваемХод': { ru: 'Скачиваем модель… {есть} из {всего} МБ', en: 'Downloading the model… {есть} of {всего} MB' },
+  'ии.модельНеСкачалась': { ru: 'Не удалось скачать модель: ', en: 'Couldn’t download the model: ' },
+  'ии.сбойПотока': { ru: 'сбой в потоке расчёта', en: 'the worker thread failed' },
+  'ии.сначалаПесня': { ru: 'Сначала загрузи песню.', en: 'Load a song first.' },
+  'ии.готовимЗвук': { ru: 'Готовим звук…', en: 'Preparing the audio…' },
+  'ии.загружаемМодель': { ru: 'Загружаем модель…', en: 'Loading the model…' },
+  'ии.модельНеНайдена': { ru: 'Модель не найдена', en: 'Model not found' },
+  'ии.неПолучилось': { ru: 'Не получилось убрать вокал: ', en: 'Couldn’t remove the vocals: ' },
+  'ии.почтиГотово': { ru: 'Почти готово…', en: 'Almost done…' },
+  'ии.возвращаемКачество': { ru: 'Возвращаем исходное качество звука.', en: 'Restoring the original audio quality.' },
+  'ии.имяНесколько': {
+    ru: 'нейросеть (UVR-MDX-NET-Inst_HQ_3, {n} прохода)',
+    en: 'neural network (UVR-MDX-NET-Inst_HQ_3, {n} passes)',
+  },
+  'ии.имя': { ru: 'нейросеть (UVR-MDX-NET-Inst_HQ_3)', en: 'neural network (UVR-MDX-NET-Inst_HQ_3)' },
+  'ии.готово': {
+    ru: 'Готово! Вокал убран нейросетью.\n\n'
+      + 'Минусовка уже подставлена — можно идти дальше. '
+      + 'Если захочешь вернуть обычное приглушение, нажми «Убрать» в блоке минусовки.',
+    en: 'Done — the vocals are gone.\n\n'
+      + 'The instrumental is already in place, so you can move on. '
+      + 'If you want the plain ducking back, press “Remove” in the instrumental block.',
+  },
+  'ии.ошибка': { ru: 'Ошибка при удалении вокала: ', en: 'Error while removing the vocals: ' },
+  'ии.готовимМодель': { ru: 'Готовим модель…', en: 'Preparing the model…' },
+  'ии.ходПроходы': {
+    ru: 'Убираем вокал: проход {проход} из {проходов}, кусок {кусок} из {кусков}',
+    en: 'Removing vocals: pass {проход} of {проходов}, chunk {кусок} of {кусков}',
+  },
+  'ии.ход': { ru: 'Убираем вокал: {кусок} из {кусков}', en: 'Removing vocals: {кусок} of {кусков}' },
+
+  /* ---------- Распознавание и подгонка текста ---------- */
+  'asr.чистыйВокал': { ru: '✓ слушаем чистый вокал', en: '✓ listening to the clean vocal' },
+  'asr.модель.small': { ru: 'Крупная, 242 МБ — слышит лучше всех', en: 'Large, 242 MB — hears best of all' },
+  'asr.модель.base': { ru: 'Обычная, 78 МБ — вдвое быстрее, но хуже', en: 'Regular, 78 MB — twice as fast, but worse' },
+  'asr.модель.скачана': { ru: '{label} · скачана', en: '{label} · downloaded' },
+  'asr.хвост.обычная': {
+    ru: 'Выбрана обычная модель: примерно вдвое быстрее крупной, но и слышит хуже.',
+    en: 'The regular model is selected: about twice as fast as the large one, and it hears worse.',
+  },
+  'asr.хвост.крупная': {
+    ru: 'Стоит крупная модель — она разбирает пение лучше всех, что у нас есть, но считает примерно вдвое дольше обычной.',
+    en: 'The large model is selected — it makes out singing better than anything else we have, but takes about twice as long as the regular one.',
+  },
+  'asr.хвост.вокал': {
+    ru: ' Слушаем чистый вокал: по нему точнее, но дольше, чем по миксу.',
+    en: ' Listening to the clean vocal: more accurate, but slower than the mix.',
+  },
+  'asr.модельНужна': {
+    ru: 'Для распознавания нужна модель — около {мб} МБ.\n\n'
+      + 'Она скачается один раз и останется на компьютере: дальше всё работает без интернета. '
+      + 'Скачать сейчас?',
+    en: 'Transcription needs a model — around {мб} MB.\n\n'
+      + 'It downloads once and stays on your computer: everything works offline afterwards. '
+      + 'Download it now?',
+  },
+  'asr.скачиваемМодель': { ru: 'Скачиваем модель распознавания…', en: 'Downloading the transcription model…' },
+  'asr.модельНеСкачалась': { ru: 'Не удалось скачать модель: ', en: 'Couldn’t download the model: ' },
+  'asr.сбойПотока': { ru: 'сбой в потоке распознавания', en: 'the transcription worker failed' },
+  'asr.загружаемМодель': { ru: 'Загружаем модель распознавания…', en: 'Loading the transcription model…' },
+  'asr.слушаем': { ru: 'Слушаем песню…', en: 'Listening to the song…' },
+  'asr.разбираем': { ru: 'Разбираем слова…', en: 'Making out the words…' },
+  'asr.трудныйКусок': {
+    ru: 'Трудный кусок, слушаем заново ({n} из {всего})…',
+    en: 'Tricky passage, listening again ({n} of {всего})…',
+  },
+  'asr.готовимЗвук': { ru: 'Готовим звук…', en: 'Preparing the audio…' },
+  'asr.сначалаПесня': { ru: 'Сначала загрузи песню.', en: 'Load a song first.' },
+  'asr.сначалаТекст': { ru: 'Сначала вставь текст песни в поле ниже.', en: 'Paste the lyrics into the field below first.' },
+  'asr.неРаспозналось': { ru: 'Не получилось распознать текст: ', en: 'Couldn’t transcribe the lyrics: ' },
+  'asr.ничегоНеРазобрало': {
+    ru: 'Распознавание ничего не разобрало.\n\n'
+      + 'Попробуй сначала убрать вокал нейросетью на первом шаге — '
+      + 'по чистому голосу получается заметно лучше. Ещё помогает выбрать язык вручную.',
+    en: 'Transcription made out nothing at all.\n\n'
+      + 'Try removing the vocals on step one first — it comes out noticeably better '
+      + 'on a clean voice. Choosing the language by hand helps too.',
+  },
+  'asr.меткаРаспознано': { ru: 'Текст распознан: {n} строк.', en: 'Lyrics transcribed: {n} lines.' },
+  'asr.меткаРаспознаноХвост': {
+    ru: ' Времена строк и слов проставлены. Это черновик: строки стоит вычитать.',
+    en: ' Line and word timings are in place. It’s a draft: the lines are worth proofreading.',
+  },
+  'asr.итогРаспознано': {
+    ru: 'Распознано строк: {n}.\n\n'
+      + 'Это черновик: пение распознаётся хуже речи, часть строк наверняка '
+      + 'придётся поправить прямо в поле текста. Времена строк и слов уже проставлены — '
+      + 'если текст не менять, простукивать в редакторе ничего не придётся.',
+    en: '{n} lines transcribed.\n\n'
+      + 'It’s a draft: singing transcribes worse than speech, and some lines will '
+      + 'certainly need fixing right in the text field. Line and word timings are already '
+      + 'in place — leave the text alone and you won’t have to tap anything in the editor.',
+  },
+  'asr.ошибка': { ru: 'Ошибка при распознавании: ', en: 'Error during transcription: ' },
+  'asr.неПослушалось': { ru: 'Не получилось послушать песню: ', en: 'Couldn’t listen to the song: ' },
+  'asr.раскладываем': { ru: 'Раскладываем твой текст по песне…', en: 'Laying your lyrics out over the song…' },
+  'asr.неПодогналось': {
+    ru: 'Не получилось подогнать текст: {ошибка}.\n\n'
+      + 'Чаще всего дело в звуке: попробуй сначала убрать вокал нейросетью '
+      + 'на первом шаге и выбрать язык вручную. Ещё проверь, что в поле — '
+      + 'текст именно этой песни.',
+    en: 'Couldn’t fit the lyrics: {ошибка}.\n\n'
+      + 'Usually it’s the audio: try removing the vocals on step one first and '
+      + 'choosing the language by hand. Also check that the field really holds '
+      + 'the lyrics to this song.',
+  },
+  'asr.меткаВремена': {
+    ru: 'Времена проставлены: {строк} строк, {слов} слов.',
+    en: 'Timings are in place: {строк} lines, {слов} words.',
+  },
+  'asr.меткаРасслышала': {
+    ru: ' Нейросеть точно расслышала {процент}% слов.',
+    en: ' The network heard {процент}% of the words for certain.',
+  },
+  'asr.меткаСомнительных': {
+    ru: ' Строк с временем на глазок: {n} — в редакторе они помечены знаком ≈.',
+    en: ' Lines with rough timing: {n} — flagged with ≈ in the editor.',
+  },
+  'asr.меткаБезСомнительных': {
+    ru: ' Строк с временем на глазок нет.',
+    en: ' No lines with rough timing.',
+  },
+  'asr.итогРазложено': {
+    ru: 'Текст разложен по песне: {строк} строк, {слов} слов.\n\n'
+      + 'Нейросеть точно расслышала {процент}% слов — их время настоящее. '
+      + 'Остальные расставлены между ними по числу слогов.',
+    en: 'The lyrics are laid out over the song: {строк} lines, {слов} words.\n\n'
+      + 'The network heard {процент}% of the words for certain — their timing is real. '
+      + 'The rest are spaced between them by syllable count.',
+  },
+  'asr.итогСомнительные': {
+    ru: '\n\nСтрок, которые нейросеть почти не расслышала: {n}. '
+      + 'В редакторе они помечены знаком ≈ — их стоит проверить и поправить '
+      + 'в панели выбранной строки или прямо на дорожке.',
+    en: '\n\nLines the network barely made out: {n}. '
+      + 'They are flagged with ≈ in the editor — worth checking and fixing '
+      + 'in the selected-line panel or right on the timeline.',
+  },
+  'asr.итогХвост': {
+    ru: '\n\nВремена уже проставлены — простукивать в редакторе ничего не придётся.',
+    en: '\n\nThe timings are already in place — there is nothing left to tap in the editor.',
+  },
+  'asr.ошибкаПодгонки': { ru: 'Ошибка при подгонке текста: ', en: 'Error while fitting the lyrics: ' },
+  'asr.кнопка.подогнать': { ru: 'Подогнать мой текст', en: 'Fit my lyrics' },
+  'asr.кнопка.распознать': { ru: 'Распознать текст', en: 'Transcribe the lyrics' },
+  'asr.сНуляВопрос': {
+    ru: 'Распознать текст с нуля?\n\n'
+      + 'Нейросеть напишет текст сама и заменит им то, что сейчас в поле. '
+      + 'Пение распознаётся хуже речи, так что это черновик — он нужен, '
+      + 'когда текста песни нет под рукой.\n\n'
+      + 'Твой текст будет потерян. Продолжить?',
+    en: 'Transcribe the lyrics from scratch?\n\n'
+      + 'The network will write the lyrics itself and replace whatever is in the field. '
+      + 'Singing transcribes worse than speech, so this is a draft — it’s for when '
+      + 'you don’t have the lyrics at hand.\n\n'
+      + 'Your text will be lost. Continue?',
+  },
+
+  /* ---------- Ошибки подгонки (align.js) ---------- */
+  'подгонка.пустойТекст': { ru: 'пустой текст', en: 'the text is empty' },
+  'подгонка.ниСлова': { ru: 'нейросеть не разобрала ни слова', en: 'the network made out no words at all' },
+  'подгонка.неСовпало': {
+    ru: 'ни одно слово текста не совпало с песней',
+    en: 'not a single word of the text matched the song',
+  },
+  'подгонка.опорыНеСложились': { ru: 'опоры не сложились', en: 'no anchor points could be built' },
+};
+
+/* Раскладываем перевод сразу, на этом же вызове: файл подключён
+   в конце <body>, дерево уже разобрано, и до первой отрисовки успеваем.
+   Иначе на английском на долю секунды мелькнула бы русская страница. */
+I18N.применить();

@@ -179,7 +179,10 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
   const R = new Float32Array(right);
   const total = L.length;
 
-  post({ type: 'progress', percent: 0, text: 'Готовим модель…' });
+  /* Надписи воркер не собирает: он живёт отдельным файлом, словаря
+     у него нет и про выбранный язык он не знает. Отдаём ключ и числа,
+     а строку складывает desktop.js — там перевод под рукой. */
+  post({ type: 'progress', percent: 0, ключ: 'ии.готовимМодель' });
   await ensureSession(modelBytes);
 
   /* Приём со сдвигами: каждый проход смещает запись на случайную долю
@@ -198,15 +201,17 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
     const frac = Math.min(сделано / всего, 0.999);
     const elapsed = (Date.now() - t0) / 1000;
     const rest = elapsed / Math.max(frac, 0.001) - elapsed;
+    const шестёрками = Math.ceil(rest / 6) * 6;
     post({
       type: 'progress',
       percent: Math.round(frac * 100),
-      text: passes > 1
-        ? `Убираем вокал: проход ${pass + 1} из ${passes}, кусок ${done} из ${all}`
-        : `Убираем вокал: ${done} из ${all}`,
-      eta: rest > 3 ? `осталось около ${Math.ceil(rest / 6) * 6 < 60
-        ? Math.ceil(rest / 6) * 6 + ' с'
-        : Math.ceil(rest / 60) + ' мин'}` : '',
+      ключ: passes > 1 ? 'ии.ходПроходы' : 'ии.ход',
+      парам: { 'проход': pass + 1, 'проходов': passes, 'кусок': done, 'кусков': all },
+      осталось: rest > 3
+        ? (шестёрками < 60
+          ? { n: шестёрками, 'единица': 'с' }
+          : { n: Math.ceil(rest / 60), 'единица': 'мин' })
+        : null,
     });
   };
 
