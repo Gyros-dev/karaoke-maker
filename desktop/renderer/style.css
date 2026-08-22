@@ -335,9 +335,11 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    Раньше шаг рос как хотел: панель «Оформление текста» уводила сцену
    за нижний край экрана, и правку не было видно. */
 .step-panel.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-/* Редактор и караоке — самые плотные экраны студии: сетка строк,
-   предпросмотр, дорожка, настройки. Им отдаётся вся ширина студии. */
-#step-3, #step-4 { max-width: none; }
+/* Вся ширина студии — всем четырём шагам. Раньше её получали только
+   редактор и караоке, а «Песня» и «Текст» оставались столбцом
+   в 720 px посреди рабочего места шириной 1232 px: полстудии пустовало,
+   и студия выглядела собранной из разных программ. */
+#step-1, #step-2, #step-3, #step-4 { max-width: none; }
 /* Первые два шага короткие: ставим их посередине рабочего места,
    а поле текста растягиваем на всю высоту. Если содержимое всё-таки
    не влезло (низкое окно, настольные блоки нейросети) — прокручивается
@@ -345,6 +347,65 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 #step-1.active { justify-content: safe center; }
 #step-1.active, #step-2.active { overflow-y: auto; }
 #step-2 #lyrics-input { flex: 1; min-height: 140px; }
+
+/* --- Шаг «Песня» на всю ширину ---
+   Карточки «Фон для караоке», «Своя минусовка» и (в приложении)
+   «Убрать вокал нейросетью» встают в ряд, а не длинным столбцом:
+   иначе широкое рабочее место наполовину пустует, а список уезжает
+   под нижний край. Сама песня и кнопки шага идут во всю ширину.
+
+   Колонок ровно столько, сколько карточек: на сайте их две, в приложении
+   к ним добавляется удаление вокала — тогда три. Считать колонки через
+   auto-fit нельзя: песня и кнопки лежат поперёк всех колонок, пустых
+   не остаётся, и лишняя колонка не схлопнулась бы. */
+#step-1 .track-info {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-content: start;
+}
+#step-1 .track-info:has(> #ai-block) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#step-1 .track-info > .track-row,
+#step-1 .track-info > .mono-warning,
+#step-1 .track-info > .panel-actions { grid-column: 1 / -1; }
+/* Просветы задаёт сетка, свои отступы карточкам больше не нужны */
+#step-1 .track-info > .bg-upload,
+#step-1 .track-info > .mono-warning { margin-top: 0; }
+#step-1 .track-info > .bg-upload { align-content: start; }
+
+/* --- Шаг «Текст» на всю ширину ---
+   Поле текста — главное окно шага, ему и достаётся вся ширина
+   и вся оставшаяся высота.
+
+   В приложении рядом с полем живёт блок разметки нейросетью. Его
+   пояснения — длинные абзацы, и во всю ширину студии строка выходит
+   под двести знаков: читать неудобно. Поэтому в приложении блок
+   встаёт слева отдельной колонкой, как настройки в караоке, а поле
+   занимает остаток. На сайте этого блока нет, поле занимает шаг
+   целиком — правило просто не срабатывает. */
+#step-2.active { gap: 0.8rem 1rem; }
+#step-2 > .panel-hint { margin-bottom: 0; }
+#step-2 > .panel-actions { margin-top: 0.2rem; }
+#step-2.active:has(> .asr-block) {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+#step-2.active:has(> .asr-block) > .panel-hint {
+  grid-area: 1 / 1 / 2 / 2;
+  align-self: start;
+  text-align: left;
+}
+#step-2.active:has(> .asr-block) > .asr-block {
+  grid-area: 2 / 1 / 3 / 2;
+  margin-bottom: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+#step-2.active:has(> .asr-block) > #lyrics-input { grid-area: 1 / 2 / 3 / 3; }
+#step-2.active:has(> .asr-block) > .panel-actions { grid-area: 3 / 1 / 4 / 3; }
 .panel-hint { color: var(--text-dim); margin-bottom: 1rem; text-align: center; }
 .panel-actions { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap; }
 
@@ -1581,6 +1642,17 @@ body.is-desktop .only-web { display: none; }
   .edit-stage { width: 100%; }
   #step-1.active, #step-2.active { overflow: visible; }
   #step-2 #lyrics-input { min-height: 300px; }
+  /* На узком экране две колонки шага «Текст» не помещаются: блок
+     разметки нейросетью встаёт над полем, как и раньше. Правило
+     адресное — то, что задаёт колонки, сильнее общего .step-panel. */
+  #step-2.active:has(> .asr-block) { display: block; }
+  #step-2.active:has(> .asr-block) > .asr-block {
+    margin-bottom: 0.9rem;
+    overflow-y: visible;
+  }
+  /* Карточки шага «Песня» тоже идут друг под другом */
+  #step-1 .track-info,
+  #step-1 .track-info:has(> #ai-block) { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 640px) {
