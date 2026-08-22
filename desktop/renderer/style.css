@@ -263,8 +263,11 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .card a, .faq a { color: #34d399; }
 
 /* ============ Как это работает ============ */
-/* Шаги держим одной строкой: с auto-fit последний срывался вниз */
-.how-steps { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+/* Шаги стоят сеткой 2×2, а не строкой из четырёх: в руководстве под
+   каждым шагом лежит по абзацу-другому, и в колонке 250 px строка
+   выходила в тридцать знаков — читать неудобно. Колонок ровно две
+   (не auto-fit: с ним последний шаг срывался вниз в одиночку). */
+.how-steps { list-style: none; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem 2rem; }
 .how-steps li { display: flex; gap: 0.7rem; align-items: flex-start; }
 .how-num {
   flex-shrink: 0;
@@ -275,9 +278,37 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   font-weight: 700;
 }
 .how-steps p { color: var(--text-dim); font-size: 0.85rem; }
+.how-steps p + p { margin-top: 0.5rem; }
+.how-steps b { color: var(--text); }
 .how-num { width: 34px; height: 34px; font-size: 0.9rem; }
+.how-lead { color: var(--text-dim); margin: -0.6rem 0 1.4rem; }
+
+/* Редактор и экспорт — под свёрнутыми заголовками: рекомендованный
+   путь должен читаться за полминуты, а подробности нужны не всем
+   и не сразу. Оформление то же, что у «Частых вопросов». */
+.how-more { margin-top: 1.6rem; display: grid; gap: 0.6rem; }
+.how-more details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  padding: 0.9rem 1.2rem;
+}
+.how-more summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+  user-select: none;
+}
+.how-more summary::-webkit-details-marker { display: none; }
+.how-more summary::before { content: '▸ '; color: var(--text-dim); }
+.how-more details[open] summary::before { content: '▾ '; }
+.how-more-body { margin-top: 0.8rem; }
+.how-more-body p { color: var(--text-dim); font-size: 0.9rem; line-height: 1.6; }
+.how-more-body p + p { margin-top: 0.7rem; }
+.how-more-body b { color: var(--text); }
+
 @media (max-width: 900px) {
-  .how-steps { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .how-steps { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ============ Студия ============ */
@@ -304,7 +335,35 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 /* Заголовок в рабочем месте — подпись, а не витрина: каждый лишний
    десяток пикселей здесь отнимается у сцены */
 .studio h2 { font-size: 1.4rem; margin-bottom: 0.7rem; }
-.steps-nav { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
+.steps-nav { position: relative; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
+/* Ссылка на руководство: вынесена из потока, поэтому ряд шагов остаётся
+   ровно посередине, а высоты рабочее место не теряет ни пикселя. */
+.steps-help {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.steps-help:hover { color: var(--text); border-color: var(--violet); }
+.steps-help-text { margin-left: 0.4rem; }
+/* В узком окне ряд шагов подбирается к ссылке вплотную: сперва ужимаем
+   её, а совсем близко к краю оставляем один знак вопроса — подпись
+   всё равно повторяется в подсказке при наведении. */
+@media (max-width: 1120px) {
+  .steps-help { font-size: 0.78rem; padding: 0.3rem 0.6rem; }
+}
+@media (max-width: 1000px) {
+  .steps-help-text { display: none; }
+}
 .step-tab {
   display: flex; align-items: center; gap: 0.5rem;
   background: transparent;
@@ -1651,6 +1710,9 @@ body.is-desktop .only-web { display: none; }
     width: calc(100% - 1.5rem);
   }
   .step-panel.active { display: block; }
+  /* На узком экране рядом с шагами места нет: ссылка на руководство
+     встаёт в поток отдельной строкой, а не поверх кнопок */
+  .steps-help { position: static; transform: none; }
   .karaoke-layout { grid-template-columns: minmax(0, 1fr); }
   /* Предпросмотр сверху: на телефоне важнее видеть, что получается */
   .karaoke-main { order: -1; }
