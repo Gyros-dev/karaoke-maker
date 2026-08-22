@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -209,6 +209,50 @@ function следитьЗаОшибками(wc) {
   });
 }
 
+/* ---------- Меню приложения ----------
+
+   Стандартное меню Electron на Windows и Linux рисуется полосой прямо
+   над интерфейсом — по-английски и с пунктами, которых у нас нет.
+   На macOS оно уходит в системную строку, поэтому беда всплыла только
+   на Windows. Дело не только в виде:
+
+     • Ctrl+R и Ctrl+Shift+R («Reload») перезагружают страницу —
+       рефлекторное нажатие посреди пятнадцатиминутного разделения
+       вокала убивает расчёт;
+     • одиночный Alt открывает полосу меню, а у нас Alt — модификатор
+       крупного шага в редакторе и отключения магнита при перетаскивании;
+     • Ctrl+Shift+I открывает инструменты разработчика.
+
+   Поэтому от меню оставлена одна «Правка». Совсем убрать его нельзя:
+   копирование и вставка в поля ввода завязаны на ускорители меню, а без
+   вставки некуда девать текст песни. «Вид» и «Окно» убраны целиком —
+   вместе с ними ушли перезагрузка и инструменты разработчика. Сами
+   ускорители «Правки» те же, что были в стандартном меню, так что
+   в редакторе ничего не поменялось.
+
+   На Windows и Linux полоса ещё и прячется (setMenuBarVisibility ниже):
+   ускорители при этом работают, а Alt полосу не открывает. */
+function собратьМеню() {
+  const правка = {
+    label: 'Правка',
+    submenu: [
+      { role: 'undo', label: 'Отменить' },
+      { role: 'redo', label: 'Повторить' },
+      { type: 'separator' },
+      { role: 'cut', label: 'Вырезать' },
+      { role: 'copy', label: 'Копировать' },
+      { role: 'paste', label: 'Вставить' },
+      { role: 'selectAll', label: 'Выделить всё' },
+    ],
+  };
+  // На macOS первым пунктом обязана быть строка приложения: в ней живут
+  // «Скрыть» и «Выйти» (Cmd+Q), без неё их нечем вызвать.
+  const пункты = process.platform === 'darwin'
+    ? [{ role: 'appMenu' }, правка]
+    : [правка];
+  return Menu.buildFromTemplate(пункты);
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1180,
@@ -217,6 +261,10 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: '#0a0a0f',
     title: 'Karaoke Punch',
+    /* Полосы меню над интерфейсом быть не должно. autoHideMenuBar здесь
+       не годится: с ним полосу открывает одиночный Alt, а Alt у нас —
+       рабочая клавиша редактора. */
+    autoHideMenuBar: false,
     // Явно задаём иконку окну: без этого в dev-режиме Electron показывает
     // стандартную иконку, хотя installer уже использует нашу.
     icon: process.platform === 'win32'
@@ -230,6 +278,11 @@ function createWindow() {
       backgroundThrottling: false,
     },
   });
+  /* На Windows и Linux меню живёт полосой в самом окне — прячем её.
+     Ускорители «Правки» (копировать, вставить) при этом остаются
+     рабочими, а показать полосу нечем: одиночный Alt её не открывает.
+     На macOS меню в системной строке, прятать нечего. */
+  if (process.platform !== 'darwin') win.setMenuBarVisibility(false);
   следитьЗаОшибками(win.webContents);
   win.loadURL('app://bundle/index.html');
 
@@ -607,6 +660,27 @@ function createWindow() {
          всегда показывал ноль, что бы на странице ни падало. */
       report.ошибок = ошибкиСтраницы.length;
       report.ошибки = ошибкиСтраницы.slice(0, 5);
+
+      /* Меню: в нём не должно остаться ни перезагрузки, ни инструментов
+         разработчика — Ctrl+R посреди разделения вокала убивает расчёт.
+         А копирование и вставка обязаны остаться: без них некуда девать
+         текст песни. Проверяем по ролям, а не по подписям. */
+      report.меню = (() => {
+        const меню = Menu.getApplicationMenu();
+        const роли = [];
+        const собрать = (m) => (m ? m.items : []).forEach((i) => {
+          if (i.role) роли.push(String(i.role).toLowerCase());
+          if (i.submenu) собрать(i.submenu);
+        });
+        собрать(меню);
+        const опасные = ['reload', 'forcereload', 'toggledevtools'];
+        return {
+          разделы: (меню ? меню.items : []).map((i) => i.label),
+          вставкаЕсть: роли.includes('paste') && роли.includes('copy'),
+          перезагрузкиНет: !роли.some((r) => опасные.includes(r)),
+          полосаСпрятана: process.platform === 'darwin' || !win.isMenuBarVisible(),
+        };
+      })();
       console.log('SELFTEST', JSON.stringify(report));
 
       /* Звук: проверка считает, а не слушает. Гоняет поддельную песню
@@ -795,6 +869,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     registerAppProtocol();
+    Menu.setApplicationMenu(собратьМеню());
     createWindow();
     setupAutoUpdate();
     app.on('activate', () => {
