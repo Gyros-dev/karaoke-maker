@@ -670,7 +670,25 @@ function createWindow() {
         новостиПроНейросети: [...document.querySelectorAll('.whatsnew-list li.only-desktop')]
           .every((li) => getComputedStyle(li).display !== 'none'),
         сайтоваяСтрокаСкрыта: [...document.querySelectorAll('.only-web')]
-          .every((el) => getComputedStyle(el).display === 'none')
+          .every((el) => getComputedStyle(el).display === 'none'),
+
+        /* Модификатор в подписях: на Маке Cmd, на Windows и Linux Ctrl.
+           Проверяем и текст под дорожкой, и подсказку кнопки отмены —
+           они наполняются разными путями (span и data-mod-title). */
+        модификатор: (() => {
+          const ждём = ${JSON.stringify(process.platform === 'darwin' ? 'Cmd' : 'Ctrl')};
+          const подпись = document.querySelector('.timeline-keys .mod-key');
+          const кнопка = document.getElementById('tl-undo');
+          const пустых = [...document.querySelectorAll('.mod-key')]
+            .filter((el) => el.textContent !== ждём).length;
+          return {
+            ждём,
+            вЛегенде: подпись ? подпись.textContent : null,
+            вПодсказке: кнопка ? кнопка.title : null,
+            неЗаполнено: пустых,
+            вНорме: пустых === 0 && !!кнопка && кнопка.title.includes(ждём + '+Z'),
+          };
+        })()
       }))()`);
       /* Ошибки считаем снаружи: страница их нигде не копит, а window.__errors,
          который тут читался раньше, в проекте не создаётся вовсе — признак

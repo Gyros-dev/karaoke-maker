@@ -8,6 +8,30 @@ const $ = (id) => document.getElementById(id);
    что браузер показывает устаревшую копию из кэша */
 const APP_VERSION = '1.8.3';
 
+/* ---------- Модификатор в подписях горячих клавиш ----------
+   Сами клавиши код ловит одинаково (metaKey || ctrlKey), а вот подписи
+   обязаны совпадать с клавиатурой: на Маке это Cmd, на Windows и Linux —
+   Ctrl. В приложении систему называет мостик (preload.js), на сайте
+   приходится верить браузеру. */
+const НА_МАКЕ = (() => {
+  const своя = window.desktop && window.desktop.platform;
+  if (своя) return своя === 'darwin';
+  const данные = navigator.userAgentData;
+  if (данные && данные.platform) return /mac/i.test(данные.platform);
+  return /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+})();
+const МОД = НА_МАКЕ ? 'Cmd' : 'Ctrl';
+
+/* Расставляет модификатор по странице. В тексте под него оставлены
+   пустые <span class="mod-key">, в подсказках кнопок — data-mod-title,
+   где «%s» стоит на месте модификатора (в title разметку не положишь). */
+function расставитьМодификаторы(корень = document) {
+  корень.querySelectorAll('.mod-key').forEach((el) => { el.textContent = МОД; });
+  корень.querySelectorAll('[data-mod-title]').forEach((el) => {
+    el.title = el.dataset.modTitle.split('%s').join(МОД);
+  });
+}
+
 /* ---------- Состояние ---------- */
 const state = {
   fileName: null,
@@ -3808,7 +3832,7 @@ function deleteLine(row) {
     alert('Это последняя строка — удалять нечего. Текст правится на шаге «Текст».');
     return;
   }
-  if (!confirm(`Убрать строку «${line.text}» из караоке?\n\nОтменяется через Cmd+Z.`)) return;
+  if (!confirm(`Убрать строку «${line.text}» из караоке?\n\nОтменяется через ${МОД}+Z.`)) return;
   pushHistory();
   state.lines.splice(row, 1);
   editor.histLines = state.lines.length;
@@ -4175,7 +4199,7 @@ function проверитьПорядокПослеЗахода() {
   const ok = confirm(
     `Строка ${k + 1} размечена раньше, чем та, которую ты только что простучал.\n\n` +
     `Стереть метки с ${k + 1}-й строки и дальше, чтобы простучать их заново?\n` +
-    'Всё вместе с этим заходом отменяется через Cmd+Z.');
+    `Всё вместе с этим заходом отменяется через ${МОД}+Z.`);
   if (!ok) return;
   for (let i = k; i < state.lines.length; i++) {
     const l = state.lines[i];
@@ -6156,6 +6180,7 @@ document.addEventListener('keydown', (e) => {
    а в состоянии были пустыми — и первое же сохранение записывало
    поверх них нули и отсутствие картинки. */
 (function init() {
+  расставитьМодификаторы();
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
   if (saved && saved.style) state.style = styleFromSaved(saved);

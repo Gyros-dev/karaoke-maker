@@ -5,6 +5,11 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
   isDesktop: true,
 
+  /* Какая система под нами — 'darwin', 'win32' или 'linux'. Нужно
+     подписям горячих клавиш: на Маке модификатор Cmd, на остальных Ctrl,
+     а сама страница про систему ничего не знает. */
+  platform: process.platform,
+
   modelStatus: () => ipcRenderer.invoke('model-status'),
   modelBytes: () => ipcRenderer.invoke('model-bytes'),
   downloadModel: () => ipcRenderer.invoke('model-download'),
