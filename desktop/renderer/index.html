@@ -1,5 +1,11 @@
 <!DOCTYPE html>
-<html lang="ru">
+<!-- data-news-version — версия, про которую написан список «Что нового»
+     ниже. Она объявлена здесь одна на всех: отсюда её берёт i18n.js
+     (подставляет в заголовок окна и в кнопку подвала на обоих языках)
+     и отсюда же — app.js, чтобы решить, показывать ли окно. В словаре
+     перевода номера нет: там он однажды отстал, и при переключении
+     на английский окно объявляло прошлую версию. -->
+<html lang="ru" data-news-version="1.9.0">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,7 +32,7 @@
     <button class="whatsnew-close" id="whatsnew-close" aria-label="Закрыть" title="Закрыть"
       data-i18n-aria="новости.закрыть" data-i18n-title="новости.закрыть">✕</button>
     <span class="whatsnew-badge"><span class="dot"></span> <span data-i18n="новости.значок">Обновление</span></span>
-    <h3 id="whatsnew-title" data-i18n="новости.заголовок">Что нового в версии 1.9.0</h3>
+    <h3 id="whatsnew-title" data-i18n="новости.заголовок">Что нового в версии {версия}</h3>
     <ul class="whatsnew-list">
       <li data-i18n-html="новости.язык">
         <b>🌍 Интерфейс переключается на английский.</b>
@@ -1025,7 +1031,7 @@
     <span class="logo-text">Karaoke&nbsp;Punch</span>
   </span>
   <span data-i18n="подвал.сделано">Сделано с любовью к музыке · работает без серверов</span>
-  <button class="footer-link" id="btn-whatsnew" data-i18n="подвал.новости">Что нового в 1.9.0</button>
+  <button class="footer-link" id="btn-whatsnew" data-i18n="подвал.новости">Что нового в {версия}</button>
 </footer>
 
 <script src="i18n.js"></script>
