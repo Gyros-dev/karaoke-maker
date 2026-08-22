@@ -2427,16 +2427,18 @@ function updateCountdown(stage, cd) {
 
    Ширину строк меряем холстом: коробки строк в DOM врут (у закреплённой
    строки коробка шире полей сцены), а холст даёт ровно ширину текста
-   тем же шрифтом. Меряем один раз в долях кегля — «сколько кеглей
-   в ширину занимает строка». От размера и от поверхности эта величина
-   не зависит, поэтому одного замера хватает всем троим. */
+   тем же шрифтом — холст и DOM сходятся до сотых долей пикселя, если
+   мерить одним и тем же кеглем. Ширина считается в долях кегля —
+   «сколько кеглей в ширину занимает строка», — но от кегля она всё же
+   зависит (см. stageMetrics), поэтому кегль ищется повторным
+   приближением в stageFit. */
 const FIT_FRAME_COLS = 32;   // опорная ширина поверхности в базовых кеглях
-const FIT_MEASURE = 40;      // каким кеглем меряем строки холстом
+const FIT_MEASURE = 40;      // с какого кегля начинаем приближение
 const FIT_MAX_UNITS = 3.2;   // потолок заполняющего кегля: песне из двух слов
 const FIT_MIN_UNITS = 0.55;  // пол: ниже строка не ужимается, а переносится
 const FIT_SAFE = 0.99;       // запас на неточность замера: строка не липнет к краю
 
-const stageMetricsCache = { key: null, value: null, ctx: null };
+const stageMetricsCache = { key: null, кегли: new Map(), ctx: null };
 
 function fitCanvasCtx() {
   if (!stageMetricsCache.ctx) {
@@ -2447,25 +2449,49 @@ function fitCanvasCtx() {
 
 /* Ширины строк в долях кегля: строка с em = 12,5 при кегле 40 px займёт
    500 px. Разрядка сюда не входит — она задаётся в пикселях и от кегля
-   не зависит, поэтому её добавляют отдельно, по числу букв. */
-function stageMetrics() {
+   не зависит, поэтому её добавляют отдельно, по числу букв.
+
+   Мерить надо ТЕМ кеглем, которым строка будет нарисована. Ширина буквы
+   не строго пропорциональна кеглю: на мелких кеглях браузер округляет
+   ширины глифов вверх, и та же строка занимает заметно больше кеглей,
+   чем на крупных. Замер одной и той же строки системным шрифтом:
+
+     кегль, px    10     12   14,7     18     30     40     80
+     ширина, em  26,24  25,61  24,85  24,16  23,38  23,17  22,66
+
+   Разница между 14,7 и 40 — 7,3%. Раньше мерили только кеглем 40 px
+   и считали ширину пропорциональной, поэтому в предпросмотре редактора
+   (самая мелкая из трёх поверхностей) строка выходила на те же 7%
+   шире расчёта и вылезала за правый край окна. */
+function stageMetrics(кегль) {
   const s = state.style;
   const texts = syncedLines().map((l) => l.text);
   const key = [s.font, s.weight, texts.length, texts.join(' ')].join('|');
-  if (stageMetricsCache.key === key) return stageMetricsCache.value;
+  if (stageMetricsCache.key !== key) {
+    stageMetricsCache.key = key;
+    stageMetricsCache.кегли.clear();
+  }
+  /* Кегль округляем вниз до половины пикселя: на замере это почти
+     не сказывается (и в безопасную сторону — ширина чуть с запасом),
+     зато замеров получается немного, а кадр видео зовёт подгонку
+     на каждом кадре. */
+  const px = Math.max(4, Math.min(400, Math.floor((+кегль || FIT_MEASURE) * 2) / 2));
+  const готовое = stageMetricsCache.кегли.get(px);
+  if (готовое) return готовое;
 
   const g = fitCanvasCtx();
   const family = (FONTS[s.font] || FONTS.system).css;
-  g.font = `${s.weight} ${FIT_MEASURE}px ${family}`;
+  g.font = `${s.weight} ${px}px ${family}`;
   if ('letterSpacing' in g) g.letterSpacing = '0px';
   const list = texts.map((t) => ({
     text: t,
-    em: g.measureText(t).width / FIT_MEASURE,
+    em: g.measureText(t).width / px,
     chars: t.length,
   }));
 
-  stageMetricsCache.key = key;
-  stageMetricsCache.value = list;
+  // Память не копим без края: за сеанс кеглей набегает много (ползунок размера)
+  if (stageMetricsCache.кегли.size > 32) stageMetricsCache.кегли.clear();
+  stageMetricsCache.кегли.set(px, list);
   return list;
 }
 
@@ -2480,26 +2506,44 @@ function stageFit(unit, avail) {
   const доля = Math.max(0.2, (+s.size || 100) / 100);
   const ls = +s.letter || 0;
   const room = Math.max(0, avail) * FIT_SAFE;
-  const lines = stageMetrics();
 
   /* Заполняющий кегль — самый крупный, при котором каждая строка ещё
-     умещается в один ряд. Это и есть «Размер 100%». */
-  let fill = Infinity;
-  for (const l of lines) {
-    if (l.em <= 0) continue;
-    const m = (room - ls * l.chars) / (l.em * unit);
-    if (m < fill) fill = m;
+     умещается в один ряд. Это и есть «Размер 100%».
+
+     Ищем его повторным приближением: померили — посчитали кегль —
+     померили этим же кеглем ещё раз. Одного захода мало, потому что
+     ширина строки в долях кегля сама зависит от кегля (см. stageMetrics),
+     и на мелкой поверхности первый ответ занижен процентов на семь.
+     Сходится за два-три шага: ширина меняется куда медленнее кегля. */
+  const заполняющий = (lines) => {
+    let f = Infinity;
+    for (const l of lines) {
+      if (l.em <= 0) continue;
+      const m = (room - ls * l.chars) / (l.em * unit);
+      if (m < f) f = m;
+    }
+    if (!isFinite(f)) f = 1;
+    return Math.min(FIT_MAX_UNITS, Math.max(FIT_MIN_UNITS, f));
+  };
+
+  let fill = заполняющий(stageMetrics(FIT_MEASURE));
+  for (let шаг = 0; шаг < 3; шаг++) {
+    const снова = заполняющий(stageMetrics(unit * fill));
+    const сошлось = Math.abs(снова - fill) * unit < 0.05;
+    fill = снова;
+    if (сошлось) break;
   }
-  if (!isFinite(fill)) fill = 1;
-  fill = Math.min(FIT_MAX_UNITS, Math.max(FIT_MIN_UNITS, fill));
 
   const m = fill * доля;
   const size = Math.max(1, unit * m);
 
-  // Что в один ряд уже не влезло — переносим, как в нынешних караоке
+  /* Что в один ряд уже не влезло — переносим, как в нынешних караоке.
+     Ширины берём померенные тем самым кеглем, которым и нарисуем:
+     иначе на мелкой поверхности строка «влезала» по расчёту и вылезала
+     на деле. */
   const wrap = new Set();
   let rows = 1;
-  for (const l of lines) {
+  for (const l of stageMetrics(size)) {
     const w = l.em * size + ls * l.chars;
     if (w > avail + 0.5) {
       wrap.add(l.text);
