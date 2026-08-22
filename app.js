@@ -2922,8 +2922,9 @@ const editor = {
   sel: -1,       // выбранная строка (номер в state.lines), -1 — ничего
   origSel: -1,   // выбранный отрезок оригинала (номер в state.origSpans)
   loop: false,   // играть выбранную строку по кругу
-  snap: true,    // притягивать границы к настоящему вступлению голоса
-  snapped: null, // куда притянулось в этом перетаскивании — для подсветки
+  snap: true,     // магнит: притягивать границы к осмысленным точкам
+  безМагнита: false, // зажат Alt — магнит отключён на время
+  snapped: null,  // { t, вид } — куда притянулось, для направляющей
   hearVocal: true, // в редакторе по умолчанию звучит оригинал с вокалом
 
   // Отмена и повтор: снимки времён, см. pushHistory
@@ -3891,7 +3892,7 @@ const LANE_WAVE = 46;
 const LANE_LINES = 38;
 const LANE_WORDS = 24;
 const EDGE_GRAB = 6;      // сколько пикселей у края блока считаются «за край»
-const SNAP_PX = 12;       // на таком расстоянии граница притягивается к голосу
+const SNAP_PX = 12;       // на таком расстоянии от точки магнит притягивает границу
 const MIN_SPAN = 0.08;    // короче строку и слово не делаем
 
 /* Полосы дорожки: где какая лежит и какой высоты. Полоса голоса
@@ -4212,7 +4213,9 @@ function drawTimeline() {
       const x0 = tToX(sp.start - LOOP_LEAD);
       const x1 = tToX(sp.end + LOOP_TAIL);
       g.fillStyle = 'rgba(132, 204, 22, 0.09)';
-      g.fillRect(x0, L.ruler, Math.max(1, x1 - x0), H - L.ruler);
+      // L.ruler — полоса, а не число: раньше здесь стояло само L.ruler,
+      // и высота выходила NaN, то есть подсветка не рисовалась вовсе
+      g.fillRect(x0, L.ruler.y, Math.max(1, x1 - x0), H - L.ruler.y);
     }
   }
 
@@ -4237,11 +4240,17 @@ function drawTimeline() {
     g.fillText(fmtTime(t), x + 3, 12);
   }
 
-  // Куда притянулась граница при перетаскивании
-  if (editor.snapped != null) {
-    const x = tToX(editor.snapped);
-    g.fillStyle = '#38bdf8';
-    g.fillRect(x - 1, L.ruler, 2, H - L.ruler);
+  /* Направляющая магнита: там, где граница примагнитилась, встаёт
+     черта цветом той полосы, к которой прилипло, — сразу видно,
+     почему граница «не там, куда привели мышь» */
+  if (editor.snapped) {
+    const x = tToX(editor.snapped.t);
+    g.fillStyle = ЦВЕТ_МАГНИТА[editor.snapped.вид] || '#38bdf8';
+    g.fillRect(x - 1, L.ruler.y, 2, H - L.ruler.y);
+    g.font = '10px sans-serif';
+    g.textAlign = x > W - 60 ? 'right' : 'left';
+    g.fillText(editor.snapped.вид, x + (x > W - 60 ? -4 : 4), L.ruler.y + 10);
+    g.textAlign = 'left';
   }
 
   // Указатель воспроизведения
@@ -4316,31 +4325,86 @@ function timelineHit(x, y) {
   return null;
 }
 
-/* Притягивание к голосу: рядом с настоящим вступлением (или концом)
-   пения граница прилипает к нему. Без огибающей и с выключенным
-   переключателем время остаётся ровно тем, куда привели мышь. */
-function snapToVoice(t) {
-  editor.snapped = null;
-  if (!editor.snap || !voiceReady()) return t;
-  const w = SNAP_PX / editor.pxPerSec;
-  let best = null;
-  for (const r of voice.runs) {
-    if (r.end < t - w) continue;
-    if (r.start > t + w) break;
-    for (const cand of [r.start, r.end]) {
-      if (Math.abs(cand - t) <= w && (best == null || Math.abs(cand - t) < Math.abs(best - t))) {
-        best = cand;
-      }
-    }
+/* ============================================================
+   Магнит
+
+   Границы при перетаскивании прилипают к осмысленным точкам — как
+   в Logic Pro и Final Cut. Куда липнет:
+     • к началам и концам соседних строк;
+     • к указателю воспроизведения;
+     • к границам отрезков оригинала;
+     • к вступлениям и концам пения — если огибающая голоса есть
+       (в приложении после удаления вокала нейросетью);
+     • к самым краям песни.
+
+   Порог задан в ПИКСЕЛЯХ, а не в секундах: на любом масштабе граница
+   прилипает с одного и того же расстояния на экране.
+
+   Зажатый Alt отключает магнит на время перетаскивания — так же
+   в обеих названных программах. Общий выключатель — кнопка
+   «🧲 магнит» и клавиша S.
+
+   Прежняя кнопка «⇥ к голосу» была тем же самым, только про одну
+   породу точек. Двух похожих переключателей быть не должно, поэтому
+   она стала общим магнитом, а голос — одним из его видов точек.
+   ============================================================ */
+
+/* Чем меньше вес, тем важнее точка при равном расстоянии: попасть
+   в указатель или в край соседней строки нужнее, чем в огибающую */
+const ВЕС_МАГНИТА = { указатель: 0, строка: 1, оригинал: 1, голос: 2, край: 3 };
+const ЦВЕТ_МАГНИТА = {
+  указатель: '#f2f2f7', строка: '#a3e635', оригинал: '#fb7185',
+  голос: '#38bdf8', край: '#9a9ab0',
+};
+
+/* Все точки, к которым сейчас имеет смысл липнуть.
+   что.кромеСтроки — номер строки, которую тащат (сама к себе не липнет),
+   что.кроме — номер отрезка оригинала, который тащат. */
+function точкиМагнита(что) {
+  const о = что || {};
+  const точки = [];
+  const добавить = (t, вид) => {
+    if (Number.isFinite(t) && t >= 0) точки.push({ t, вид });
+  };
+  for (const sp of editorSpans()) {
+    if (sp.row === о.кромеСтроки) continue;
+    добавить(sp.start, 'строка');
+    добавить(sp.end, 'строка');
   }
-  if (best == null) return t;
-  editor.snapped = best;
-  return best;
+  добавить(audio.position(), 'указатель');
+  отрезкиОригинала().forEach((s, i) => {
+    if (i === о.кроме) return;
+    добавить(s.start, 'оригинал');
+    добавить(s.end, 'оригинал');
+  });
+  if (voiceReady()) {
+    for (const r of voice.runs) { добавить(r.start, 'голос'); добавить(r.end, 'голос'); }
+  }
+  добавить(0, 'край');
+  добавить(audio.duration, 'край');
+  return точки;
 }
 
-/* Единый вход притягивания для всех перетаскиваний дорожки */
-function примагнитить(t) {
-  return snapToVoice(t);
+/* Притянуть время t к ближайшей точке. Магнит выключен или зажат Alt —
+   время остаётся ровно тем, куда привели мышь. */
+function примагнитить(t, что) {
+  editor.snapped = null;
+  if (!editor.snap || editor.безМагнита) return t;
+  const w = SNAP_PX / editor.pxPerSec;
+  let best = null;
+  let bestKey = Infinity;
+  for (const p of точкиМагнита(что)) {
+    const d = Math.abs(p.t - t);
+    if (d > w) continue;
+    /* Ключ: сначала расстояние в целых пикселях, потом вес. Так две
+       точки на одном и том же пикселе разбираются не порядком перебора,
+       а важностью — иначе прилипание скакало бы туда-сюда. */
+    const key = Math.round(d * editor.pxPerSec) * 10 + ВЕС_МАГНИТА[p.вид];
+    if (key < bestKey) { bestKey = key; best = p; }
+  }
+  if (!best) return t;
+  editor.snapped = best;
+  return best.t;
 }
 
 /* ---------- Выбор строки ---------- */
@@ -4546,16 +4610,17 @@ function applyDrag(t) {
   d.moved = true;
 
   if (d.kind === 'line-start') {
-    setLineTime(d.row, snapToVoice(t));
+    setLineTime(d.row, примагнитить(t, { кромеСтроки: d.row }));
   } else if (d.kind === 'line-end') {
-    setLineEnd(d.row, snapToVoice(t));
+    setLineEnd(d.row, примагнитить(t, { кромеСтроки: d.row }));
   } else if (d.kind === 'line-move') {
-    const delta = t - d.grabT;
     const hadEnd = line.ручнойКонец;
-    setLineTime(d.row, d.startWas + delta);
+    // Блок целиком тянется за начало: липнет ведущая граница, как в монтажной
+    const ns = примагнитить(d.startWas + (t - d.grabT), { кромеСтроки: d.row });
+    setLineTime(d.row, ns);
     // Конец едет за строкой, только если человек уже задавал его руками:
     // иначе он и так пересчитается от нового начала
-    if (hadEnd) setLineEnd(d.row, d.endWas + delta);
+    if (hadEnd) setLineEnd(d.row, d.endWas + (ns - d.startWas));
   } else if (d.kind === 'word-edge' || d.kind === 'word-move') {
     if (!sp) return;
     const words = ensureWords(line, sp);
@@ -4564,7 +4629,7 @@ function applyDrag(t) {
     if (d.kind === 'word-edge') {
       const lo = (words[k - 1] ? words[k - 1].time : line.time) + MIN_SPAN;
       const hi = (words[k].end != null ? words[k].end : sp.end) - MIN_SPAN;
-      const nt = Math.min(Math.max(snapToVoice(t), lo), Math.max(lo, hi));
+      const nt = Math.min(Math.max(примагнитить(t), lo), Math.max(lo, hi));
       words[k].time = nt;
       if (words[k - 1]) words[k - 1].end = nt;
     } else {
@@ -4716,6 +4781,8 @@ $('tl-loop').addEventListener('click', () => setLoop(!editor.loop));
 function setSnap(on) {
   editor.snap = !!on;
   $('tl-snap').classList.toggle('on', editor.snap);
+  editor.snapped = null;
+  drawTimeline();
 }
 
 /* ---------- Прослушивание выбранной строки по кругу ----------
