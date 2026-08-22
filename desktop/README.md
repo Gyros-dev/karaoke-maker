@@ -100,6 +100,14 @@ KARAOKE_SELFTEST=1 KARAOKE_E2E=1 npm start
   двойки, поэтому к основанию 2 добавлена стадия по основанию 3
   (6144 = 2048 × 3)
 
+`onnxruntime-web` и `@huggingface/transformers` стоят в `devDependencies`, а не
+в обычных зависимостях, и это не описка. Во время работы их никто не подключает:
+нужные файлы движка раскладывают по `renderer/ort` и `renderer/xf` скрипты
+`setup-ort.js` и `setup-transformers.js` сразу после `npm install`. Пока пакеты
+лежали в `dependencies`, electron-builder клал их целиком внутрь `app.asar` —
+одна только `onnxruntime-web` весила там 131 МБ, две трети архива, при том что
+её `dist` уже лежит рядом в `renderer/ort`.
+
 Расчёт идёт на WebAssembly-версии ONNX. Нативный `onnxruntime-node` внутри
 Electron падает с SIGTRAP при загрузке модели — проверено во всех трёх режимах
 (utilityProcess, worker_threads, ELECTRON_RUN_AS_NODE), поэтому от него отказались.
