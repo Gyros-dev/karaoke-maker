@@ -6242,7 +6242,10 @@ document.addEventListener('i18n', () => {
      следующий раз окно открылось бы с надписями на прежнем языке. */
   renderTapMode();
   if (wordTap.chunks.length) renderWordTap();
-  if ($('step-4').classList.contains('active')) renderStage();
+  /* Сцену пересобираем всегда, а не только на четвёртом шаге: пока
+     строк нет, на ней лежит надпись «нет размеченных строк», и она
+     осталась бы на прежнем языке до первого перехода на шаг. */
+  renderStage();
   if (updater.перерисовать) updater.перерисовать();
 });
 
