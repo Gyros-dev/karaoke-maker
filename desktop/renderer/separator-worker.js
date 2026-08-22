@@ -189,12 +189,38 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
      проход один. Переключатель оставлен, но обещаний за него не даём. */
   const passes = Math.max(1, Math.min(4, shifts));
   const MAX_SHIFT = Math.round(sampleRate * 0.5);
-  const sumL = new Float64Array(total);
-  const sumR = new Float64Array(total);
-  const sumV = new Float64Array(total);
   const t0 = Date.now();
   let сделано = 0;
   const всего = passes * кусков(total);
+
+  const отчёт = (pass) => (done, all) => {
+    сделано++;
+    const frac = Math.min(сделано / всего, 0.999);
+    const elapsed = (Date.now() - t0) / 1000;
+    const rest = elapsed / Math.max(frac, 0.001) - elapsed;
+    post({
+      type: 'progress',
+      percent: Math.round(frac * 100),
+      text: passes > 1
+        ? `Убираем вокал: проход ${pass + 1} из ${passes}, кусок ${done} из ${all}`
+        : `Убираем вокал: ${done} из ${all}`,
+      eta: rest > 3 ? `осталось около ${Math.ceil(rest / 6) * 6 < 60
+        ? Math.ceil(rest / 6) * 6 + ' с'
+        : Math.ceil(rest / 60) + ' мин'}` : '',
+    });
+  };
+
+  /* Обычный случай — один проход. Тогда ни складывать, ни усреднять
+     нечего, и три буфера под сумму не заводим вовсе: на пятиминутной
+     песне это триста мегабайт, которых воркеру может и не хватить. */
+  if (passes === 1) {
+    const { outL, outR, outV } = await separatePass(L, R, total, session, отчёт(0));
+    return { left: outL, right: outR, vocal: outV, sampleRate };
+  }
+
+  const sumL = new Float64Array(total);
+  const sumR = new Float64Array(total);
+  const sumV = new Float64Array(total);
 
   for (let pass = 0; pass < passes; pass++) {
     // Первый проход без смещения, дальше — со сдвигом
@@ -205,24 +231,7 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
     sL.set(L, shift);
     sR.set(R, shift);
 
-    const { outL, outR, outV } = await separatePass(
-      sL, sR, padded, session,
-      (done, all) => {
-        сделано++;
-        const frac = Math.min(сделано / всего, 0.999);
-        const elapsed = (Date.now() - t0) / 1000;
-        const rest = elapsed / Math.max(frac, 0.001) - elapsed;
-        post({
-          type: 'progress',
-          percent: Math.round(frac * 100),
-          text: passes > 1
-            ? `Убираем вокал: проход ${pass + 1} из ${passes}, кусок ${done} из ${all}`
-            : `Убираем вокал: ${done} из ${all}`,
-          eta: rest > 3 ? `осталось около ${Math.ceil(rest / 6) * 6 < 60
-            ? Math.ceil(rest / 6) * 6 + ' с'
-            : Math.ceil(rest / 60) + ' мин'}` : '',
-        });
-      });
+    const { outL, outR, outV } = await separatePass(sL, sR, padded, session, отчёт(pass));
 
     // Снимаем сдвиг и копим сумму
     for (let i = 0; i < total; i++) {
