@@ -245,7 +245,13 @@ function createWindow() {
       // В Electron 38 всё лежит в объекте события, старые аргументы устарели
       console.log('[renderer]', e && e.message !== undefined ? e.message : message);
     });
+    /* Самопроверка обязана ЗАВЕРШИТЬСЯ в любом случае. Если проверочный
+       код падает — скажем, после перекладки интерфейса пропал узел,
+       который он читает, — обещание не разрешается, до app.quit() дело
+       не доходит, и проверка висит вечно вместо честного провала.
+       Такое зависание хуже провала: его легко принять за долгий расчёт. */
     win.webContents.once('did-finish-load', async () => {
+      try {
       const report = await win.webContents.executeJavaScript(`(() => ({
         аиБлокВиден: !document.getElementById('ai-block').classList.contains('hidden'),
         кнопкаЕсть: !!document.getElementById('btn-ai-run'),
@@ -516,7 +522,14 @@ function createWindow() {
               сетка: document.getElementById('edit-list').offsetParent === null,
               предпросмотр: document.getElementById('edit-stage').offsetParent === null,
               панельСтроки: document.getElementById('sel-panel').offsetParent === null,
-              инструменты: document.querySelector('.timeline-tools').offsetParent === null,
+              /* Панель управления редактора: после перекладки под
+                 монтажную она называется .transport. Узел ищем мягко —
+                 признак не должен ронять всю самопроверку из-за того,
+                 что разметку переименовали. */
+              инструменты: (() => {
+                const el = document.querySelector('.transport');
+                return el ? el.offsetParent === null : null;
+              })(),
             };
             const видно = {
               строка: document.getElementById('tap-now').textContent,
@@ -724,7 +737,11 @@ function createWindow() {
           console.log(lyrics ? 'FIT-E2E' : 'ASR-E2E', JSON.stringify(res));
         }
       }
-      app.quit();
+      } catch (e) {
+        console.log('SELFTEST-ОШИБКА', String((e && e.message) || e));
+      } finally {
+        app.quit();
+      }
     });
   }
 }
