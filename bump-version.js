@@ -59,7 +59,7 @@ function bumpSite(version) {
   // 3. Приписки в путях: без них браузер возьмёт старые файлы из кэша
   let html = read('index.html');
   const before = html;
-  html = html.replace(/(style\.css|app\.js)\?v=[\d.]+/g, `$1?v=${version}`);
+  html = html.replace(/(style\.css|app\.js|i18n\.js)\?v=[\d.]+/g, `$1?v=${version}`);
   if (html === before) throw new Error('в index.html не нашёл пути с ?v=');
   write('index.html', html);
 
