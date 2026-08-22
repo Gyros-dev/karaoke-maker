@@ -260,18 +260,6 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .hero-glow-1 { width: 500px; height: 500px; background: var(--violet); top: -150px; left: 8%; }
 .hero-glow-2 { width: 450px; height: 450px; background: var(--pink); top: 50px; right: 5%; opacity: 0.22; }
 .hero-inner { position: relative; max-width: 800px; margin: 0 auto; }
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 0.9rem;
-  color: var(--text-dim);
-  margin-bottom: 1.2rem;
-}
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; }
 /* Имя студии крупно, Bungee Shade. Мельче ставить нельзя: у этого
    шрифта буква нарисована вместе с объёмной тенью, и на маленьком

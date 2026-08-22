@@ -221,7 +221,6 @@ I18N.EN = {
   'шапка.язык': 'Interface language',
 
   /* ---------- Первый экран ---------- */
-  'герой.значок': 'Runs right in your browser · free',
   'герой.заголовок': 'Turn any song<br><span class="grad-text">into karaoke</span>',
   'герой.подзаголовок': 'Load a track — the studio ducks the vocals, helps you time the lyrics line by line and word by word, and runs karaoke with word-level highlighting. Nothing is uploaded anywhere: it all happens on your device.',
   'герой.кнопка': 'Make karaoke →',
