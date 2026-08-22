@@ -1,17 +1,29 @@
 /* ============================================================
-   DSP для HTDemucs: FFT, STFT и обратное преобразование.
-   Соглашения повторяют torch.stft/torch.istft с параметрами,
-   которыми обучался Demucs: окно Ханна, normalized=True,
-   center=True, pad_mode='reflect'.
+   DSP для MDX-Net: БПФ, STFT и обратное преобразование.
+
+   Соглашения повторяют torch.stft/torch.istft с теми параметрами,
+   с которыми MDX-Net гоняет UVR5: окно Ханна (periodic),
+   center=True, pad_mode='reflect', normalized=False.
+
+   Главное отличие от прежней версии, считавшей htdemucs: у MDX-Net
+   n_fft = 6144, а это НЕ степень двойки. 6144 = 2048 × 3, поэтому
+   к прежнему БПФ по основанию 2 добавлена одна стадия по основанию 3.
+   Подробности — у makeFFT.
    ============================================================ */
 
-const NFFT = 4096;
-const HOP = 1024;
+const NFFT = 6144;      // mdx_n_fft_scale_set
+const HOP = 1024;       // в UVR зашито жёстко
+const DIM_F = 3072;     // mdx_dim_f_set — сколько полос видит модель
+const DIM_T = 256;      // 2 ** mdx_dim_t_set — кадров в одном куске
+const BINS = NFFT / 2 + 1;
 
-/* --- Комплексное БПФ по основанию 2, на месте --- */
-function makeFFT(n) {
-  const levels = Math.log2(n);
-  if (levels % 1 !== 0) throw new Error('Размер БПФ должен быть степенью двойки');
+/* ------------------------------------------------------------
+   Ядро по основанию 2, на месте, без деления на n.
+   sign = -1 — прямое преобразование, +1 — обратное.
+   ------------------------------------------------------------ */
+function makeRadix2Core(n) {
+  const levels = Math.round(Math.log2(n));
+  if (2 ** levels !== n) throw new Error('radix-2: размер должен быть степенью двойки');
 
   const cosT = new Float64Array(n / 2);
   const sinT = new Float64Array(n / 2);
@@ -28,7 +40,7 @@ function makeFFT(n) {
     rev[i] = r;
   }
 
-  return function fft(re, im, inverse) {
+  return function core(re, im, sign) {
     for (let i = 0; i < n; i++) {
       const j = rev[i];
       if (j > i) {
@@ -43,7 +55,7 @@ function makeFFT(n) {
         for (let j = i, k = 0; j < i + half; j++, k += step) {
           const l = j + half;
           const c = cosT[k];
-          const s = inverse ? sinT[k] : -sinT[k];
+          const s = sign > 0 ? sinT[k] : -sinT[k];
           const tre = re[l] * c - im[l] * s;
           const tim = re[l] * s + im[l] * c;
           re[l] = re[j] - tre;
@@ -53,6 +65,80 @@ function makeFFT(n) {
         }
       }
     }
+  };
+}
+
+/* ------------------------------------------------------------
+   Ядро для n = 3 × (степень двойки).
+
+   Обычное разложение Кули—Тьюки, только внешний множитель равен
+   трём, а не двум: вход раскладывается на три подряда по остатку
+   от деления номера на 3, каждый считается прежним БПФ основания 2,
+   и результаты сводятся с поворотными множителями
+
+       X[k] = X0[k mod m] + W^k · X1[k mod m] + W^2k · X2[k mod m],
+       W = exp(∓2πi/n),  m = n/3.
+
+   Почему так, а не по Блустейну. Алгоритм Блустейна берёт любой
+   размер, но считает его через три БПФ длиной не меньше 2n−1: для
+   6144 это 16384, то есть примерно вдесятеро больше работы, да ещё
+   и с лишней потерей точности на чирп-множителях. Здесь же
+   разложение точное и стоит одного лишнего прохода по массиву.
+   ------------------------------------------------------------ */
+function makeRadix3Core(n) {
+  const m = n / 3;
+  const sub = makeRadix2Core(m);
+
+  const cosW = new Float64Array(n);
+  const sinW = new Float64Array(n);
+  for (let k = 0; k < n; k++) {
+    cosW[k] = Math.cos((2 * Math.PI * k) / n);
+    sinW[k] = Math.sin((2 * Math.PI * k) / n);
+  }
+
+  // Буферы под подряды заводим один раз: БПФ зовут десятки тысяч раз
+  const aRe = [new Float64Array(m), new Float64Array(m), new Float64Array(m)];
+  const aIm = [new Float64Array(m), new Float64Array(m), new Float64Array(m)];
+
+  return function core(re, im, sign) {
+    for (let r = 0; r < 3; r++) {
+      const pr = aRe[r], pi = aIm[r];
+      for (let j = 0; j < m; j++) { pr[j] = re[3 * j + r]; pi[j] = im[3 * j + r]; }
+      sub(pr, pi, sign);
+    }
+    const r0 = aRe[0], i0 = aIm[0];
+    const r1 = aRe[1], i1 = aIm[1];
+    const r2 = aRe[2], i2 = aIm[2];
+    // k пробегает 0…n−1, а k mod m — это три круга по подрядам.
+    // Поворотные индексы ведём приращением: остаток от деления
+    // в самом горячем цикле стоит дороже сложения.
+    let k = 0, t1 = 0, t2 = 0;
+    for (let blk = 0; blk < 3; blk++) {
+      for (let j = 0; j < m; j++) {
+        const c1 = cosW[t1], s1 = sign > 0 ? sinW[t1] : -sinW[t1];
+        const c2 = cosW[t2], s2 = sign > 0 ? sinW[t2] : -sinW[t2];
+        const x1 = r1[j], y1 = i1[j];
+        const x2 = r2[j], y2 = i2[j];
+        re[k] = r0[j] + (x1 * c1 - y1 * s1) + (x2 * c2 - y2 * s2);
+        im[k] = i0[j] + (x1 * s1 + y1 * c1) + (x2 * s2 + y2 * c2);
+        k++;
+        t1++;                       // t1 = k mod n, а k < n — сбрасывать не нужно
+        t2 += 2; if (t2 >= n) t2 -= n;
+      }
+    }
+  };
+}
+
+/* Полное БПФ: прямое без множителя, обратное с делением на n —
+   те же соглашения, что у прежней версии. */
+function makeFFT(n) {
+  let core;
+  if (n > 0 && (n & (n - 1)) === 0) core = makeRadix2Core(n);
+  else if (n % 3 === 0 && ((n / 3) & (n / 3 - 1)) === 0) core = makeRadix3Core(n);
+  else throw new Error('БПФ: размер должен быть 2^k или 3×2^k, получено ' + n);
+
+  return function fft(re, im, inverse) {
+    core(re, im, inverse ? 1 : -1);
     if (inverse) {
       for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
     }
@@ -77,15 +163,14 @@ function padReflect(x, left, right) {
   return out;
 }
 
-/* --- STFT: возвращает {re, im} размера (bins × frames) построчно --- */
+/* --- STFT: возвращает {re, im} размера (bins × frames) построчно.
+   normalized=False, поэтому никакого множителя 1/√n здесь нет. --- */
 function stft(signal, frames) {
-  const bins = NFFT / 2 + 1;
   const padded = padReflect(signal, NFFT / 2, NFFT / 2);
-  const re = new Float64Array(bins * frames);
-  const im = new Float64Array(bins * frames);
+  const re = new Float64Array(BINS * frames);
+  const im = new Float64Array(BINS * frames);
   const bufRe = new Float64Array(NFFT);
   const bufIm = new Float64Array(NFFT);
-  const norm = 1 / Math.sqrt(NFFT); // normalized=True
 
   for (let t = 0; t < frames; t++) {
     const off = t * HOP;
@@ -95,12 +180,12 @@ function stft(signal, frames) {
       bufIm[i] = 0;
     }
     fft(bufRe, bufIm, false);
-    for (let f = 0; f < bins; f++) {
-      re[f * frames + t] = bufRe[f] * norm;
-      im[f * frames + t] = bufIm[f] * norm;
+    for (let f = 0; f < BINS; f++) {
+      re[f * frames + t] = bufRe[f];
+      im[f * frames + t] = bufIm[f];
     }
   }
-  return { re, im, bins, frames };
+  return { re, im, bins: BINS, frames };
 }
 
 /* --- Обратное STFT с перекрытием-суммированием --- */
@@ -110,12 +195,12 @@ function istft(re, im, bins, frames, outLength) {
   const wsum = new Float64Array(total);
   const bufRe = new Float64Array(NFFT);
   const bufIm = new Float64Array(NFFT);
-  const denorm = Math.sqrt(NFFT); // обратное к normalized=True
 
   for (let t = 0; t < frames; t++) {
+    bufRe.fill(0); bufIm.fill(0);
     for (let f = 0; f < bins; f++) {
-      const r = re[f * frames + t] * denorm;
-      const i2 = im[f * frames + t] * denorm;
+      const r = re[f * frames + t];
+      const i2 = im[f * frames + t];
       bufRe[f] = r;
       bufIm[f] = i2;
       if (f > 0 && f < NFFT / 2) {
@@ -149,7 +234,7 @@ function istft(re, im, bins, frames, outLength) {
 // В окне и в воркере модуль подключается через importScripts —
 // экспортируем в глобальную область, если module недоступен
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { NFFT, HOP, stft, istft, padReflect, makeFFT, WINDOW };
+  module.exports = { NFFT, HOP, DIM_F, DIM_T, BINS, stft, istft, padReflect, makeFFT, WINDOW };
 } else {
-  self.DSP = { NFFT, HOP, stft, istft, padReflect, makeFFT, WINDOW };
+  self.DSP = { NFFT, HOP, DIM_F, DIM_T, BINS, stft, istft, padReflect, makeFFT, WINDOW };
 }

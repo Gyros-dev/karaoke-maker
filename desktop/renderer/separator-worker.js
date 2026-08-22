@@ -3,69 +3,48 @@
    Считает WebAssembly-версия ONNX: нативная библиотека внутри
    Electron падает, а эта работает и использует все ядра.
 
-   Конвенции повторяют demucs (hdemucs.py / apply.py):
-   сегмент 343980 сэмплов при 44100 Гц, перекрытие 25%,
-   треугольные веса на стыках, порядок стемов
-   [ударные, бас, остальное, вокал].
+   Модель — UVR-MDX-NET-Inst_HQ_3, та самая, которой считает UVR5.
+   Конвенции повторяют UVR (separate.py, класс SeperateMDX):
+   вход — комплексная спектрограмма куска, нарезка по 261 120
+   отсчётов, склейка окном Ханна, первые три полосы обнуляются.
+
+   Важное отличие от прежней htdemucs: эта модель отдаёт сразу
+   ИНСТРУМЕНТАЛ (в model_data.json у неё primary_stem =
+   "Instrumental"), а вокал получается вычитанием инструментала
+   из микса. Вокал нам нужен: по нему распознаётся текст и
+   рисуется полоса «голос» на дорожке редактора.
    ============================================================ */
 
-// HOP, stft и istft приходят из dsp.js как глобальные —
-// повторно объявлять их здесь нельзя
+// NFFT, HOP, DIM_F, DIM_T, BINS, stft и istft приходят из dsp.js
+// как глобальные — повторно объявлять их здесь нельзя
 importScripts('ort/ort.min.js', 'dsp.js');
 
-const SEG = 343980;
-const FRAMES = 336;
-const FREQ = 2048;
-const PAD = (HOP / 2) * 3;
+/* Параметры модели. Взяты не с потолка: они лежат в
+   mdx_model_data/model_data.json репозитория TRvlvr под ключом,
+   который равен md5 последних 10 000 КБ файла модели. Для
+   UVR-MDX-NET-Inst_HQ_3 это 55657dd70583b0fedfba5f67df11d711:
+
+     mdx_n_fft_scale_set = 6144   → NFFT
+     mdx_dim_f_set       = 3072   → DIM_F
+     mdx_dim_t_set       = 8      → DIM_T = 2⁸ = 256
+     compensate          = 1.022
+     primary_stem        = Instrumental                                */
+const COMPENSATE = 1.022;
+
+const TRIM = NFFT / 2;                 // 3072
+const CHUNK = HOP * (DIM_T - 1);       // 261 120 отсчётов ≈ 5,9 с
+const GEN = CHUNK - 2 * TRIM;          // 254 976
+/* Перекрытие кусков. 0,25 — умолчание UVR для MDX-Net; на нём и
+   сделан эталон, с которым мы сверялись. Каждая четверть перекрытия
+   стоит ровно столько же времени, сколько экономит на стыках. */
 const OVERLAP = 0.25;
-const STRIDE = Math.floor(SEG * (1 - OVERLAP));
-const SOURCES = 4;
+const STEP = Math.floor((1 - OVERLAP) * CHUNK);
 
 let session = null;
 let cancelled = false;
 
 function post(msg, transfer) {
   self.postMessage(msg, transfer || []);
-}
-
-/* Спектрограмма сегмента: [4, 2048, 336], каналы [Lre, Lim, Rre, Rim] */
-function segmentSpec(left, right) {
-  const out = new Float32Array(4 * FREQ * FRAMES);
-  const chans = [left, right];
-  const rightPad = PAD + FRAMES * HOP - SEG;
-  for (let c = 0; c < 2; c++) {
-    const ch = chans[c];
-    const padded = new Float32Array(PAD + SEG + rightPad);
-    padded.set(ch, PAD);
-    for (let i = 0; i < PAD; i++) padded[PAD - 1 - i] = ch[i + 1];
-    for (let i = 0; i < rightPad; i++) padded[PAD + SEG + i] = ch[SEG - 2 - i];
-
-    const S = stft(padded, FRAMES + 4);
-    for (let f = 0; f < FREQ; f++) {
-      for (let t = 0; t < FRAMES; t++) {
-        const src = f * S.frames + (t + 2);
-        out[(c * 2) * FREQ * FRAMES + f * FRAMES + t] = S.re[src];
-        out[(c * 2 + 1) * FREQ * FRAMES + f * FRAMES + t] = S.im[src];
-      }
-    }
-  }
-  return out;
-}
-
-/* Спектр одного источника обратно в волну */
-function specToWave(spec, base) {
-  const frames = FRAMES + 4;
-  const bins = FREQ + 1;
-  const re = new Float64Array(bins * frames);
-  const im = new Float64Array(bins * frames);
-  for (let f = 0; f < FREQ; f++) {
-    for (let t = 0; t < FRAMES; t++) {
-      re[f * frames + (t + 2)] = spec[base + f * FRAMES + t];
-      im[f * frames + (t + 2)] = spec[base + FREQ * FRAMES + f * FRAMES + t];
-    }
-  }
-  const full = istft(re, im, bins, frames, PAD * 2 + FRAMES * HOP);
-  return full.subarray(PAD, PAD + SEG);
 }
 
 async function ensureSession(modelBytes) {
@@ -80,79 +59,116 @@ async function ensureSession(modelBytes) {
   return session;
 }
 
-/* Один полный проход разделения по всей записи.
-   Возвращает накопленный инструментал и веса для склейки. */
-async function separatePass(L, R, total, mean, std, weight, session, onSegment) {
-  const instL = new Float64Array(total);
-  const instR = new Float64Array(total);
-  /* Чистый вокал (стем 3) раньше выбрасывался. Он нужен распознаванию
-     текста: по голосу без музыки Whisper ошибается заметно реже.
-     Копим сразу в моно — стерео распознаванию не нужно, а на песне
-     в четыре минуты каждый лишний Float64Array это больше сотни мегабайт. */
-  const voc = new Float64Array(total);
-  const wAcc = new Float64Array(total);
-
-  const starts = [];
-  for (let s = 0; s < total; s += STRIDE) starts.push(s);
-  const segL = new Float32Array(SEG);
-  const segR = new Float32Array(SEG);
-
-  for (let si = 0; si < starts.length; si++) {
-    if (cancelled) throw new Error('отменено');
-    const start = starts[si];
-    segL.fill(0); segR.fill(0);
-    const n = Math.min(SEG, total - start);
-    for (let i = 0; i < n; i++) {
-      segL[i] = (L[start + i] - mean) / std;
-      segR[i] = (R[start + i] - mean) / std;
+/* Спектр пары каналов (re, im) обратно в волну куска.
+   Модель видит только DIM_F полос из BINS — верхние достраиваем нулями,
+   ровно как делает STFT.inverse в UVR. */
+function обратно(buf, cRe, cIm, re, im) {
+  re.fill(0); im.fill(0);
+  const bRe = cRe * DIM_F * DIM_T, bIm = cIm * DIM_F * DIM_T;
+  for (let f = 0; f < DIM_F; f++) {
+    const dst = f * DIM_T, sRe = bRe + dst, sIm = bIm + dst;
+    for (let t = 0; t < DIM_T; t++) {
+      re[dst + t] = buf[sRe + t];
+      im[dst + t] = buf[sIm + t];
     }
+  }
+  return istft(re, im, BINS, DIM_T, CHUNK);
+}
 
-    const spec = segmentSpec(segL, segR);
-    const wave = new Float32Array(2 * SEG);
-    wave.set(segL, 0);
-    wave.set(segR, SEG);
+/* Сколько кусков выйдет из записи такой длины — нужно и для нарезки,
+   и для честного процента в окне ожидания */
+function длинаСДополнением(total) {
+  return TRIM + total + (GEN + TRIM - (total % GEN));
+}
+function кусков(total) {
+  return Math.ceil(длинаСДополнением(total) / STEP);
+}
 
-    const res = await session.run({
-      input: new ort.Tensor('float32', wave, [1, 2, SEG]),
-      x: new ort.Tensor('float32', spec, [1, 4, FREQ, FRAMES]),
-    });
-    const specOut = res.output.data;
-    const waveOut = res.add_67.data;
+/* Один полный проход разделения по всей записи.
+   Возвращает инструментал (стерео) и вокал (моно). */
+async function separatePass(L, R, total, session, onChunk) {
+  const mixLen = длинаСДополнением(total);
 
-    /* Инструментал = ударные + бас + остальное (стемы 0..2),
-       вокал — стем 3, копим его отдельно */
-    for (let src = 0; src < SOURCES; src++) {
-      const specBase = src * 4 * FREQ * FRAMES;
-      const wl = specToWave(specOut, specBase);
-      const wr = specToWave(specOut, specBase + 2 * FREQ * FRAMES);
-      const tBase = src * 2 * SEG;
-      if (src === SOURCES - 1) {
-        for (let i = 0; i < n; i++) {
-          const l = wl[i] + waveOut[tBase + i];
-          const r = wr[i] + waveOut[tBase + SEG + i];
-          voc[start + i] += (l + r) * 0.5 * weight[i];
-        }
-      } else {
-        for (let i = 0; i < n; i++) {
-          instL[start + i] += (wl[i] + waveOut[tBase + i]) * weight[i];
-          instR[start + i] += (wr[i] + waveOut[tBase + SEG + i]) * weight[i];
-        }
+  const mixL = new Float32Array(mixLen), mixR = new Float32Array(mixLen);
+  mixL.set(L, TRIM); mixR.set(R, TRIM);
+
+  const resL = new Float32Array(mixLen), resR = new Float32Array(mixLen);
+  /* «Микс, прошедший тот же тракт»: обратное преобразование того же
+     спектра, что ушёл в модель. Вычитая из него инструментал, получаем
+     вокал без следов срезанных полос. Копим сразу в моно — стерео
+     распознаванию не нужно, а лишний буфер на песню в четыре минуты
+     это ещё сорок мегабайт. */
+  const mixMono = new Float32Array(mixLen);
+  const div = new Float32Array(mixLen);
+
+  const partL = new Float32Array(CHUNK), partR = new Float32Array(CHUNK);
+  const spec = new Float32Array(4 * DIM_F * DIM_T);
+  const re = new Float64Array(BINS * DIM_T), im = new Float64Array(BINS * DIM_T);
+
+  const всегоКусков = кусков(total);
+  let кусок = 0;
+
+  for (let i = 0; i < mixLen; i += STEP) {
+    if (cancelled) throw new Error('отменено');
+    const start = i, end = Math.min(i + CHUNK, mixLen);
+    const act = end - start;
+
+    partL.fill(0); partR.fill(0);
+    partL.set(mixL.subarray(start, end), 0);
+    partR.set(mixR.subarray(start, end), 0);
+
+    const SL = stft(partL, DIM_T), SR = stft(partR, DIM_T);
+    // Каналы модели: [Lre, Lim, Rre, Rim], только нижние DIM_F полос
+    for (let f = 0; f < DIM_F; f++) {
+      const dst = f * DIM_T, src = f * DIM_T;
+      for (let t = 0; t < DIM_T; t++) {
+        spec[dst + t] = SL.re[src + t];
+        spec[DIM_F * DIM_T + dst + t] = SL.im[src + t];
+        spec[2 * DIM_F * DIM_T + dst + t] = SR.re[src + t];
+        spec[3 * DIM_F * DIM_T + dst + t] = SR.im[src + t];
       }
     }
-    for (let i = 0; i < n; i++) wAcc[start + i] += weight[i];
+    // Первые три полосы в нуль — так UVR кормит модель
+    for (let c = 0; c < 4; c++) {
+      spec.fill(0, c * DIM_F * DIM_T, c * DIM_F * DIM_T + 3 * DIM_T);
+    }
 
-    onSegment(si + 1, starts.length);
+    const out = await session.run({
+      input: new ort.Tensor('float32', spec, [1, 4, DIM_F, DIM_T]),
+    });
+    const o = out.output.data;
+
+    // istft каждый раз отдаёт свой массив, так что копировать нечего
+    const tarL = обратно(o, 0, 1, re, im);
+    const tarR = обратно(o, 2, 3, re, im);
+    const rawL = обратно(spec, 0, 1, re, im);
+    const rawR = обратно(spec, 2, 3, re, im);
+
+    // Окно на стыках — симметричное Ханна длины куска, как np.hanning
+    for (let j = 0; j < act; j++) {
+      const w = act > 1 ? 0.5 - 0.5 * Math.cos((2 * Math.PI * j) / (act - 1)) : 1;
+      resL[start + j] += tarL[j] * w;
+      resR[start + j] += tarR[j] * w;
+      mixMono[start + j] += (rawL[j] + rawR[j]) * 0.5 * w;
+      div[start + j] += w;
+    }
+
+    кусок++;
+    onChunk(кусок, всегоКусков);
   }
 
-  // Нормируем на сумму весов — получаем готовую дорожку прохода
-  const outL = new Float32Array(total);
-  const outR = new Float32Array(total);
+  // Делим на сумму весов, снимаем TRIM, обрезаем до исходной длины.
+  // COMPENSATE — предписанный моделью коэффициент, без него минусовка
+  // выходит тише оригинала примерно на два процента.
+  const outL = new Float32Array(total), outR = new Float32Array(total);
   const outV = new Float32Array(total);
   for (let i = 0; i < total; i++) {
-    const w = wAcc[i] || 1;
-    outL[i] = instL[i] / w;
-    outR[i] = instR[i] / w;
-    outV[i] = voc[i] / w;
+    const j = i + TRIM;
+    const w = div[j] || 1e-12;
+    const l = (resL[j] / w) * COMPENSATE;
+    const r = (resR[j] / w) * COMPENSATE;
+    outL[i] = l; outR[i] = r;
+    outV[i] = mixMono[j] / w - (l + r) * 0.5;
   }
   return { outL, outR, outV };
 }
@@ -166,34 +182,19 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
   post({ type: 'progress', percent: 0, text: 'Готовим модель…' });
   await ensureSession(modelBytes);
 
-  // Нормализация по моно-миксу, как в demucs.apply_model
-  let mean = 0;
-  for (let i = 0; i < total; i++) mean += (L[i] + R[i]) * 0.5;
-  mean /= total;
-  let varSum = 0;
-  for (let i = 0; i < total; i++) {
-    const m = (L[i] + R[i]) * 0.5 - mean;
-    varSum += m * m;
-  }
-  const std = Math.sqrt(varSum / total) || 1;
-
-  // Треугольные веса — плавная склейка перекрытий
-  const weight = new Float32Array(SEG);
-  const half = Math.floor(SEG / 2);
-  for (let i = 0; i < SEG; i++) weight[i] = (i < half ? i + 1 : SEG - i) / half;
-
   /* Приём со сдвигами: каждый проход смещает запись на случайную долю
-     секунды, результаты усредняются. Так делает demucs и, следом за ним,
-     UVR5 — модель по-разному режет одни и те же места, и остаточный
-     вокал взаимно гасится. Цена — время растёт кратно числу проходов. */
+     секунды, результаты усредняются. Мы его замеряли: на качество он
+     не влияет (три прохода против одного расходятся на −31 дБ, остаток
+     вокала совпадает до сотых долей децибела), поэтому по умолчанию
+     проход один. Переключатель оставлен, но обещаний за него не даём. */
   const passes = Math.max(1, Math.min(4, shifts));
   const MAX_SHIFT = Math.round(sampleRate * 0.5);
   const sumL = new Float64Array(total);
   const sumR = new Float64Array(total);
-  const sumV = new Float64Array(total);   // вокал, уже сведённый в моно
+  const sumV = new Float64Array(total);
   const t0 = Date.now();
-  let segmentsDone = 0;
-  const segmentsTotal = passes * Math.ceil(total / STRIDE);
+  let сделано = 0;
+  const всего = passes * кусков(total);
 
   for (let pass = 0; pass < passes; pass++) {
     // Первый проход без смещения, дальше — со сдвигом
@@ -205,17 +206,17 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
     sR.set(R, shift);
 
     const { outL, outR, outV } = await separatePass(
-      sL, sR, padded, mean, std, weight, session,
+      sL, sR, padded, session,
       (done, all) => {
-        segmentsDone++;
-        const frac = segmentsDone / segmentsTotal;
+        сделано++;
+        const frac = Math.min(сделано / всего, 0.999);
         const elapsed = (Date.now() - t0) / 1000;
         const rest = elapsed / Math.max(frac, 0.001) - elapsed;
         post({
           type: 'progress',
           percent: Math.round(frac * 100),
           text: passes > 1
-            ? `Убираем вокал: проход ${pass + 1} из ${passes}, отрезок ${done} из ${all}`
+            ? `Убираем вокал: проход ${pass + 1} из ${passes}, кусок ${done} из ${all}`
             : `Убираем вокал: ${done} из ${all}`,
           eta: rest > 3 ? `осталось около ${Math.ceil(rest / 6) * 6 < 60
             ? Math.ceil(rest / 6) * 6 + ' с'
@@ -235,10 +236,9 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
   const outR = new Float32Array(total);
   const voc = new Float32Array(total);
   for (let i = 0; i < total; i++) {
-    outL[i] = (sumL[i] / passes) * std + mean;
-    outR[i] = (sumR[i] / passes) * std + mean;
-    // Постоянную составляющую к отдельному стему не возвращаем: она от микса
-    voc[i] = (sumV[i] / passes) * std;
+    outL[i] = sumL[i] / passes;
+    outR[i] = sumR[i] / passes;
+    voc[i] = sumV[i] / passes;
   }
   return { left: outL, right: outR, vocal: voc, sampleRate };
 }

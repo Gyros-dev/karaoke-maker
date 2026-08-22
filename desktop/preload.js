@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('desktop', {
   downloadModel: () => ipcRenderer.invoke('model-download'),
   // Отмена скачивания: рвёт загрузку и убирает недокачанный файл
   cancelModelDownload: () => ipcRenderer.invoke('model-cancel'),
+  // Убрать прежнюю модель Demucs — только по согласию человека
+  removeOldModel: () => ipcRenderer.invoke('model-remove-old'),
   onModelProgress: (cb) => {
     ipcRenderer.removeAllListeners('model-progress');
     ipcRenderer.on('model-progress', (_e, data) => cb(data));
