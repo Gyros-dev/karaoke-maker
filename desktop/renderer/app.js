@@ -5348,6 +5348,85 @@ document.addEventListener('keydown', (e) => {
    пишем всё вместе через MediaRecorder. Запись в реальном времени. */
 const videoExport = { active: false, cancelled: false };
 
+/* ---------- Знак студии в углу кадра ----------
+   Раньше в кадр попадала одна картинка логотипа: по ней узнаёт тот,
+   кто уже знает, а название нигде не написано. Теперь над логотипом
+   стоит имя студии — тем же фирменным Bungee Shade, что и в заставке.
+
+   Кегль и отступы считаются от высоты кадра, чтобы знак одинаково
+   смотрелся и в HD, и в 2K. Прозрачность у надписи ниже, чем у
+   логотипа: спорить с текстом песни она не должна. */
+const ЗНАК_ТЕКСТ = 'Karaoke Punch';
+const ЗНАК_ШРИФТ = '"Bungee Shade", Impact, sans-serif';
+const знакКегль = (H) => Math.max(10, Math.round(H * 0.03));
+
+/* Холст рисует нужным шрифтом только после того, как шрифт по-настоящему
+   загружен: сам по себе canvas загрузку не запускает, в отличие от текста
+   на странице. Если начать запись раньше, первые кадры уедут запасным
+   шрифтом — на экране этого не видно, видно только в готовом файле.
+   Поэтому перед записью ждём шрифт явно.
+
+   Возвращает true, если шрифт действительно доступен: не пришёл файл —
+   пишем запасным, отменять из-за этого экспорт незачем. */
+async function дождатьсяЗнака(H) {
+  if (!document.fonts || !document.fonts.load) return false;
+  const запрос = `${знакКегль(H)}px ${ЗНАК_ШРИФТ}`;
+  try {
+    await document.fonts.load(запрос, ЗНАК_ТЕКСТ);
+    await document.fonts.ready;
+    /* Проверяем один Bungee Shade, без запасных: в списке с запасными
+       ответ был бы «да» и тогда, когда фирменный файл не пришёл. */
+    return document.fonts.check(`${знакКегль(H)}px "Bungee Shade"`, ЗНАК_ТЕКСТ);
+  } catch (e) {
+    return false;   // шрифта нет — не повод срывать запись
+  }
+}
+
+function рисоватьЗнак(g2d, W, H, watermark) {
+  const size = Math.round(H * 0.09);      // сторона логотипа
+  const margin = Math.round(H * 0.03);
+  const кегль = знакКегль(H);
+  g2d.save();
+  if (watermark) {
+    g2d.globalAlpha = 0.75;
+    g2d.drawImage(watermark, W - size - margin, H - size - margin, size, size);
+  }
+  // Имя выровнено по правому краю логотипа и стоит над ним
+  g2d.globalAlpha = 0.6;
+  g2d.font = `400 ${кегль}px ${ЗНАК_ШРИФТ}`;
+  g2d.textAlign = 'right';
+  g2d.textBaseline = 'alphabetic';
+  const низ = H - margin - (watermark ? size : 0) - Math.round(H * 0.012);
+  /* Тёмный контур под белой буквой. Фоном кадра бывает и светлая
+     картинка, а на ней белая надпись без контура просто теряется —
+     проверено на светлой подложке. Контур тонкий: у Bungee Shade
+     объём нарисован в самой букве, и толстая обводка съела бы его. */
+  g2d.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+  g2d.lineWidth = Math.max(1, кегль * 0.11);
+  g2d.lineJoin = 'round';
+  g2d.strokeText(ЗНАК_ТЕКСТ, W - margin, низ);
+  g2d.fillStyle = '#ffffff';
+  g2d.fillText(ЗНАК_ТЕКСТ, W - margin, низ);
+  g2d.restore();
+  // Для самопроверки: ширина надписи в последнем кадре
+  рисоватьЗнак.последний = {
+    кегль,
+    ширина: g2d.measureText ? измеритьЗнак(g2d, кегль) : 0,
+    низ,
+  };
+}
+
+/* Ширина надписи знака тем шрифтом, которым её сейчас нарисовали бы.
+   Отдельной функцией, потому что этим же замером проверяется, что
+   к началу записи применился именно Bungee Shade, а не запасной. */
+function измеритьЗнак(g2d, кегль) {
+  const было = g2d.font;
+  g2d.font = `400 ${кегль}px ${ЗНАК_ШРИФТ}`;
+  const w = g2d.measureText(ЗНАК_ТЕКСТ).width;
+  g2d.font = было;
+  return w;
+}
+
 function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   const st = state.style;
 
@@ -5579,14 +5658,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
         : места.a - места.half - size * 0.35);
     }
     g2d.letterSpacing = '0px';
-    if (watermark) {
-      const size = Math.round(H * 0.09);
-      const margin = Math.round(H * 0.03);
-      g2d.save();
-      g2d.globalAlpha = 0.75;
-      g2d.drawImage(watermark, W - size - margin, H - size - margin, size, size);
-      g2d.restore();
-    }
+    рисоватьЗнак(g2d, W, H, watermark);
     return;
   }
 
@@ -5637,16 +5709,8 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   g2d.letterSpacing = '0px';
   if (cd) drawCountdown(countCy != null ? countCy : H / 2);
 
-  // Логотип в правом нижнем углу — размер от высоты кадра,
-  // чтобы одинаково смотрелся и в HD, и в 2K
-  if (watermark) {
-    const size = Math.round(H * 0.09);
-    const margin = Math.round(H * 0.03);
-    g2d.save();
-    g2d.globalAlpha = 0.75;
-    g2d.drawImage(watermark, W - size - margin, H - size - margin, size, size);
-    g2d.restore();
-  }
+  // Знак студии в правом нижнем углу: логотип и имя над ним
+  рисоватьЗнак(g2d, W, H, watermark);
 }
 
 async function exportVideo() {
@@ -5688,6 +5752,15 @@ async function exportVideo() {
   canvas.width = W;
   canvas.height = H;
   const g2d = canvas.getContext('2d');
+
+  /* Ждём фирменный шрифт знака до первого кадра. Ждать надо именно
+     здесь, а не «когда-нибудь»: холст загрузку шрифта не запускает,
+     и если начать писать раньше, первые секунды видео уйдут запасным
+     шрифтом, а дальше надпись сменится на Bungee Shade. На экране
+     такого не увидишь — разнобой остаётся только в файле. */
+  $('export-status').textContent = 'Готовим шрифт…';
+  await дождатьсяЗнака(H);
+  $('export-status').textContent = 'Записываем видео…';
 
   // Звук: та же смесь, что в плеере, но в MediaStream вместо колонок
   const ctx = audio.ensureCtx();
