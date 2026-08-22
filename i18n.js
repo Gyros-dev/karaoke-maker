@@ -194,8 +194,8 @@ I18N.EN = {
   /* ---------- Окно «Что нового» ---------- */
   'новости.закрыть': 'Close',
   'новости.значок': 'Update',
-  'новости.заголовок': 'What’s new in 1.8.4',
-  'новости.язык': '<b>\u{1F30D} The interface speaks English now.</b> The language switch sits in the header and in the studio\u2019s step row. Everything you see is translated \u2014 labels, hints, questions, the guide and messages. Your lyrics, of course, stay yours.',
+  'новости.заголовок': 'What’s new in {версия}',
+  'новости.язык': '<b>\u{1F30D} The interface speaks English now.</b> The language switch sits in the header \u2014 in reach from every step of the studio. Everything you see is translated \u2014 labels, hints, questions, the guide and messages. Your lyrics, of course, stay yours.',
   'новости.установщик': '<b>📦 The installer is 40 MB lighter.</b> A second copy of the neural-network engine had been slipping into the app by oversight — 131 MB that nothing ever loaded. It’s gone now: 202 MB instead of 242.',
   'новости.клавиши': '<b>⌨️ Key names match your system.</b> On Windows the hints said “Cmd+Z” — a key that isn’t there. The code was right all along; only the labels lied.',
   'новости.вокал': '<b>🎚 Vocal removal is cleaner and faster.</b> We switched to the very model UVR5 runs. Measured against an instrumental made by the real UVR5, the match went from 84 % to 94 %. The model is three times lighter too — 64 MB instead of 172. And the wait is shorter: the old “accurate mode” with three passes turned out to add nothing — the difference from a single pass is down at the noise floor — so one pass is now the default.',

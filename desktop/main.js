@@ -738,10 +738,15 @@ function createWindow() {
           return {
             en, ru, langEn, langRu, кириллицыПриАнглийском, следы,
             вернулиЯзык: I18N.язык() === былЯзык,
+            /* Переключатель ровно один и живёт в шапке. Раньше их было
+               два — второй стоял в ряду шагов студии, и на экране они
+               попадались на глаза оба сразу. */
             переключателей: document.querySelectorAll('.lang-switch').length,
+            вШапке: !!document.querySelector('.site-header .lang-switch'),
             вНорме: langEn === 'en' && langRu === 'ru'
               && I18N.язык() === былЯзык
-              && document.querySelectorAll('.lang-switch').length === 2
+              && document.querySelectorAll('.lang-switch').length === 1
+              && !!document.querySelector('.site-header .lang-switch')
               && кириллицыПриАнглийском === 0
               // При английском ни в одном ключевом месте нет кириллицы…
               && чужих(en, false) === 0
