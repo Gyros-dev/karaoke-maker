@@ -2920,6 +2920,7 @@ const editor = {
   stageKey: '',
 
   sel: -1,       // выбранная строка (номер в state.lines), -1 — ничего
+  origSel: -1,   // выбранный отрезок оригинала (номер в state.origSpans)
   loop: false,   // играть выбранную строку по кругу
   snap: true,    // притягивать границы к настоящему вступлению голоса
   snapped: null, // куда притянулось в этом перетаскивании — для подсветки
@@ -2992,7 +2993,7 @@ function spanOfRow(row) {
 const HISTORY_MAX = 80;
 
 function snapshotTimings() {
-  return state.lines.map((l) => ({
+  const snap = state.lines.map((l) => ({
     /* Текст в снимке лежит, но при обычной отмене не применяется —
        он нужен только чтобы вернуть удалённую строку целиком.
        См. applySnapshot: пока число строк не изменилось, текст не трогаем. */
@@ -3003,10 +3004,21 @@ function snapshotTimings() {
     guess: !!l.сомнительная,
     words: l.words ? l.words.map((w) => ({ text: w.text, time: w.time, end: w.end })) : null,
   }));
+  /* Отрезки оригинала едут в снимке отдельным свойством, а не лишним
+     элементом списка: снимок повсюду перебирается как список строк,
+     и чужой элемент внутри пришлось бы обходить в каждом месте. */
+  snap.отрезки = отрезкиОригинала().map((s) => ({ ...s }));
+  return snap;
 }
 
 function snapshotEqual(a, b) {
   if (!a || !b || a.length !== b.length) return false;
+  const ao = a.отрезки || [];
+  const bo = b.отрезки || [];
+  if (ao.length !== bo.length) return false;
+  for (let i = 0; i < ao.length; i++) {
+    if (ao[i].start !== bo[i].start || ao[i].end !== bo[i].end) return false;
+  }
   for (let i = 0; i < a.length; i++) {
     const x = a[i];
     const y = b[i];
@@ -3099,12 +3111,15 @@ function applySnapshot(snap) {
       else delete l.words;
     });
   }
+  state.origSpans = нормОтрезки(snap.отрезки || [], audio.duration);
+  if (editor.origSel >= state.origSpans.length) editor.origSel = -1;
   editor.spansKey = '';
   refreshTimes();
   renderEditList();
   updateWordExportBtn();
   editor.stageKey = '';
   renderEditStage();
+  audio.applyMix();   // отменили правку отрезка — звук меняется сразу
   saveProject();
   drawTimeline();
 }
@@ -3854,6 +3869,9 @@ function updateEditStage() {
 
    Дорожка собрана из полос, сверху вниз:
      • линейка времени;
+     • оригинал — отрезки, где вместо минусовки звучит сама песня
+       со словами. Пусто по умолчанию: протянул мышью — появился
+       отрезок, потянул за край — сдвинул границу;
      • голос — огибающая вокальной дорожки. Её считает настольная
        версия после удаления вокала нейросетью, и по ней прямо видно,
        где на самом деле поют. На сайте этой полосы нет, дорожка просто
@@ -3867,6 +3885,7 @@ function updateEditStage() {
    ============================================================ */
 
 const LANE_RULER = 18;
+const LANE_ORIG = 22;
 const LANE_VOICE = 34;
 const LANE_WAVE = 46;
 const LANE_LINES = 38;
@@ -3885,6 +3904,7 @@ function timelineLanes() {
   let y = 0;
   const L = {};
   L.ruler = { y, h: px(LANE_RULER) }; y += L.ruler.h;
+  L.orig = { y, h: px(LANE_ORIG) }; y += L.orig.h;
   if (voiceReady()) { L.voice = { y, h: px(LANE_VOICE) }; y += L.voice.h; }
   L.wave = { y, h: px(LANE_WAVE) }; y += L.wave.h;
   L.lines = { y, h: px(LANE_LINES) }; y += L.lines.h;
@@ -3944,6 +3964,61 @@ function clipText(g, text, maxW) {
   let s = text;
   while (s.length > 1 && g.measureText(s + '…').width > maxW) s = s.slice(0, -1);
   return s.length > 1 ? s + '…' : '';
+}
+
+/* ---------- Полоса отрезков оригинала ----------
+   Розовый — «здесь поёт запись, а не вы». Крестик у правого края
+   убирает отрезок; пока блок узкий, крестик не рисуем и не ловим. */
+const ORIG_DEL_W = 14;   // ширина крестика внутри блока
+
+function drawOrigLane(g, lane, W) {
+  const spans = отрезкиОригинала();
+  g.fillStyle = 'rgba(30, 16, 22, 0.85)';
+  g.fillRect(0, lane.y, W, lane.h);
+
+  if (!spans.length) {
+    g.fillStyle = 'rgba(251, 113, 133, 0.55)';
+    g.font = '10px sans-serif';
+    g.textAlign = 'left';
+    g.fillText('оригинал: протяни мышью — на этом куске зазвучат настоящие слова',
+      6, lane.y + lane.h / 2 + 3);
+    return;
+  }
+
+  const y = lane.y + 3;
+  const h = lane.h - 6;
+  g.font = '10px sans-serif';
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  spans.forEach((s, i) => {
+    const x0 = tToX(s.start);
+    const x1 = tToX(s.end);
+    if (x1 < -40 || x0 > W + 40) return;
+    const w = Math.max(2, x1 - x0);
+    const sel = i === editor.origSel;
+    roundRect(g, x0, y, w, h, 4);
+    g.fillStyle = sel ? 'rgba(251, 113, 133, 0.42)' : 'rgba(251, 113, 133, 0.26)';
+    g.fill();
+    g.lineWidth = sel ? 2 : 1;
+    g.strokeStyle = sel ? '#fda4af' : '#fb7185';
+    g.stroke();
+    // Ручки по краям — за них тянут границу
+    g.fillStyle = sel ? '#fda4af' : '#fb7185';
+    g.fillRect(x0, y, 2, h);
+    g.fillRect(x1 - 2, y, 2, h);
+
+    const крестик = w >= ORIG_DEL_W + 26;
+    g.fillStyle = '#ffe4e6';
+    const txt = clipText(g, 'оригинал', w - 8 - (крестик ? ORIG_DEL_W : 0));
+    if (txt) g.fillText(txt, x0 + 4, lane.y + lane.h / 2);
+    if (крестик) {
+      g.textAlign = 'center';
+      g.fillStyle = 'rgba(255, 228, 230, 0.85)';
+      g.fillText('✕', x1 - ORIG_DEL_W / 2 - 2, lane.y + lane.h / 2);
+      g.textAlign = 'left';
+    }
+  });
+  g.textBaseline = 'alphabetic';
 }
 
 /* ---------- Полоса голоса ---------- */
@@ -4126,6 +4201,7 @@ function drawTimeline() {
   g.fillStyle = '#0e0e15';
   g.fillRect(0, 0, W, H);
 
+  drawOrigLane(g, L.orig, W);
   if (L.voice) drawVoiceLane(g, L.voice, W);
   drawWaveLane(g, L.wave, W);
 
@@ -4145,7 +4221,7 @@ function drawTimeline() {
 
   // Разделители полос
   g.fillStyle = 'rgba(255, 255, 255, 0.07)';
-  [L.wave, L.lines, L.words].forEach((lane) => g.fillRect(0, lane.y, W, 1));
+  [L.orig, L.wave, L.lines, L.words].forEach((lane) => g.fillRect(0, lane.y, W, 1));
 
   // Линейка времени
   const step = editor.pxPerSec >= 60 ? 1 : editor.pxPerSec >= 25 ? 2 : editor.pxPerSec >= 12 ? 5 : 10;
@@ -4190,6 +4266,23 @@ function drawTimeline() {
    ============================================================ */
 function timelineHit(x, y) {
   const L = timelineLanes();
+
+  // Отрезки оригинала
+  if (y >= L.orig.y && y < L.orig.y + L.orig.h) {
+    const spans = отрезкиОригинала();
+    for (let i = 0; i < spans.length; i++) {
+      const x0 = tToX(spans[i].start);
+      const x1 = tToX(spans[i].end);
+      if (Math.abs(x - x0) <= EDGE_GRAB) return { kind: 'orig-start', i };
+      if (Math.abs(x - x1) <= EDGE_GRAB) return { kind: 'orig-end', i };
+      if (x > x0 && x < x1) {
+        const крестик = x1 - x0 >= ORIG_DEL_W + 26;
+        if (крестик && x >= x1 - ORIG_DEL_W - 4) return { kind: 'orig-del', i };
+        return { kind: 'orig-move', i };
+      }
+    }
+    return { kind: 'orig-new' };
+  }
 
   // Слова выбранной строки
   if (y >= L.words.y && y < L.words.y + L.words.h) {
@@ -4243,6 +4336,11 @@ function snapToVoice(t) {
   if (best == null) return t;
   editor.snapped = best;
   return best;
+}
+
+/* Единый вход притягивания для всех перетаскиваний дорожки */
+function примагнитить(t) {
+  return snapToVoice(t);
 }
 
 /* ---------- Выбор строки ---------- */
@@ -4299,8 +4397,120 @@ function updateSelInfo() {
   $('btn-sel-words-reset').classList.toggle('hidden', !marked);
 }
 
+/* ---------- Правка отрезков оригинала ----------
+   Отрезки лежат в state.origSpans по возрастанию времени и не налезают
+   друг на друга. Порядок держится сам собой: каждая граница зажата
+   между соседями, поэтому во время перетаскивания номера не меняются
+   и editor.origSel остаётся тем же отрезком. */
+
+/* Куда вправе двигаться отрезок №i: до соседей, с зазором в два
+   затухания — чтобы переходы не наложились друг на друга */
+function границыОтрезка(i) {
+  const spans = отрезкиОригинала();
+  const зазор = ОТРЕЗОК_ФЕЙД * 2;
+  const пред = spans[i - 1];
+  const след = spans[i + 1];
+  return {
+    lo: пред ? пред.end + зазор : 0,
+    hi: след ? след.start - зазор : (audio.duration || Infinity),
+  };
+}
+
+/* Новый отрезок в точке t. Возвращает его номер или −1, если места
+   нет: точка внутри чужого отрезка или свободный промежуток слишком мал. */
+function вставитьОтрезок(t) {
+  const spans = state.origSpans;
+  const зазор = ОТРЕЗОК_ФЕЙД * 2;
+  let i = 0;
+  while (i < spans.length && spans[i].end <= t) i++;
+  if (i < spans.length && spans[i].start <= t) return -1;   // внутри чужого
+  const lo = i > 0 ? spans[i - 1].end + зазор : 0;
+  const hi = i < spans.length ? spans[i].start - зазор : (audio.duration || Infinity);
+  if (hi - lo < ОТРЕЗОК_МИН) return -1;
+  const start = Math.min(Math.max(t, lo), hi - ОТРЕЗОК_МИН);
+  spans.splice(i, 0, { start, end: start });
+  return i;
+}
+
+function удалитьОтрезок(i) {
+  if (!state.origSpans[i]) return;
+  pushHistory();
+  state.origSpans.splice(i, 1);
+  editor.origSel = -1;
+  saveProject();
+  drawTimeline();
+}
+
 /* ---------- Перетаскивание ---------- */
 const tl = $('timeline');
+
+function beginOrigDrag(hit, t) {
+  pushHistory();
+  let i = hit.i;
+  let kind = hit.kind;
+  let создан = false;
+  if (kind === 'orig-new') {
+    i = вставитьОтрезок(t);
+    if (i < 0) { dropEmptyHistory(); return; }
+    создан = true;
+  }
+  editor.origSel = i;
+  editor.drag = { kind, i, создан, grabT: t, was: { ...state.origSpans[i] }, moved: false };
+}
+
+function applyOrigDrag(t) {
+  const d = editor.drag;
+  const s = state.origSpans[d.i];
+  if (!s) return;
+  const гр = границыОтрезка(d.i);
+  const зажать = (v) => Math.min(Math.max(v, гр.lo), гр.hi);
+  d.moved = Math.abs(t - d.grabT) * editor.pxPerSec >= 4;
+
+  if (d.kind === 'orig-new') {
+    /* Тянем в любую сторону от точки нажатия: отрезок растёт туда,
+       куда ведут мышь, — как рисуют область в монтажной программе */
+    const nt = зажать(примагнитить(t, { кроме: d.i }));
+    s.start = Math.min(d.grabT, nt);
+    s.end = Math.max(d.grabT, nt);
+    s.start = зажать(s.start);
+    s.end = Math.max(s.start, зажать(s.end));
+  } else if (d.kind === 'orig-start') {
+    s.start = Math.min(зажать(примагнитить(t, { кроме: d.i })), s.end - ОТРЕЗОК_МИН);
+    s.start = Math.max(s.start, гр.lo);
+  } else if (d.kind === 'orig-end') {
+    s.end = Math.max(зажать(примагнитить(t, { кроме: d.i })), s.start + ОТРЕЗОК_МИН);
+    s.end = Math.min(s.end, гр.hi);
+  } else if (d.kind === 'orig-move') {
+    const длина = d.was.end - d.was.start;
+    const nt = примагнитить(d.was.start + (t - d.grabT), { кроме: d.i });
+    s.start = Math.min(Math.max(nt, гр.lo), Math.max(гр.lo, гр.hi - длина));
+    s.end = s.start + длина;
+  }
+  drawTimeline();
+}
+
+function endOrigDrag() {
+  const d = editor.drag;
+  editor.drag = null;
+  editor.snapped = null;
+  const s = state.origSpans[d.i];
+  /* Просто щелчок по пустому месту полосы — это не «отрезок в ноль
+     длиной», а перемотка: ставим указатель туда, куда ткнули */
+  if (d.создан && (!d.moved || !s || s.end - s.start < ОТРЕЗОК_МИН)) {
+    state.origSpans.splice(d.i, 1);
+    editor.origSel = -1;
+    dropEmptyHistory();
+    if (!d.moved) seekTo(d.grabT);
+    drawTimeline();
+    return;
+  }
+  state.origSpans = нормОтрезки(state.origSpans, audio.duration);
+  // После слияния номер мог сдвинуться — ищем отрезок по времени
+  editor.origSel = state.origSpans.findIndex((x) => s && x.start <= s.start && x.end >= s.end);
+  if (!dropEmptyHistory()) saveProject();
+  audio.applyMix();   // расписание пересчитывается на ходу, не дожидаясь перезапуска
+  drawTimeline();
+}
 
 function beginDrag(hit, t) {
   const sp = spanOfRow(hit.row);
@@ -4378,23 +4588,36 @@ function applyDrag(t) {
   drawTimeline();
 }
 
+/* Перемотка щелчком по пустому месту дорожки */
+function seekTo(t) {
+  const пос = Math.min(Math.max(0, t), audio.duration);
+  if (audio.playing) audio.play(пос);
+  else audio.offset = пос;
+  editor.stageKey = '';
+  renderEditStage();
+  updatePlayerUI();
+  setText('edit-time', fmtTime(audio.position()));
+}
+
 tl.addEventListener('pointerdown', (e) => {
   const rect = tl.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   const hit = timelineHit(x, y);
-  if (hit) {
+  editor.безМагнита = !!e.altKey;
+  if (hit && hit.kind === 'orig-del') {
+    удалитьОтрезок(hit.i);
+    return;
+  }
+  if (hit && hit.kind.startsWith('orig-')) {
+    beginOrigDrag(hit, xToT(x));
+    try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
+  } else if (hit) {
     if (hit.row !== editor.sel) selectLine(hit.row, { scrollList: true });
     beginDrag(hit, xToT(x));
     try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
   } else {
-    const t = Math.min(Math.max(0, xToT(x)), audio.duration);
-    if (audio.playing) audio.play(t);
-    else audio.offset = t;
-    editor.stageKey = '';
-    renderEditStage();
-    updatePlayerUI();
-    setText('edit-time', fmtTime(audio.position()));
+    seekTo(xToT(x));
   }
   drawTimeline();
 });
@@ -4403,15 +4626,25 @@ tl.addEventListener('pointermove', (e) => {
   const rect = tl.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  if (editor.drag) { applyDrag(xToT(x)); return; }
+  // Зажатый Alt отключает магнит на время: так же в Logic Pro и Final Cut
+  editor.безМагнита = !!e.altKey;
+  if (editor.drag) {
+    if (editor.drag.kind.startsWith('orig-')) applyOrigDrag(xToT(x));
+    else applyDrag(xToT(x));
+    return;
+  }
   const hit = timelineHit(x, y);
   tl.style.cursor = !hit ? 'pointer'
-    : hit.kind === 'line-start' || hit.kind === 'line-end' || hit.kind === 'word-edge'
-      ? 'ew-resize' : 'grab';
+    : hit.kind === 'orig-del' ? 'pointer'
+      : hit.kind === 'orig-new' ? 'crosshair'
+        : hit.kind === 'line-start' || hit.kind === 'line-end'
+          || hit.kind === 'word-edge' || hit.kind === 'orig-start' || hit.kind === 'orig-end'
+          ? 'ew-resize' : 'grab';
 });
 
 function endDrag() {
   if (!editor.drag) return;
+  if (editor.drag.kind.startsWith('orig-')) { endOrigDrag(); return; }
   editor.drag = null;
   editor.snapped = null;
   if (!dropEmptyHistory()) {
@@ -4427,6 +4660,18 @@ function endDrag() {
 
 tl.addEventListener('pointerup', endDrag);
 tl.addEventListener('pointercancel', endDrag);
+
+/* Двойной щелчок по отрезку оригинала убирает его — как и крестик
+   у правого края блока. Крестик виден, двойной щелчок привычен. */
+tl.addEventListener('dblclick', (e) => {
+  const rect = tl.getBoundingClientRect();
+  const hit = timelineHit(e.clientX - rect.left, e.clientY - rect.top);
+  if (hit && (hit.kind === 'orig-move' || hit.kind === 'orig-start'
+    || hit.kind === 'orig-end' || hit.kind === 'orig-del')) {
+    e.preventDefault();
+    удалитьОтрезок(hit.i);
+  }
+});
 
 /* Колесо: прокрутка по времени, с Cmd/Ctrl/Alt (и щипком тачпада) — масштаб */
 tl.addEventListener('wheel', (e) => {
@@ -4635,8 +4880,15 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'KeyL': e.preventDefault(); setLoop(!editor.loop); break;
     case 'KeyS': e.preventDefault(); setSnap(!editor.snap); break;
+    // Выбранный отрезок оригинала — убрать. Строки удаляются кнопкой
+    // в инспекторе: слишком легко снести разметку случайной клавишей
+    case 'Delete':
+    case 'Backspace':
+      if (editor.origSel >= 0) { e.preventDefault(); удалитьОтрезок(editor.origSel); }
+      break;
     case 'Escape':
       if (editor.loop) { e.preventDefault(); setLoop(false); }
+      else if (editor.origSel >= 0) { editor.origSel = -1; drawTimeline(); }
       break;
     case 'Equal':
     case 'NumpadAdd': e.preventDefault(); zoomTimeline(1.5); break;

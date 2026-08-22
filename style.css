@@ -804,8 +804,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   display: block;
   width: 100%;
   /* До первого замера (resizeTimeline) — высота дорожек: иначе канвас
-     тянется по своим 300×160 и раздувает шаг вчетверо */
-  height: 126px;
+     тянется по своим 300×160 и раздувает шаг вчетверо.
+     18 линейка + 22 оригинал + 46 волна + 38 строки + 24 слова */
+  height: 148px;
   border-radius: 8px;
   cursor: pointer;
   touch-action: none;
@@ -827,6 +828,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   border-radius: 3px;
   display: inline-block;
 }
+.sw-orig { background: rgba(251, 113, 133, 0.4); border: 1px solid #fb7185; }
 .sw-voice { background: rgba(56, 189, 248, 0.55); border: 1px solid #38bdf8; }
 .sw-line { background: rgba(16, 185, 129, 0.35); border: 1px solid #10b981; }
 .sw-guess { background: rgba(245, 158, 11, 0.3); border: 1px dashed #f59e0b; }

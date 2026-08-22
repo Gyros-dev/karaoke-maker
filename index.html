@@ -484,7 +484,7 @@
             <input type="range" id="seek" min="0" max="1000" value="0">
             <span class="time" id="time-total">0:00</span>
           </div>
-          <div class="mixer">
+          <div class="mixer" title="Отрезки оригинала, размеченные в редакторе, звучат целиком независимо от этого ползунка">
             <span class="mixer-icon">🎤</span>
             <label for="vocal-mix">Вокал</label>
             <input type="range" id="vocal-mix" min="0" max="100" value="0">
@@ -499,7 +499,7 @@
       <button class="btn btn-ghost" id="btn-sound-check">🔊 Проверить звук</button>
       <button class="btn btn-ghost" id="btn-export-lrc">⬇ Текст .lrc</button>
       <button class="btn btn-ghost hidden" id="btn-export-lrc-words" title="Расширенный LRC: время каждого слова внутри строки">⬇ .lrc со словами</button>
-      <button class="btn btn-ghost" id="btn-export-wav">⬇ Минусовка .wav</button>
+      <button class="btn btn-ghost" id="btn-export-wav" title="Минусовка с оригиналом на отрезках, размеченных в редакторе">⬇ Минусовка .wav</button>
       <label class="btn btn-ghost export-quality" for="video-quality">Качество
         <select id="video-quality">
           <option value="720">HD · 1280×720</option>
@@ -538,7 +538,16 @@
         тяни за края блока — сдвинется граница, за середину — вся строка.
         Начала строк простукиваются пробелом: кнопка «✎ простучать заново».
       </p>
+      <p>
+        <b>Верхняя полоса — оригинал.</b> Протяни по ней мышью — на этом куске вместо
+        минусовки зазвучат настоящие слова из записи: удобно для вступления, которое
+        петь не хочется. Тяни за края, чтобы поправить границы; крестик, двойной щелчок
+        или <kbd>Delete</kbd> убирают отрезок. Внутри отрезка оригинал слышен целиком,
+        как бы ни стоял ползунок «Вокал» в караоке, — и точно так же он попадёт
+        в минусовку&nbsp;.wav и в записанное видео.
+      </p>
       <div class="timeline-legend">
+        <span class="tl-key"><i class="sw sw-orig"></i> здесь звучит оригинал</span>
         <span class="tl-key"><i class="sw sw-voice"></i> голос <b id="tl-voice-note">— только в приложении после удаления вокала</b></span>
         <span class="tl-key"><i class="sw sw-line"></i> строка</span>
         <span class="tl-key"><i class="sw sw-guess"></i> ≈ время на глазок</span>
