@@ -1,3 +1,41 @@
+/* ============ Фирменный шрифт ============
+   Bungee (Дэвид Джонатан Росс) — шрифт вывесок: узкий, плотный,
+   ровно под короткое имя из двух слов. Bungee Shade — та же буква
+   с объёмной тенью, для крупной подачи.
+
+   Файлы лежат рядом, в fonts/: политика безопасности страницы
+   разрешает только 'self', и внешние адреса вроде Google Fonts
+   всё равно не загрузились бы. Лицензия обоих — OFL, её текст
+   обязан лежать рядом со шрифтом: fonts/OFL.txt.
+
+   Внимание: подмножества латинские, кириллицы в них нет. Поэтому
+   ставим их только на латинские надписи («Karaoke Punch»), а не на
+   русские заголовки — там браузер всё равно взял бы запасной шрифт.
+
+   font-display: swap — пока файл не пришёл, надпись видна запасным
+   шрифтом, а не пустым местом. */
+@font-face {
+  font-family: 'Bungee';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/bungee.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Bungee Shade';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/bungee-shade.woff2') format('woff2');
+}
+
+/* Запасные шрифты заданы всюду, где применяется фирменный: не пришёл
+   файл — надпись просто станет обычной жирной, но ничего не поедет */
+:root {
+  --font-brand: 'Bungee', Impact, "Haettenschweiler", "Arial Narrow Bold", system-ui, sans-serif;
+  --font-brand-shade: 'Bungee Shade', 'Bungee', Impact, "Haettenschweiler", system-ui, sans-serif;
+}
+
 /* ============ Базовые стили ============ */
 :root {
   --bg: #0a0a0f;
@@ -125,6 +163,19 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   border-bottom: 1px solid var(--border);
 }
 .logo { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; color: var(--text); font-weight: 700; font-size: 1.1rem; }
+/* Имя студии фирменным шрифтом — в шапке и в подвале.
+
+   Bungee заметно шире системного шрифта, поэтому кегль здесь ниже
+   обычного, а межбуквенный просвет отрицательный: иначе на узком
+   экране имя вытесняло бы кнопку «Открыть студию». Ниже, в разделе
+   узких экранов, оно ужимается ещё раз. */
+.logo-text {
+  font-family: var(--font-brand);
+  font-weight: 400;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
 .logo-icon { font-size: 1.4rem; }
 .logo-img {
   display: block;
@@ -135,6 +186,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .footer-brand { display: inline-flex; align-items: center; gap: 0.5rem; }
 .footer-brand .logo-img { width: 24px; height: 24px; border-radius: 6px; }
+.footer-brand .logo-text { font-size: 0.9rem; }
 .site-nav { display: flex; gap: 1.5rem; }
 .site-nav a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; transition: color 0.15s; }
 .site-nav a:hover { color: var(--text); }
@@ -169,6 +221,22 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   margin-bottom: 2rem;
 }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; }
+/* Имя студии крупно, Bungee Shade. Мельче ставить нельзя: у этого
+   шрифта буква нарисована вместе с объёмной тенью, и на маленьком
+   кегле тень слипается с самой буквой в грязь. Отсюда и нижняя
+   граница clamp — 1.7rem, ниже она не опускается даже на 320 px. */
+.hero-wordmark {
+  font-family: var(--font-brand-shade);
+  font-weight: 400;
+  font-size: clamp(1.55rem, 5.2vw, 3.2rem);
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  color: #34d399;
+  margin-bottom: 1rem;
+  /* Тень нарисована в самом шрифте, поэтому свечение вокруг делаем
+     мягким и слабым — иначе оно забивает рельеф букв */
+  text-shadow: 0 0 28px rgba(52, 211, 153, 0.35);
+}
 .hero h1 {
   font-size: clamp(2.4rem, 7vw, 4.5rem);
   line-height: 1.1;
@@ -1746,6 +1814,12 @@ body.is-desktop .only-web { display: none; }
 
 @media (max-width: 640px) {
   .site-nav { display: none; }
+  /* На узком экране в шапке остаются только имя и «Открыть студию»,
+     и места им впритык. Bungee шире системного шрифта примерно на
+     четверть, поэтому здесь кегль ниже: замер на 320 px — имя занимает
+     119 px против 123,5 px у прежнего системного, то есть шапке
+     от фирменного шрифта не стало теснее. */
+  .logo-text { font-size: 0.85rem; }
   .hero { padding: 4.5rem 1.2rem 4rem; }
   .studio { padding: 2rem 1rem 2.5rem; }
   .panel-actions { justify-content: center; }

@@ -311,6 +311,20 @@ try {
   fs.writeFileSync(path.join(OUT, 'style.css'), css);
   fs.writeFileSync(path.join(OUT, 'app.js'), js);
 
+  /* Фирменные шрифты. Их подключает style.css относительным путём
+     fonts/…, и без этих файлов приложение молча рисовало бы имя
+     запасным шрифтом. Лицензия OFL требует носить свой текст вместе
+     со шрифтом, поэтому OFL.txt переносится наравне с woff2. */
+  const FONT_DIR = path.join(WEB, 'fonts');
+  const FONT_OUT = path.join(OUT, 'fonts');
+  const FONT_FILES = ['bungee.woff2', 'bungee-shade.woff2', 'OFL.txt'];
+  fs.mkdirSync(FONT_OUT, { recursive: true });
+  for (const name of FONT_FILES) {
+    const from = path.join(FONT_DIR, name);
+    if (!fs.existsSync(from)) throw new Error(`нет файла шрифта fonts/${name}`);
+    fs.copyFileSync(from, path.join(FONT_OUT, name));
+  }
+
   // DSP-модуль общий, но в воркере экспортируется иначе
   const dsp = fs.readFileSync(path.join(__dirname, 'renderer', 'dsp.js'), 'utf8');
   if (!dsp.includes('self.DSP')) throw new Error('renderer/dsp.js потерял экспорт для воркера');
@@ -319,6 +333,7 @@ try {
   console.log('  index.html — политика безопасности, блок нейросети, скрипты');
   console.log('  style.css  — полоса прогресса нейросети');
   console.log('  app.js     — без изменений');
+  console.log('  fonts/     — Bungee, Bungee Shade и лицензия OFL');
 } catch (err) {
   console.error('Не получилось:', err.message);
   process.exit(1);
