@@ -526,21 +526,21 @@ async function makeInstrumental(buffer) {
     trimmed.copyToChannel(
       rendered.getChannelData(c).subarray(PREROLL, PREROLL + buffer.length), c);
   }
-  return normalizeInstrumental(trimmed, buffer);
+  return normalizeInstrumental(trimmed);
 }
 
-/* После вычитания центра пики могут вылезать далеко за 1.0 — на выходе
-   это слышно как хрип и треск. Подгоняем громкость минусовки под
-   оригинал и следим, чтобы пики не превышали 0.95. */
-function normalizeInstrumental(inst, original) {
-  const rmsOf = (buf) => {
-    let sum = 0, n = 0;
-    for (let c = 0; c < buf.numberOfChannels; c++) {
-      const d = buf.getChannelData(c);
-      for (let i = 0; i < d.length; i += 97) { sum += d[i] * d[i]; n++; }
-    }
-    return Math.sqrt(sum / n) || 1e-6;
-  };
+/* После вычитания голоса пики могут вылезать далеко за 1.0 — на выходе
+   это слышно как хрип и треск. Здесь мы только сторожим пик и, если
+   модель разделения предписывает свой коэффициент компенсации,
+   применяем его.
+
+   Чего мы тут больше НЕ делаем: не подгоняем СКЗ минусовки под СКЗ
+   оригинала. Это было принципиально неверно. Из микса убран голос,
+   значит энергия обязана упасть — а «подтягивание» назад просто делало
+   громче всё, что осталось, включая недобитый вокал: минусовке
+   возвращалась ровно та энергия, которую мы старались убрать. UVR так
+   не делает, там применяется только фиксированный коэффициент модели. */
+function normalizeInstrumental(inst, compensate) {
   const peakOf = (buf) => {
     let p = 0;
     for (let c = 0; c < buf.numberOfChannels; c++) {
@@ -553,7 +553,7 @@ function normalizeInstrumental(inst, original) {
     return p || 1e-6;
   };
 
-  let gain = Math.min(rmsOf(original) / rmsOf(inst), 4);
+  let gain = compensate > 0 ? compensate : 1;
   const peak = peakOf(inst);
   if (peak * gain > 0.95) gain = 0.95 / peak;
 
