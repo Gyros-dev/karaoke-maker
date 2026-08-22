@@ -763,6 +763,23 @@ function createWindow() {
               && Object.keys(en).every((k) => en[k] !== ru[k]),
           };
         })(),
+        /* Логотип в шапке и в подвале. Приложению нужна своя копия
+           картинки: папка icons/ в сборку не едет, и без копии рядом
+           с интерфейсом вместо логотипа оставался запасной значок. */
+        логотип: (() => {
+          const шапка = document.getElementById('logo-img');
+          const подвал = document.getElementById('logo-img-footer');
+          const запасной = document.getElementById('logo-fallback');
+          const виден = (img) => !!img && img.complete && img.naturalWidth > 0
+            && !img.classList.contains('hidden');
+          return {
+            путь: шапка ? шапка.getAttribute('src') : null,
+            размер: шапка ? шапка.naturalWidth : 0,
+            запаснойСкрыт: !!запасной && запасной.classList.contains('hidden'),
+            вНорме: виден(шапка) && виден(подвал)
+              && !!запасной && запасной.classList.contains('hidden'),
+          };
+        })(),
         /* Раздел «Для компьютера» в приложении удалён — приложение уже
            стоит. Проверяем после переключения языка: перевод абзацев
            кладётся через innerHTML и приносит ссылки на раздел обратно,

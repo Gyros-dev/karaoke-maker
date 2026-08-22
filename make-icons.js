@@ -76,12 +76,21 @@ for (const [size, name] of WEB_SIZES) resize(size, path.join(WEB_OUT, name));
 resize(32, path.join(WEB_OUT, 'favicon.ico'));
 console.log(`Сайт:    ${WEB_SIZES.length + 1} файлов в icons/`);
 
+/* Логотип в шапке и в подвале. Сайт берёт его из icons/, а приложению
+   нужна своя копия: в сборку едет только папка renderer, из-за чего
+   картинка в приложении не находилась и вместо логотипа оставался
+   запасной значок-микрофон. Кладём рядом с интерфейсом, как знак. */
+const rendererDir = path.join(__dirname, 'desktop', 'renderer');
+if (fs.existsSync(rendererDir)) {
+  resize(192, path.join(rendererDir, 'logo.png'));
+  console.log('Логотип: desktop/renderer/logo.png (шапка приложения)');
+}
+
 /* --- Водяной знак для видео ---
    Лежит рядом с интерфейсом, а не в icons/: настольная сборка папку
    icons вычищает, а знак нужен и там. */
 const WM = 'watermark.png';
 resize(256, path.join(__dirname, WM));
-const rendererDir = path.join(__dirname, 'desktop', 'renderer');
 if (fs.existsSync(rendererDir)) {
   fs.copyFileSync(path.join(__dirname, WM), path.join(rendererDir, WM));
 }

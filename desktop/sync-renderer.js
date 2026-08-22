@@ -173,8 +173,15 @@ function patchHtml(src) {
   // 2. Иконки сайта в приложении не нужны — у окна своя иконка
   s = s.replace(/^.*<link rel="(icon|apple-touch-icon)"[^>]*>\n/gm, '');
   s = s.replace(/^.*<meta name="theme-color"[^>]*>\n/gm, '');
-  s = s.replace(/^.*<img class="logo-img"[^>]*>\n/gm, '');
-  s = s.replace('<span class="logo-icon hidden" id="logo-fallback">', '<span class="logo-icon" id="logo-fallback">');
+
+  /* Логотип в шапке и в подвале. Папка icons/ в сборку не едет (в неё
+     кладут только renderer), поэтому картинку берём из своей копии
+     рядом с интерфейсом — её делает make-icons.js. Раньше картинку
+     здесь просто выбрасывали, и в приложении вместо логотипа оставался
+     запасной значок-микрофон. */
+  const было = s;
+  s = s.replace(/src="icons\/icon-192\.png"/g, 'src="logo.png"');
+  if (s === было) throw new Error('не нашёл картинку логотипа в шапке');
 
   // 3. Версии в путях к файлам не нужны — тут нет кэша браузера
   s = s.replace(/(href|src)="(style\.css|app\.js|i18n\.js)\?v=[^"]*"/g, '$1="$2"');
@@ -331,12 +338,19 @@ try {
     fs.copyFileSync(from, path.join(FONT_OUT, name));
   }
 
+  /* Логотип рядом с интерфейсом кладёт make-icons.js. Без файла шапка
+     приложения показала бы запасной значок вместо логотипа, и заметно
+     это стало бы только в собранном приложении. */
+  if (!fs.existsSync(path.join(OUT, 'logo.png'))) {
+    throw new Error('нет renderer/logo.png — сделай его: node make-icons.js');
+  }
+
   // DSP-модуль общий, но в воркере экспортируется иначе
   const dsp = fs.readFileSync(path.join(__dirname, 'renderer', 'dsp.js'), 'utf8');
   if (!dsp.includes('self.DSP')) throw new Error('renderer/dsp.js потерял экспорт для воркера');
 
   console.log('Интерфейс перенесён из веб-версии:');
-  console.log('  index.html — политика безопасности, блок нейросети, скрипты');
+  console.log('  index.html — политика безопасности, логотип, блок нейросети, скрипты');
   console.log('  style.css  — полоса прогресса нейросети');
   console.log('  app.js     — без изменений');
   console.log('  i18n.js    — без изменений');
