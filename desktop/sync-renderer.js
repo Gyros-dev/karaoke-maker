@@ -88,12 +88,17 @@ const AI_OVERLAY = `<div class="export-overlay hidden" id="ai-overlay">
    текст сама (черновик). Текст уже вставлен — она только расставляет
    по нему времена, и это главный способ работы. Пояснение и подпись
    кнопки переключает updateAsrMode в desktop.js, чтобы человек заранее
-   видел, что произойдёт, и не затёр свой текст распознаванием. */
+   видел, что произойдёт, и не затёр свой текст распознаванием.
+
+   Сразу под заголовком — метка о готовой разметке (#asr-result). Она
+   стоит первой, а не в конце блока: расчёт долгий, и его итог должен
+   попадаться на глаза сразу, а не после прокрутки длинных пояснений. */
 const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
       <div class="asr-head">
         <b>🗣 Разметка текста нейросетью</b>
         <span class="asr-source" id="asr-source"></span>
       </div>
+      <p class="asr-result hidden" id="asr-result"><b id="asr-result-head"></b><span id="asr-result-note"></span></p>
       <p class="asr-warning hidden" id="asr-about-fit">
         <b>Текст на месте — нейросеть расставит по нему времена.</b> Она послушает
         песню, найдёт, где какое слово поётся, и разложит по этим меткам ваши строки:
@@ -221,6 +226,26 @@ const ASR_CSS = `
 }
 .asr-warning b { color: var(--text); }
 .asr-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+
+/* --- Метка о готовой разметке (только в приложении) ---
+   Расчёт долгий, а по его окончании на экране не оставалось никакого
+   следа: окно с итогом закрыли — и непонятно, получилось или нет.
+   Метка остаётся в блоке разметки, переживает переход на другой шаг
+   и обратно и меняется только тогда, когда разметку делают заново. */
+.asr-result {
+  flex-basis: 100%;
+  width: 100%;
+  margin: 0 0 0.8rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.07);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.asr-result b { color: #34d399; font-weight: 600; }
 
 /* --- Оценка времени и спрятанные быстрые варианты (только в приложении) ---
 
