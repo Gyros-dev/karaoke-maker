@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 
 /* ---------- Состояние ---------- */
 const state = {
@@ -5877,7 +5877,7 @@ $('update-dismiss').addEventListener('click', () => {
    NEWS_VERSION — версия, про которую написан список в index.html.
    Она нарочно отдельна от APP_VERSION: мелкий выпуск без новостей
    не должен показывать окно с прошлым списком. */
-const NEWS_VERSION = '1.8.0';
+const NEWS_VERSION = '1.8.1';
 const NEWS_KEY = 'karaoke-news-version';
 
 /* Сравнение номеров вида 1.7.0: −1, 0 или 1 */
