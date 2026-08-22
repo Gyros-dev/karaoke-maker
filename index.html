@@ -10,7 +10,7 @@
   <link rel="icon" href="icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="theme-color" content="#0a0a0f">
-  <link rel="stylesheet" href="style.css?v=1.8.3">
+  <link rel="stylesheet" href="style.css?v=1.8.4">
 </head>
 <body>
 
@@ -29,8 +29,19 @@
   <div class="whatsnew-box" role="dialog" aria-modal="true" aria-labelledby="whatsnew-title">
     <button class="whatsnew-close" id="whatsnew-close" aria-label="Закрыть" title="Закрыть">✕</button>
     <span class="whatsnew-badge"><span class="dot"></span> Обновление</span>
-    <h3 id="whatsnew-title">Что нового в версии 1.8.3</h3>
+    <h3 id="whatsnew-title">Что нового в версии 1.8.4</h3>
     <ul class="whatsnew-list">
+      <li class="only-desktop">
+        <b>📦 Установщик стал легче на 40 МБ.</b>
+        Внутрь приложения по недосмотру ехала вторая копия движка
+        нейросети — 131 МБ, который при работе никто не подключал.
+        Теперь его там нет: 202 МБ вместо 242.
+      </li>
+      <li>
+        <b>⌨️ Подписи клавиш по системе.</b>
+        На Windows в подсказках было написано «Cmd+Z» — клавиши, которой
+        там нет. Сам код работал правильно, врали только надписи.
+      </li>
       <li class="only-desktop">
         <b>🎚 Вокал убирается чище и быстрее.</b>
         Сменили модель на ту самую, которой считает UVR5. Замерили против
@@ -167,9 +178,9 @@
       <span class="hero-get-label">Лучше — приложением: там нейросети убирают вокал и размечают текст</span>
       <span class="hero-get-buttons">
         <a class="btn btn-primary btn-small" id="dl-mac-hero"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.8.3/Karaoke-Punch-1.8.3-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.8.4/Karaoke-Punch-1.8.4-macOS-arm64.dmg">🍎 Скачать для macOS</a>
         <a class="btn btn-primary btn-small" id="dl-win-hero"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.8.3/Karaoke-Punch-1.8.3-Windows-Setup.exe">🪟 Скачать для Windows</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.8.4/Karaoke-Punch-1.8.4-Windows-Setup.exe">🪟 Скачать для Windows</a>
       </span>
     </div>
     <div class="hero-note"><span class="pill">100% приватно</span> файлы не покидают твой компьютер</div>
@@ -220,9 +231,9 @@
   </p>
   <div class="desktop-buttons">
     <a class="btn btn-primary" id="dl-mac"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.8.3/Karaoke-Punch-1.8.3-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.8.4/Karaoke-Punch-1.8.4-macOS-arm64.dmg">🍎 Скачать для macOS</a>
     <a class="btn btn-primary" id="dl-win"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.8.3/Karaoke-Punch-1.8.3-Windows-Setup.exe">🪟 Скачать для Windows</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.8.4/Karaoke-Punch-1.8.4-Windows-Setup.exe">🪟 Скачать для Windows</a>
   </div>
   <p class="desktop-note">
     Бесплатно и с открытым кодом. Каждая модель скачивается один раз при первом
@@ -905,9 +916,9 @@
     <span class="logo-text">Karaoke&nbsp;Punch</span>
   </span>
   <span>Сделано с любовью к музыке · работает без серверов</span>
-  <button class="footer-link" id="btn-whatsnew">Что нового в 1.8.3</button>
+  <button class="footer-link" id="btn-whatsnew">Что нового в 1.8.4</button>
 </footer>
 
-<script src="app.js?v=1.8.3"></script>
+<script src="app.js?v=1.8.4"></script>
 </body>
 </html>
