@@ -555,7 +555,7 @@
             <input type="range" id="seek" min="0" max="1000" value="0">
             <span class="time" id="time-total">0:00</span>
           </div>
-          <div class="mixer">
+          <div class="mixer" title="Отрезки оригинала, размеченные в редакторе, звучат целиком независимо от этого ползунка">
             <span class="mixer-icon">🎤</span>
             <label for="vocal-mix">Вокал</label>
             <input type="range" id="vocal-mix" min="0" max="100" value="0">
@@ -570,7 +570,7 @@
       <button class="btn btn-ghost" id="btn-sound-check">🔊 Проверить звук</button>
       <button class="btn btn-ghost" id="btn-export-lrc">⬇ Текст .lrc</button>
       <button class="btn btn-ghost hidden" id="btn-export-lrc-words" title="Расширенный LRC: время каждого слова внутри строки">⬇ .lrc со словами</button>
-      <button class="btn btn-ghost" id="btn-export-wav">⬇ Минусовка .wav</button>
+      <button class="btn btn-ghost" id="btn-export-wav" title="Минусовка с оригиналом на отрезках, размеченных в редакторе">⬇ Минусовка .wav</button>
       <label class="btn btn-ghost export-quality" for="video-quality">Качество
         <select id="video-quality">
           <option value="720">HD · 1280×720</option>
@@ -609,17 +609,35 @@
         тяни за края блока — сдвинется граница, за середину — вся строка.
         Начала строк простукиваются пробелом: кнопка «✎ простучать заново».
       </p>
+      <p>
+        <b>Верхняя полоса — оригинал.</b> Протяни по ней мышью — на этом куске вместо
+        минусовки зазвучат настоящие слова из записи: удобно для вступления, которое
+        петь не хочется. Тяни за края, чтобы поправить границы; крестик, двойной щелчок
+        или <kbd>Delete</kbd> убирают отрезок. Внутри отрезка оригинал слышен целиком,
+        как бы ни стоял ползунок «Вокал» в караоке, — и точно так же он попадёт
+        в минусовку&nbsp;.wav и в записанное видео.
+      </p>
       <div class="timeline-legend">
+        <span class="tl-key"><i class="sw sw-orig"></i> здесь звучит оригинал</span>
         <span class="tl-key"><i class="sw sw-voice"></i> голос <b id="tl-voice-note">— только в приложении после удаления вокала</b></span>
         <span class="tl-key"><i class="sw sw-line"></i> строка</span>
         <span class="tl-key"><i class="sw sw-guess"></i> ≈ время на глазок</span>
         <span class="tl-key"><i class="sw sw-word"></i> слова выбранной строки</span>
         <span class="tl-key"><i class="sw sw-own"></i> своё время, если строку подтянуло к голосу</span>
       </div>
+      <p>
+        <b>🧲 Магнит.</b> При перетаскивании границы прилипают к краям соседних строк,
+        к указателю воспроизведения, к границам отрезков оригинала, к вступлениям
+        и концам пения (когда огибающая голоса есть) и к краям песни. В месте
+        прилипания встаёт цветная направляющая — цвет говорит, за что зацепилось.
+        Порог одинаков на любом масштабе. Зажатый <kbd>Alt</kbd> отключает магнит
+        на время, клавиша <kbd>S</kbd> — совсем.
+      </p>
       <p class="timeline-keys">
         <kbd>пробел</kbd> играть · <kbd>↑</kbd><kbd>↓</kbd> строка · <kbd>←</kbd><kbd>→</kbd> начало
         · <kbd>[</kbd><kbd>]</kbd> конец · <kbd>Shift</kbd> точнее, <kbd>Alt</kbd> грубее
-        · <kbd>Enter</kbd> прослушать · <kbd>L</kbd> по кругу · <kbd>Cmd+Z</kbd> отменить
+        · <kbd>Enter</kbd> прослушать · <kbd>L</kbd> по кругу · <kbd>S</kbd> магнит
+        · <kbd>Delete</kbd> убрать отрезок · <kbd>Cmd+Z</kbd> отменить
         · колесо — прокрутка, с <kbd>Cmd</kbd> — масштаб
       </p>
     </details>
@@ -660,7 +678,7 @@
       </span>
       <span class="ed-group">
         <button class="nudge-btn" id="tl-loop" title="Играть выбранную строку по кругу (клавиша L)">↻ по кругу</button>
-        <button class="nudge-btn on" id="tl-snap" title="Притягивать границы к настоящему вступлению голоса (клавиша S)">⇥ к голосу</button>
+        <button class="nudge-btn on" id="tl-snap" title="Магнит: границы прилипают к краям соседних строк, к указателю, к отрезкам оригинала и к настоящему вступлению голоса. Клавиша S — выключить совсем, зажатый Alt — отключить на время перетаскивания">🧲 магнит</button>
       </span>
       <!-- Сдвиг всей разметки разом: раньше жил на шаге «Синхронизация» -->
       <span class="ed-group" id="shift-all">

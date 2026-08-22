@@ -14,6 +14,7 @@ const state = {
   originalBuffer: null,     // AudioBuffer исходной песни
   instrumentalBuffer: null, // AudioBuffer с приглушённым вокалом (null для моно)
   lines: [],                // [{ text, time|null, end:number|null }]
+  origSpans: [],            // отрезки, где вместо минусовки звучит оригинал
   vocalMix: 0,              // 0..1 — громкость вокала в караоке
   bgImage: null,            // dataURL картинки-фона для караоке
   eq: { low: 0, mid: 0, high: 0 }, // эквалайзер, дБ (−12…+12)
@@ -158,6 +159,108 @@ function усиленияМикса(vocalMix, hasInst, forceVocal) {
   return { вокал: v, минусовка: hasInst ? 1 - v : 0 };
 }
 
+/* ---------- Отрезки, где звучит оригинал ----------
+
+   Человек размечает на дорожке куски, в которых вместо минусовки
+   должна звучать сама песня со словами: во вступлении «Кирпичей»
+   поёт оригинал, а дальше поёт он сам. Нейросеть тут ни при чём —
+   обе дорожки уже есть, отрезок только выбирает, какая играет.
+
+   Источник переключается не перекоммутацией узлов, а расписанием на
+   тех же двух усилениях, что и ползунок вокала. Поэтому одно и то же
+   расписание годится и живому плееру, и OfflineAudioContext в
+   экспорте: считает его одна функция — расхождению взяться неоткуда.
+
+   ПРАВИЛО ГРОМКОСТИ. Внутри отрезка оригинал звучит целиком, как бы
+   ни стоял ползунок «Вокал»: отрезок для того и ставится, чтобы
+   услышать оригинальные слова. Снаружи ползунок работает как раньше.
+
+   ПОЧЕМУ НЕ ЩЁЛКАЕТ. Оригинал ≈ минусовка + вокал, а усиления в
+   перекрёстном затухании всё время дают в сумме единицу: вокал идёт
+   вне→1, минусовка одновременно (1−вне)→0. Значит музыкальная часть
+   на переходе не меняется вовсе, а голос вводится ровным линейным
+   нарастанием за 50 мс. Скачку между соседними отсчётами взяться
+   неоткуда — это проверяется числами в самопроверке. */
+const ОТРЕЗОК_ФЕЙД = 0.05;   // перекрёстное затухание на границе, с
+const ОТРЕЗОК_МИН = 0.2;     // короче отрезок не делаем
+
+/* Отрезки в порядок: выкинуть вырожденные, отсортировать, слить
+   наложенные и слишком близкие. Меньше двух затуханий между соседями
+   не оставляем — иначе на стыке вышел бы дребезг вместо перехода. */
+function нормОтрезки(spans, длина) {
+  const предел = длина > 0 ? длина : Infinity;
+  const годные = [];
+  for (const s of spans || []) {
+    const a = Math.max(0, Math.min(+s.start, +s.end));
+    const b = Math.min(предел, Math.max(+s.start, +s.end));
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b - a < 0.01) continue;
+    годные.push({ start: a, end: b });
+  }
+  годные.sort((p, q) => p.start - q.start);
+  const итог = [];
+  for (const s of годные) {
+    const пред = итог[итог.length - 1];
+    if (пред && s.start - пред.end < ОТРЕЗОК_ФЕЙД * 2) пред.end = Math.max(пред.end, s.end);
+    else итог.push(s);
+  }
+  return итог;
+}
+
+/* Отрезки текущего проекта — всегда уже приведённые в порядок */
+function отрезкиОригинала() {
+  return state.origSpans || [];
+}
+
+/* Доля оригинала в момент t: 1 внутри отрезка, 0 снаружи, линейно
+   между — это и есть перекрёстное затухание. Затухание лежит СНАРУЖИ
+   отрезка (вход [start−f, start], выход [end, end+f]), поэтому всё,
+   что человек отметил, звучит оригиналом целиком и без огрызков. */
+function доляОригинала(t, spans) {
+  const f = ОТРЕЗОК_ФЕЙД;
+  for (const s of spans) {
+    if (t <= s.start - f || t >= s.end + f) continue;
+    if (t >= s.start && t <= s.end) return 1;
+    if (t < s.start) return (t - (s.start - f)) / f;
+    return 1 - (t - s.end) / f;
+  }
+  return 0;
+}
+
+/* Переломы расписания: начало и конец каждого затухания. Начало песни
+   обрезаем нулём — до неё звука нет, а точки обязаны идти по возрастанию. */
+function точкиОтрезков(spans) {
+  const pts = [];
+  for (const s of spans) {
+    pts.push(Math.max(0, s.start - ОТРЕЗОК_ФЕЙД), s.start, s.end, s.end + ОТРЕЗОК_ФЕЙД);
+  }
+  return pts;
+}
+
+/* Расписание переключения источника на усилениях смеси.
+   t0 — момент контекста, в который звучит нулевая секунда песни.
+   Годится и живому контексту (t0 = audio.startedAt), и офлайнному
+   (t0 = 0), и записи видео (t0 = момент запуска источников). */
+function расписатьОтрезки(ctx, vGain, iGain, база, spans, t0) {
+  const сейчас = ctx.currentTime;
+  const от = сейчас - t0;   // какая секунда песни звучит прямо сейчас
+  const пары = [
+    [vGain.gain, база.вокал, 1],
+    [iGain.gain, база.минусовка, 0],
+  ];
+  const знач = (доля, вне, внутри) => вне + (внутри - вне) * доля;
+  for (const [param, вне, внутри] of пары) {
+    param.cancelScheduledValues(сейчас);
+    param.setValueAtTime(знач(доляОригинала(от, spans), вне, внутри), сейчас);
+  }
+  for (const t of точкиОтрезков(spans)) {
+    if (t <= от) continue;
+    const доля = доляОригинала(t, spans);
+    for (const [param, вне, внутри] of пары) {
+      param.linearRampToValueAtTime(знач(доля, вне, внутри), t0 + t);
+    }
+  }
+}
+
 /* ---------- Аудио-движок ---------- */
 const audio = {
   ctx: null,
@@ -248,7 +351,6 @@ const audio = {
     const fade = ctx.createGain();
     смесь.output.connect(fade);
     fade.connect(ctx.destination);
-    this.applyMix();
 
     const orig = ctx.createBufferSource();
     orig.buffer = state.originalBuffer;
@@ -269,6 +371,9 @@ const audio = {
     this.sources.forEach((s) => s.start(t, this.offset));
     this.startedAt = t - this.offset;
     this.playing = true;
+    /* Громкости расставляем ПОСЛЕ startedAt: расписание отрезков
+       считается от него, и без него оригинал заиграл бы не там */
+    this.applyMix();
     this.checkAudible();
 
     orig.onended = () => {
@@ -305,11 +410,22 @@ const audio = {
     });
   },
 
+  /* Громкости смеси. Пока играем — не голыми значениями, а расписанием:
+     на размеченных отрезках источник переключается на оригинал. Ползунок
+     вокала можно двигать прямо во время игры, расписание пересчитается
+     от текущей секунды. */
   applyMix() {
     if (!this.vocalGain) return;
-    const g = усиленияМикса(state.vocalMix, !!state.instrumentalBuffer, this.forceVocal);
-    this.vocalGain.gain.value = g.вокал;
-    this.instGain.gain.value = g.минусовка;
+    const база = усиленияМикса(state.vocalMix, !!state.instrumentalBuffer, this.forceVocal);
+    if (!this.playing) {
+      this.vocalGain.gain.cancelScheduledValues(0);
+      this.instGain.gain.cancelScheduledValues(0);
+      this.vocalGain.gain.value = база.вокал;
+      this.instGain.gain.value = база.минусовка;
+      return;
+    }
+    расписатьОтрезки(this.ctx, this.vocalGain, this.instGain, база,
+      отрезкиОригинала(), this.startedAt);
   },
 };
 
@@ -605,6 +721,12 @@ async function самопроверкаЗвука() {
 
   const уровни0 = уровни(ноль), уровни100 = уровни(сотня);
 
+  /* Отрезки оригинала и магнит проверяются здесь же: снаружи, из
+     самопроверки приложения, вызывается ровно одна считающая функция —
+     эта. Заводить вторую точку входа значило бы править desktop/main.js. */
+  const отрезки = await проверкаОтрезков(песня, минус, SR, N);
+  const магнит = проверкаМагнита();
+
   return {
     остатокВокала0, остатокВокала100,
     сМинусовкой, сПесней,
@@ -613,6 +735,7 @@ async function самопроверкаЗвука() {
     уровни0, уровни100,
     минусовкаСтерео: +корр(минус.getChannelData(0), минус.getChannelData(1), 0).toFixed(3),
     подавлениеДб: +(остатокВокала0 - остатокВокала100).toFixed(1),
+    отрезки, магнит,
     вНорме:
       остатокВокала0 <= -12                        // на нуле голоса почти нет
       && остатокВокала100 >= -3                    // на сотне он весь на месте
@@ -620,8 +743,324 @@ async function самопроверкаЗвука() {
       && сМинусовкой >= 0.98      // на нуле звучит ровно минусовка
       && сПесней >= 0.98          // на сотне — ровно песня
       && эхо < 0.25               // второй копии со сдвигом нет (целое даёт 0,11)
-      && уровни0.пик <= 1 && уровни100.пик <= 1,
+      && уровни0.пик <= 1 && уровни100.пик <= 1
+      && отрезки.вНорме && магнит.вНорме,
   };
+}
+
+/* ---------- Самопроверка отрезков оригинала ----------
+
+   Проверяет ровно то, что обещано человеку:
+
+     • внутри отрезка звучит оригинал, снаружи — минусовка. Меряем
+       корреляцией выхода с той и с другой дорожкой по кускам,
+       заведомо лежащим внутри и снаружи;
+
+     • на границах не щёлкает: наибольший скачок между соседними
+       отсчётами на переходе не больше того, что бывает в этом же
+       звуке вдали от границ. Иначе переход был бы слышнее музыки;
+
+     • живой звук и выгруженный файл говорят одно и то же. Цепи у них
+       разные (в живой стоят эквалайзер и лимитер), поэтому сравниваем
+       не отсчёты, а долю оригинала по окнам в 20 мс — и требуем, чтобы
+       ни в одном окне источник не разошёлся.
+
+   Долю оригинала достаём проекцией: (выход − минусовка) на
+   (оригинал − минусовка). Для живой цепи опоры берём тоже из неё —
+   те же прогоны без отрезков при вокале 0 и 1, иначе окраска
+   эквалайзера и лимитера села бы в число вместо переключения. */
+async function проверкаОтрезков(исхПесня, исхМинус, SR, N) {
+  const отрезки = [{ start: 0.4, end: 0.9 }];
+  const дл = N / SR;
+
+  /* Обе дорожки берём вполовину тише. Лимитер на выходе живой цепи —
+     штука нелинейная, и на громком сигнале он сжимает по-разному в
+     разных прогонах. Тогда сравнение мерило бы работу лимитера, а не
+     переключение источника, ради которого проверка и затеяна.
+     На тихом сигнале лимитер не срабатывает вовсе и цепь линейна. */
+  const тише = (buf) => {
+    const c = new OfflineAudioContext(2, N, SR).createBuffer(2, N, SR);
+    for (let ch = 0; ch < 2; ch++) {
+      const из = buf.getChannelData(Math.min(ch, buf.numberOfChannels - 1));
+      const в = c.getChannelData(ch);
+      for (let k = 0; k < Math.min(N, из.length); k++) в[k] = из[k] * 0.4;
+    }
+    return c;
+  };
+  const песня = тише(исхПесня);
+  const минус = тише(исхМинус);
+
+  // Живая цепь — та же, что играет в колонки
+  const живой = async (спаны, vocalMix) => {
+    const ctx = new OfflineAudioContext(2, N, SR);
+    const см = собратьМикс(ctx);
+    см.output.connect(ctx.destination);
+    const o = ctx.createBufferSource(); o.buffer = песня; o.connect(см.vocalGain);
+    const i = ctx.createBufferSource(); i.buffer = минус; i.connect(см.instGain);
+    расписатьОтрезки(ctx, см.vocalGain, см.instGain,
+      усиленияМикса(vocalMix, true, false), спаны, 0);
+    o.start(); i.start();
+    return ctx.startRendering();
+  };
+
+  // Выгрузка — та самая функция, что отдаёт человеку файл
+  const было = {
+    o: state.originalBuffer, i: state.instrumentalBuffer, s: state.origSpans,
+  };
+  let файл;
+  try {
+    state.originalBuffer = песня;
+    state.instrumentalBuffer = минус;
+    state.origSpans = отрезки;
+    файл = await собратьМинусовку();
+  } finally {
+    state.originalBuffer = было.o;
+    state.instrumentalBuffer = было.i;
+    state.origSpans = было.s;
+  }
+
+  const жив = await живой(отрезки, 0);
+  const опораМинус = await живой([], 0);
+  const опораОригинал = await живой([], 1);
+
+  const мон = (b) => {
+    const l = b.getChannelData(0), r = b.getChannelData(1);
+    const m = new Float32Array(l.length);
+    for (let k = 0; k < l.length; k++) m[k] = (l[k] + r[k]) / 2;
+    return m;
+  };
+  const корр = (a, b, лаг, от, до) => {
+    let xy = 0, xx = 0, yy = 0;
+    for (let k = от; k < до; k++) {
+      const x = a[k], y = b[k + лаг] || 0;
+      xy += x * y; xx += x * x; yy += y * y;
+    }
+    return xy / (Math.sqrt(xx * yy) || 1e-9);
+  };
+  const с = (t) => Math.round(t * SR);
+  const мЖив = мон(жив), мФайл = мон(файл);
+  const мПесня = мон(песня), мМинус = мон(минус);
+
+  // Лимитер живой цепи задерживает звук — сначала находим сдвиг
+  let лаг = 0, лучш = -2;
+  const макс = Math.round(SR * 0.02);
+  for (let g = -макс; g <= макс; g++) {
+    const r = корр(мЖив, мМинус, g, с(1.0), с(дл - 0.05));
+    if (r > лучш) { лучш = r; лаг = g; }
+  }
+
+  const живВнутриСПесней = +корр(мЖив, мПесня, лаг, с(0.5), с(0.85)).toFixed(3);
+  const живВнутриСМинусовкой = +корр(мЖив, мМинус, лаг, с(0.5), с(0.85)).toFixed(3);
+  const живСнаружиСМинусовкой = +корр(мЖив, мМинус, лаг, с(1.0), с(дл - 0.05)).toFixed(3);
+  const живСнаружиСПесней = +корр(мЖив, мПесня, лаг, с(1.0), с(дл - 0.05)).toFixed(3);
+  const файлВнутриСПесней = +корр(мФайл, мПесня, 0, с(0.5), с(0.85)).toFixed(3);
+  const файлСнаружиСМинусовкой = +корр(мФайл, мМинус, 0, с(1.0), с(дл - 0.05)).toFixed(3);
+
+  // Щелчки: наибольший скачок между соседними отсчётами
+  const скачок = (buf, от, до) => {
+    const d = buf.getChannelData(0);
+    let m = 0;
+    for (let k = Math.max(1, с(от)); k < Math.min(d.length, с(до)); k++) {
+      const v = Math.abs(d[k] - d[k - 1]);
+      if (v > m) m = v;
+    }
+    return +m.toFixed(4);
+  };
+  /* Границу меряем ровно по затуханию плюс пара миллисекунд с краёв,
+     а не по широкому окну: в широком наибольшим оказался бы обычный
+     шум песни, и проверка сравнивала бы шум сам с собой. */
+  const кр = 0.01;
+  const вход = [отрезки[0].start - ОТРЕЗОК_ФЕЙД - кр, отрезки[0].start + кр];
+  const выход = [отрезки[0].end - кр, отрезки[0].end + ОТРЕЗОК_ФЕЙД + кр];
+  const наГранице = Math.max(
+    скачок(жив, вход[0], вход[1]), скачок(жив, выход[0], выход[1]),
+    скачок(файл, вход[0], вход[1]), скачок(файл, выход[0], выход[1]));
+  // Для сравнения — что в этом же звуке творится вдали от границ
+  const вЗвуке = Math.max(
+    скачок(жив, 1.05, дл - 0.05), скачок(файл, 1.05, дл - 0.05));
+
+  /* Доля оригинала по окнам 20 мс. Живой выход перед этим сдвигаем
+     обратно на задержку лимитера, иначе переход уехал бы на 6 мс. */
+  const сдвинуть = (x, л) => {
+    const y = new Float32Array(x.length);
+    for (let k = 0; k < x.length; k++) y[k] = x[k - л] || 0;
+    return y;
+  };
+  const профиль = (x, а, б) => {
+    const шаг = Math.round(SR * 0.02);
+    const n = Math.floor(x.length / шаг);
+    const p = new Float32Array(n);
+    for (let w = 0; w < n; w++) {
+      let num = 0, den = 0;
+      for (let k = w * шаг; k < (w + 1) * шаг; k++) {
+        const d = б[k] - а[k];
+        num += (x[k] - а[k]) * d; den += d * d;
+      }
+      p[w] = den > 1e-9 ? num / den : 0;
+    }
+    return p;
+  };
+  /* Сдвигаем ВСЕ три живых сигнала одинаково: и выход, и обе опоры
+     задержаны лимитером на один и тот же срок, а профиль — проекция
+     выхода на разность опор, и разъехавшийся сдвиг всё бы испортил */
+  const пЖив = профиль(сдвинуть(мЖив, лаг),
+    сдвинуть(мон(опораМинус), лаг), сдвинуть(мон(опораОригинал), лаг));
+  const пФайл = профиль(мФайл, мМинус, мПесня);
+  let расхождение = 0, разныйИсточник = 0;
+  // Первые окна пропускаем: там разгоняется лимитер, а не отрезок
+  for (let w = 5; w < пЖив.length - 1; w++) {
+    расхождение = Math.max(расхождение, Math.abs(пЖив[w] - пФайл[w]));
+    if ((пЖив[w] > 0.5) !== (пФайл[w] > 0.5)) разныйИсточник++;
+  }
+  // И насколько выгруженный файл повторяет то, что задумано расписанием
+  let поРасчёту = 0;
+  const шагОкна = Math.round(SR * 0.02);
+  for (let w = 0; w < пФайл.length - 1; w++) {
+    /* Расчётную долю усредняем по тому же окну, а не берём в его
+       середине: затухание короче окна, и точка в середине давала бы
+       расхождение там, где на деле всё сходится */
+    let ср = 0;
+    for (let k = w * шагОкна; k < (w + 1) * шагОкна; k++) ср += доляОригинала(k / SR, отрезки);
+    поРасчёту = Math.max(поРасчёту, Math.abs(пФайл[w] - ср / шагОкна));
+  }
+
+  return {
+    отрезок: отрезки[0],
+    живВнутриСПесней, живВнутриСМинусовкой,
+    живСнаружиСМинусовкой, живСнаружиСПесней,
+    файлВнутриСПесней, файлСнаружиСМинусовкой,
+    задержкаЖивойЦепиМс: +((-лаг / SR) * 1000).toFixed(2),
+    скачокНаГранице: наГранице,
+    скачокВЗвуке: вЗвуке,
+    файлПротивРасчёта: +поРасчёту.toFixed(3),
+    живойПротивФайлаМакс: +расхождение.toFixed(3),
+    оконСРазнымИсточником: разныйИсточник,
+    вНорме:
+      живВнутриСПесней >= 0.98            // внутри отрезка звучит оригинал
+      && живВнутриСМинусовкой <= 0.9      // и это не минусовка
+      && живСнаружиСМинусовкой >= 0.98    // снаружи — ровно минусовка
+      && живСнаружиСПесней <= 0.9
+      && файлВнутриСПесней >= 0.98        // в файле то же самое
+      && файлСнаружиСМинусовкой >= 0.98
+      && наГранице <= вЗвуке              // переход не громче того, что и так есть
+      && поРасчёту <= 0.02                // файл повторяет расписание
+      && разныйИсточник === 0,            // живой звук и файл не разошлись
+  };
+}
+
+/* ---------- Самопроверка магнита ----------
+
+   Считает, а не смотрит: подставляет заведомую разметку и спрашивает
+   примагнитить(), куда встанет граница. Проверяет каждую породу точек,
+   что своя строка и свой отрезок целью не считаются, что зажатый Alt
+   и общий выключатель магнит отменяют — и что порог задан в пикселях:
+   на впятеро более крупном масштабе то же расстояние в секундах уже
+   не притягивает. */
+function проверкаМагнита() {
+  const было = {
+    lines: state.lines, spans: state.origSpans, buf: state.originalBuffer,
+    off: audio.offset, play: audio.playing,
+    px: editor.pxPerSec, scroll: editor.scrollT, snap: editor.snap,
+    без: editor.безМагнита, key: editor.spansKey, snapped: editor.snapped,
+    runs: voice.runs, level: voice.level,
+  };
+  try {
+    // Песня 12 секунд: длина нужна, чтобы магнит знал её край
+    state.originalBuffer = new OfflineAudioContext(1, 1, 8000)
+      .createBuffer(1, 8000 * 12, 8000);
+    audio.playing = false;
+    editor.pxPerSec = 40;     // порог 12 px — это 0,3 с
+    editor.scrollT = 0;
+    editor.snap = true;
+    editor.безМагнита = false;
+    voice.runs = null;
+    voice.level = null;
+
+    const строки = () => [2, 4, 6, 8, 10].map((t, i) => ({
+      text: 'Строка ' + (i + 1), time: t, end: null,
+      ручнойКонец: false, сомнительная: false,
+    }));
+    const настроить = (о) => {
+      state.lines = о.строки === false ? [] : строки();
+      state.origSpans = о.отрезки || [];
+      voice.runs = о.голос || null;
+      voice.level = о.голос ? new Uint8Array(1200) : null;
+      audio.offset = о.указатель == null ? 4 : о.указатель;
+      editor.spansKey = '';
+    };
+    const проба = (t, что) => {
+      const r = примагнитить(t, что);
+      return { стало: +r.toFixed(4), вид: editor.snapped ? editor.snapped.вид : null };
+    };
+
+    настроить({});
+    const кСтроке = проба(6.12);                       // ждём 6,0
+    const свояСтрокаНеЦель = проба(6.12, { кромеСтроки: 2 });
+
+    настроить({ указатель: 7.5 });
+    const кУказателю = проба(7.42);                    // ждём 7,5
+
+    настроить({ строки: false, отрезки: [{ start: 1, end: 3 }] });
+    const кОтрезку = проба(1.12);                      // ждём 1,0
+    const свойОтрезокНеЦель = проба(1.12, { кроме: 0 });
+
+    настроить({ строки: false, голос: [{ start: 8.4, end: 9.2 }] });
+    const кГолосу = проба(8.55);                       // ждём 8,4
+    const кКонцуПения = проба(9.05);                   // ждём 9,2
+
+    настроить({ строки: false });
+    const кНачалуПесни = проба(0.11);                  // ждём 0
+    const кКонцуПесни = проба(11.93);                  // ждём 12
+
+    настроить({});
+    editor.безМагнита = true;
+    const сAlt = проба(6.12);                          // ждём 6,12 как есть
+    editor.безМагнита = false;
+    editor.snap = false;
+    const выключен = проба(6.12);
+    editor.snap = true;
+
+    // Порог в пикселях: 0,25 с — это 10 px при масштабе 40 и 50 px при 200
+    const мелко = проба(6.25);
+    editor.pxPerSec = 200;
+    const крупно = проба(6.25);
+    editor.pxPerSec = 40;
+
+    const о = {
+      кСтроке, кУказателю, кОтрезку, кГолосу, кКонцуПения,
+      кНачалуПесни, кКонцуПесни,
+      свояСтрокаНеЦель, свойОтрезокНеЦель, сAlt, выключен,
+      порогПри40: мелко, порогПри200: крупно,
+    };
+    о.вНорме =
+      кСтроке.стало === 6 && кСтроке.вид === 'строка'
+      && кУказателю.стало === 7.5 && кУказателю.вид === 'указатель'
+      && кОтрезку.стало === 1 && кОтрезку.вид === 'оригинал'
+      && кГолосу.стало === 8.4 && кГолосу.вид === 'голос'
+      && кКонцуПения.стало === 9.2 && кКонцуПения.вид === 'голос'
+      && кНачалуПесни.стало === 0 && кНачалуПесни.вид === 'край'
+      && кКонцуПесни.стало === 12 && кКонцуПесни.вид === 'край'
+      && свояСтрокаНеЦель.стало !== 6
+      && свойОтрезокНеЦель.стало === 1.12
+      && сAlt.стало === 6.12 && сAlt.вид === null
+      && выключен.стало === 6.12
+      && мелко.стало === 6 && крупно.стало === 6.25;
+    return о;
+  } finally {
+    state.lines = было.lines;
+    state.origSpans = было.spans;
+    state.originalBuffer = было.buf;
+    audio.offset = было.off;
+    audio.playing = было.play;
+    editor.pxPerSec = было.px;
+    editor.scrollT = было.scroll;
+    editor.snap = было.snap;
+    editor.безМагнита = было.без;
+    editor.spansKey = было.key;
+    editor.snapped = было.snapped;
+    voice.runs = было.runs;
+    voice.level = было.level;
+  }
 }
 
 /* Трёхполосный эквалайзер: низкие/средние/высокие.
@@ -897,6 +1336,16 @@ function saveProject() {
     // Строки, чьё время нейросеть подобрала на глазок при подгонке текста
     guess: state.lines.length ? state.lines.map((l) => !!l.сомнительная)
       : (keepPrev && prev.guess) || [],
+    /* Отрезки, где вместо минусовки звучит оригинал. Умолчание — пустой
+       список, так что переносить между поколениями оформления (STYLE_GEN)
+       тут нечего: старый проект просто приходит без отрезков.
+
+       Условие такое же, как у времён: пока строки в памяти не разобраны,
+       проект ещё не открыт — и стирать чужую разметку нельзя. А когда
+       открыт, пустой список означает «человек убрал все отрезки», и это
+       обязано сохраниться, а не подмениться прежними. */
+    origSpans: state.lines.length ? отрезкиОригинала().map((s) => ({ ...s }))
+      : (keepPrev && prev.origSpans) || [],
     bg: state.bgImage,
     // Огибающая голоса: по ней сцена знает конец строки и проигрыши
     voice: voice.level ? voiceToText(voice.level) : ((keepPrev && prev.voice) || null),
@@ -1028,6 +1477,7 @@ async function handleFile(file) {
     }
     // Времена прежней песни новой не годятся: строки стоят не на своих местах
     state.lines = [];
+    state.origSpans = [];   // и отрезки оригинала — они тоже про прежнюю песню
     editor.sel = -1;
     editor.peaks = null;
     clearHistory();
@@ -1070,6 +1520,8 @@ async function handleFile(file) {
     if (saved && saved.name === file.name) {
       if (saved.lyrics) $('lyrics-input').value = saved.lyrics;
       if (saved.bg) setBgImage(saved.bg);
+      // Отрезки оригинала: длину знаем только сейчас — по ней и обрезаем
+      state.origSpans = нормОтрезки(saved.origSpans, buffer.duration);
       // Огибающая голоса от прошлого разделения этой же песни
       if (saved.voice) restoreVoiceTrack(saved.voice, buffer.duration);
       if (saved.eq) {
@@ -2733,13 +3185,43 @@ function bufferToWav(buffer) {
   return new Blob([ab], { type: 'audio/wav' });
 }
 
-$('btn-export-wav').addEventListener('click', () => {
+/* Минусовка на выгрузку — с оригиналом на размеченных отрезках.
+
+   Считаем офлайн тем же расписанием, что играет в колонки: если в файле
+   окажется не то, что человек слышал в караоке, — это провал. Цепь тут
+   короче плеерной (без эквалайзера и лимитера): выгружается дорожка
+   аккомпанемента, а не готовая смесь, и такой она была всегда. */
+async function собратьМинусовку() {
+  const inst = state.instrumentalBuffer;
+  if (!inst) return null;
+  const spans = отрезкиОригинала();
+  if (!spans.length) return inst;
+
+  const orig = state.originalBuffer;
+  const SR = inst.sampleRate;
+  const каналов = Math.max(inst.numberOfChannels, orig.numberOfChannels);
+  const ctx = new OfflineAudioContext(каналов, Math.max(inst.length, orig.length), SR);
+  const vGain = ctx.createGain();
+  const iGain = ctx.createGain();
+  vGain.connect(ctx.destination);
+  iGain.connect(ctx.destination);
+  const o = ctx.createBufferSource(); o.buffer = orig; o.connect(vGain);
+  const i = ctx.createBufferSource(); i.buffer = inst; i.connect(iGain);
+  // Ползунок вокала в этот файл не входит: снаружи отрезков — чистая
+  // минусовка, внутри — оригинал целиком
+  расписатьОтрезки(ctx, vGain, iGain, усиленияМикса(0, true, false), spans, 0);
+  o.start(); i.start();
+  return ctx.startRendering();
+}
+
+$('btn-export-wav').addEventListener('click', async () => {
   if (!state.instrumentalBuffer) {
     alert('Для моно-файла минусовку сделать нельзя.');
     return;
   }
   const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
-  download(bufferToWav(state.instrumentalBuffer), `${name} (минус).wav`);
+  const buf = await собратьМинусовку();
+  download(bufferToWav(buf), `${name} (минус).wav`);
 });
 
 /* ============================================================
@@ -2761,9 +3243,11 @@ const editor = {
   stageKey: '',
 
   sel: -1,       // выбранная строка (номер в state.lines), -1 — ничего
+  origSel: -1,   // выбранный отрезок оригинала (номер в state.origSpans)
   loop: false,   // играть выбранную строку по кругу
-  snap: true,    // притягивать границы к настоящему вступлению голоса
-  snapped: null, // куда притянулось в этом перетаскивании — для подсветки
+  snap: true,     // магнит: притягивать границы к осмысленным точкам
+  безМагнита: false, // зажат Alt — магнит отключён на время
+  snapped: null,  // { t, вид } — куда притянулось, для направляющей
   hearVocal: true, // в редакторе по умолчанию звучит оригинал с вокалом
 
   // Отмена и повтор: снимки времён, см. pushHistory
@@ -2833,7 +3317,7 @@ function spanOfRow(row) {
 const HISTORY_MAX = 80;
 
 function snapshotTimings() {
-  return state.lines.map((l) => ({
+  const snap = state.lines.map((l) => ({
     /* Текст в снимке лежит, но при обычной отмене не применяется —
        он нужен только чтобы вернуть удалённую строку целиком.
        См. applySnapshot: пока число строк не изменилось, текст не трогаем. */
@@ -2844,10 +3328,21 @@ function snapshotTimings() {
     guess: !!l.сомнительная,
     words: l.words ? l.words.map((w) => ({ text: w.text, time: w.time, end: w.end })) : null,
   }));
+  /* Отрезки оригинала едут в снимке отдельным свойством, а не лишним
+     элементом списка: снимок повсюду перебирается как список строк,
+     и чужой элемент внутри пришлось бы обходить в каждом месте. */
+  snap.отрезки = отрезкиОригинала().map((s) => ({ ...s }));
+  return snap;
 }
 
 function snapshotEqual(a, b) {
   if (!a || !b || a.length !== b.length) return false;
+  const ao = a.отрезки || [];
+  const bo = b.отрезки || [];
+  if (ao.length !== bo.length) return false;
+  for (let i = 0; i < ao.length; i++) {
+    if (ao[i].start !== bo[i].start || ao[i].end !== bo[i].end) return false;
+  }
   for (let i = 0; i < a.length; i++) {
     const x = a[i];
     const y = b[i];
@@ -2940,12 +3435,15 @@ function applySnapshot(snap) {
       else delete l.words;
     });
   }
+  state.origSpans = нормОтрезки(snap.отрезки || [], audio.duration);
+  if (editor.origSel >= state.origSpans.length) editor.origSel = -1;
   editor.spansKey = '';
   refreshTimes();
   renderEditList();
   updateWordExportBtn();
   editor.stageKey = '';
   renderEditStage();
+  audio.applyMix();   // отменили правку отрезка — звук меняется сразу
   saveProject();
   drawTimeline();
 }
@@ -3695,6 +4193,9 @@ function updateEditStage() {
 
    Дорожка собрана из полос, сверху вниз:
      • линейка времени;
+     • оригинал — отрезки, где вместо минусовки звучит сама песня
+       со словами. Пусто по умолчанию: протянул мышью — появился
+       отрезок, потянул за край — сдвинул границу;
      • голос — огибающая вокальной дорожки. Её считает настольная
        версия после удаления вокала нейросетью, и по ней прямо видно,
        где на самом деле поют. На сайте этой полосы нет, дорожка просто
@@ -3708,12 +4209,13 @@ function updateEditStage() {
    ============================================================ */
 
 const LANE_RULER = 18;
+const LANE_ORIG = 22;
 const LANE_VOICE = 34;
 const LANE_WAVE = 46;
 const LANE_LINES = 38;
 const LANE_WORDS = 24;
 const EDGE_GRAB = 6;      // сколько пикселей у края блока считаются «за край»
-const SNAP_PX = 12;       // на таком расстоянии граница притягивается к голосу
+const SNAP_PX = 12;       // на таком расстоянии от точки магнит притягивает границу
 const MIN_SPAN = 0.08;    // короче строку и слово не делаем
 
 /* Полосы дорожки: где какая лежит и какой высоты. Полоса голоса
@@ -3726,6 +4228,7 @@ function timelineLanes() {
   let y = 0;
   const L = {};
   L.ruler = { y, h: px(LANE_RULER) }; y += L.ruler.h;
+  L.orig = { y, h: px(LANE_ORIG) }; y += L.orig.h;
   if (voiceReady()) { L.voice = { y, h: px(LANE_VOICE) }; y += L.voice.h; }
   L.wave = { y, h: px(LANE_WAVE) }; y += L.wave.h;
   L.lines = { y, h: px(LANE_LINES) }; y += L.lines.h;
@@ -3785,6 +4288,61 @@ function clipText(g, text, maxW) {
   let s = text;
   while (s.length > 1 && g.measureText(s + '…').width > maxW) s = s.slice(0, -1);
   return s.length > 1 ? s + '…' : '';
+}
+
+/* ---------- Полоса отрезков оригинала ----------
+   Розовый — «здесь поёт запись, а не вы». Крестик у правого края
+   убирает отрезок; пока блок узкий, крестик не рисуем и не ловим. */
+const ORIG_DEL_W = 14;   // ширина крестика внутри блока
+
+function drawOrigLane(g, lane, W) {
+  const spans = отрезкиОригинала();
+  g.fillStyle = 'rgba(30, 16, 22, 0.85)';
+  g.fillRect(0, lane.y, W, lane.h);
+
+  if (!spans.length) {
+    g.fillStyle = 'rgba(251, 113, 133, 0.55)';
+    g.font = '10px sans-serif';
+    g.textAlign = 'left';
+    g.fillText('оригинал: протяни мышью — на этом куске зазвучат настоящие слова',
+      6, lane.y + lane.h / 2 + 3);
+    return;
+  }
+
+  const y = lane.y + 3;
+  const h = lane.h - 6;
+  g.font = '10px sans-serif';
+  g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  spans.forEach((s, i) => {
+    const x0 = tToX(s.start);
+    const x1 = tToX(s.end);
+    if (x1 < -40 || x0 > W + 40) return;
+    const w = Math.max(2, x1 - x0);
+    const sel = i === editor.origSel;
+    roundRect(g, x0, y, w, h, 4);
+    g.fillStyle = sel ? 'rgba(251, 113, 133, 0.42)' : 'rgba(251, 113, 133, 0.26)';
+    g.fill();
+    g.lineWidth = sel ? 2 : 1;
+    g.strokeStyle = sel ? '#fda4af' : '#fb7185';
+    g.stroke();
+    // Ручки по краям — за них тянут границу
+    g.fillStyle = sel ? '#fda4af' : '#fb7185';
+    g.fillRect(x0, y, 2, h);
+    g.fillRect(x1 - 2, y, 2, h);
+
+    const крестик = w >= ORIG_DEL_W + 26;
+    g.fillStyle = '#ffe4e6';
+    const txt = clipText(g, 'оригинал', w - 8 - (крестик ? ORIG_DEL_W : 0));
+    if (txt) g.fillText(txt, x0 + 4, lane.y + lane.h / 2);
+    if (крестик) {
+      g.textAlign = 'center';
+      g.fillStyle = 'rgba(255, 228, 230, 0.85)';
+      g.fillText('✕', x1 - ORIG_DEL_W / 2 - 2, lane.y + lane.h / 2);
+      g.textAlign = 'left';
+    }
+  });
+  g.textBaseline = 'alphabetic';
 }
 
 /* ---------- Полоса голоса ---------- */
@@ -3967,6 +4525,7 @@ function drawTimeline() {
   g.fillStyle = '#0e0e15';
   g.fillRect(0, 0, W, H);
 
+  drawOrigLane(g, L.orig, W);
   if (L.voice) drawVoiceLane(g, L.voice, W);
   drawWaveLane(g, L.wave, W);
 
@@ -3977,7 +4536,9 @@ function drawTimeline() {
       const x0 = tToX(sp.start - LOOP_LEAD);
       const x1 = tToX(sp.end + LOOP_TAIL);
       g.fillStyle = 'rgba(132, 204, 22, 0.09)';
-      g.fillRect(x0, L.ruler, Math.max(1, x1 - x0), H - L.ruler);
+      // L.ruler — полоса, а не число: раньше здесь стояло само L.ruler,
+      // и высота выходила NaN, то есть подсветка не рисовалась вовсе
+      g.fillRect(x0, L.ruler.y, Math.max(1, x1 - x0), H - L.ruler.y);
     }
   }
 
@@ -3986,7 +4547,7 @@ function drawTimeline() {
 
   // Разделители полос
   g.fillStyle = 'rgba(255, 255, 255, 0.07)';
-  [L.wave, L.lines, L.words].forEach((lane) => g.fillRect(0, lane.y, W, 1));
+  [L.orig, L.wave, L.lines, L.words].forEach((lane) => g.fillRect(0, lane.y, W, 1));
 
   // Линейка времени
   const step = editor.pxPerSec >= 60 ? 1 : editor.pxPerSec >= 25 ? 2 : editor.pxPerSec >= 12 ? 5 : 10;
@@ -4002,11 +4563,17 @@ function drawTimeline() {
     g.fillText(fmtTime(t), x + 3, 12);
   }
 
-  // Куда притянулась граница при перетаскивании
-  if (editor.snapped != null) {
-    const x = tToX(editor.snapped);
-    g.fillStyle = '#38bdf8';
-    g.fillRect(x - 1, L.ruler, 2, H - L.ruler);
+  /* Направляющая магнита: там, где граница примагнитилась, встаёт
+     черта цветом той полосы, к которой прилипло, — сразу видно,
+     почему граница «не там, куда привели мышь» */
+  if (editor.snapped) {
+    const x = tToX(editor.snapped.t);
+    g.fillStyle = ЦВЕТ_МАГНИТА[editor.snapped.вид] || '#38bdf8';
+    g.fillRect(x - 1, L.ruler.y, 2, H - L.ruler.y);
+    g.font = '10px sans-serif';
+    g.textAlign = x > W - 60 ? 'right' : 'left';
+    g.fillText(editor.snapped.вид, x + (x > W - 60 ? -4 : 4), L.ruler.y + 10);
+    g.textAlign = 'left';
   }
 
   // Указатель воспроизведения
@@ -4031,6 +4598,23 @@ function drawTimeline() {
    ============================================================ */
 function timelineHit(x, y) {
   const L = timelineLanes();
+
+  // Отрезки оригинала
+  if (y >= L.orig.y && y < L.orig.y + L.orig.h) {
+    const spans = отрезкиОригинала();
+    for (let i = 0; i < spans.length; i++) {
+      const x0 = tToX(spans[i].start);
+      const x1 = tToX(spans[i].end);
+      if (Math.abs(x - x0) <= EDGE_GRAB) return { kind: 'orig-start', i };
+      if (Math.abs(x - x1) <= EDGE_GRAB) return { kind: 'orig-end', i };
+      if (x > x0 && x < x1) {
+        const крестик = x1 - x0 >= ORIG_DEL_W + 26;
+        if (крестик && x >= x1 - ORIG_DEL_W - 4) return { kind: 'orig-del', i };
+        return { kind: 'orig-move', i };
+      }
+    }
+    return { kind: 'orig-new' };
+  }
 
   // Слова выбранной строки
   if (y >= L.words.y && y < L.words.y + L.words.h) {
@@ -4064,26 +4648,93 @@ function timelineHit(x, y) {
   return null;
 }
 
-/* Притягивание к голосу: рядом с настоящим вступлением (или концом)
-   пения граница прилипает к нему. Без огибающей и с выключенным
-   переключателем время остаётся ровно тем, куда привели мышь. */
-function snapToVoice(t) {
+/* ============================================================
+   Магнит
+
+   Границы при перетаскивании прилипают к осмысленным точкам — как
+   в Logic Pro и Final Cut. Куда липнет:
+     • к началам и концам соседних строк;
+     • к указателю воспроизведения;
+     • к границам отрезков оригинала;
+     • к вступлениям и концам пения — если огибающая голоса есть
+       (в приложении после удаления вокала нейросетью);
+     • к самым краям песни.
+
+   Порог задан в ПИКСЕЛЯХ, а не в секундах: на любом масштабе граница
+   прилипает с одного и того же расстояния на экране.
+
+   Зажатый Alt отключает магнит на время перетаскивания — так же
+   в обеих названных программах. Общий выключатель — кнопка
+   «🧲 магнит» и клавиша S.
+
+   Прежняя кнопка «⇥ к голосу» была тем же самым, только про одну
+   породу точек. Двух похожих переключателей быть не должно, поэтому
+   она стала общим магнитом, а голос — одним из его видов точек.
+   ============================================================ */
+
+/* Чем меньше вес, тем важнее точка при равном расстоянии: попасть
+   в указатель или в край соседней строки нужнее, чем в огибающую */
+const ВЕС_МАГНИТА = { указатель: 0, строка: 1, оригинал: 1, голос: 2, край: 3 };
+const ЦВЕТ_МАГНИТА = {
+  указатель: '#f2f2f7', строка: '#a3e635', оригинал: '#fb7185',
+  голос: '#38bdf8', край: '#9a9ab0',
+};
+
+/* Все точки, к которым сейчас имеет смысл липнуть.
+   что.кромеСтроки — номер строки, которую тащат (сама к себе не липнет),
+   что.кроме — номер отрезка оригинала, который тащат. */
+function точкиМагнита(что) {
+  const о = что || {};
+  const точки = [];
+  const добавить = (t, вид) => {
+    if (Number.isFinite(t) && t >= 0) точки.push({ t, вид });
+  };
+  for (const sp of editorSpans()) {
+    if (sp.row === о.кромеСтроки) continue;
+    добавить(sp.start, 'строка');
+    добавить(sp.end, 'строка');
+  }
+  добавить(audio.position(), 'указатель');
+  отрезкиОригинала().forEach((s, i) => {
+    if (i === о.кроме) return;
+    добавить(s.start, 'оригинал');
+    добавить(s.end, 'оригинал');
+  });
+  if (voiceReady()) {
+    for (const r of voice.runs) { добавить(r.start, 'голос'); добавить(r.end, 'голос'); }
+  }
+  добавить(0, 'край');
+  добавить(audio.duration, 'край');
+  return точки;
+}
+
+/* Притянуть время t к ближайшей точке. Магнит выключен или зажат Alt —
+   время остаётся ровно тем, куда привели мышь. */
+function примагнитить(t, что) {
   editor.snapped = null;
-  if (!editor.snap || !voiceReady()) return t;
+  if (!editor.snap || editor.безМагнита) return t;
   const w = SNAP_PX / editor.pxPerSec;
   let best = null;
-  for (const r of voice.runs) {
-    if (r.end < t - w) continue;
-    if (r.start > t + w) break;
-    for (const cand of [r.start, r.end]) {
-      if (Math.abs(cand - t) <= w && (best == null || Math.abs(cand - t) < Math.abs(best - t))) {
-        best = cand;
-      }
-    }
+  let bestKey = Infinity;
+  for (const p of точкиМагнита(что)) {
+    const d = Math.abs(p.t - t);
+    if (d > w) continue;
+    /* Ключ: сначала расстояние в целых пикселях, потом вес. Так две
+       точки на одном и том же пикселе разбираются не порядком перебора,
+       а важностью — иначе прилипание скакало бы туда-сюда. */
+    const key = Math.round(d * editor.pxPerSec) * 10 + ВЕС_МАГНИТА[p.вид];
+    if (key < bestKey) { bestKey = key; best = p; }
   }
-  if (best == null) return t;
+  if (!best) return t;
   editor.snapped = best;
-  return best;
+  return best.t;
+}
+
+/* Прежнее имя притягивания. Самопроверка приложения зовёт его отсюда,
+   а её код живёт в desktop/main.js, править который нельзя, — поэтому
+   вход остаётся. Голос теперь лишь одна из пород точек магнита. */
+function snapToVoice(t) {
+  return примагнитить(t);
 }
 
 /* ---------- Выбор строки ---------- */
@@ -4140,8 +4791,120 @@ function updateSelInfo() {
   $('btn-sel-words-reset').classList.toggle('hidden', !marked);
 }
 
+/* ---------- Правка отрезков оригинала ----------
+   Отрезки лежат в state.origSpans по возрастанию времени и не налезают
+   друг на друга. Порядок держится сам собой: каждая граница зажата
+   между соседями, поэтому во время перетаскивания номера не меняются
+   и editor.origSel остаётся тем же отрезком. */
+
+/* Куда вправе двигаться отрезок №i: до соседей, с зазором в два
+   затухания — чтобы переходы не наложились друг на друга */
+function границыОтрезка(i) {
+  const spans = отрезкиОригинала();
+  const зазор = ОТРЕЗОК_ФЕЙД * 2;
+  const пред = spans[i - 1];
+  const след = spans[i + 1];
+  return {
+    lo: пред ? пред.end + зазор : 0,
+    hi: след ? след.start - зазор : (audio.duration || Infinity),
+  };
+}
+
+/* Новый отрезок в точке t. Возвращает его номер или −1, если места
+   нет: точка внутри чужого отрезка или свободный промежуток слишком мал. */
+function вставитьОтрезок(t) {
+  const spans = state.origSpans;
+  const зазор = ОТРЕЗОК_ФЕЙД * 2;
+  let i = 0;
+  while (i < spans.length && spans[i].end <= t) i++;
+  if (i < spans.length && spans[i].start <= t) return -1;   // внутри чужого
+  const lo = i > 0 ? spans[i - 1].end + зазор : 0;
+  const hi = i < spans.length ? spans[i].start - зазор : (audio.duration || Infinity);
+  if (hi - lo < ОТРЕЗОК_МИН) return -1;
+  const start = Math.min(Math.max(t, lo), hi - ОТРЕЗОК_МИН);
+  spans.splice(i, 0, { start, end: start });
+  return i;
+}
+
+function удалитьОтрезок(i) {
+  if (!state.origSpans[i]) return;
+  pushHistory();
+  state.origSpans.splice(i, 1);
+  editor.origSel = -1;
+  saveProject();
+  drawTimeline();
+}
+
 /* ---------- Перетаскивание ---------- */
 const tl = $('timeline');
+
+function beginOrigDrag(hit, t) {
+  pushHistory();
+  let i = hit.i;
+  let kind = hit.kind;
+  let создан = false;
+  if (kind === 'orig-new') {
+    i = вставитьОтрезок(t);
+    if (i < 0) { dropEmptyHistory(); return; }
+    создан = true;
+  }
+  editor.origSel = i;
+  editor.drag = { kind, i, создан, grabT: t, was: { ...state.origSpans[i] }, moved: false };
+}
+
+function applyOrigDrag(t) {
+  const d = editor.drag;
+  const s = state.origSpans[d.i];
+  if (!s) return;
+  const гр = границыОтрезка(d.i);
+  const зажать = (v) => Math.min(Math.max(v, гр.lo), гр.hi);
+  d.moved = Math.abs(t - d.grabT) * editor.pxPerSec >= 4;
+
+  if (d.kind === 'orig-new') {
+    /* Тянем в любую сторону от точки нажатия: отрезок растёт туда,
+       куда ведут мышь, — как рисуют область в монтажной программе */
+    const nt = зажать(примагнитить(t, { кроме: d.i }));
+    s.start = Math.min(d.grabT, nt);
+    s.end = Math.max(d.grabT, nt);
+    s.start = зажать(s.start);
+    s.end = Math.max(s.start, зажать(s.end));
+  } else if (d.kind === 'orig-start') {
+    s.start = Math.min(зажать(примагнитить(t, { кроме: d.i })), s.end - ОТРЕЗОК_МИН);
+    s.start = Math.max(s.start, гр.lo);
+  } else if (d.kind === 'orig-end') {
+    s.end = Math.max(зажать(примагнитить(t, { кроме: d.i })), s.start + ОТРЕЗОК_МИН);
+    s.end = Math.min(s.end, гр.hi);
+  } else if (d.kind === 'orig-move') {
+    const длина = d.was.end - d.was.start;
+    const nt = примагнитить(d.was.start + (t - d.grabT), { кроме: d.i });
+    s.start = Math.min(Math.max(nt, гр.lo), Math.max(гр.lo, гр.hi - длина));
+    s.end = s.start + длина;
+  }
+  drawTimeline();
+}
+
+function endOrigDrag() {
+  const d = editor.drag;
+  editor.drag = null;
+  editor.snapped = null;
+  const s = state.origSpans[d.i];
+  /* Просто щелчок по пустому месту полосы — это не «отрезок в ноль
+     длиной», а перемотка: ставим указатель туда, куда ткнули */
+  if (d.создан && (!d.moved || !s || s.end - s.start < ОТРЕЗОК_МИН)) {
+    state.origSpans.splice(d.i, 1);
+    editor.origSel = -1;
+    dropEmptyHistory();
+    if (!d.moved) seekTo(d.grabT);
+    drawTimeline();
+    return;
+  }
+  state.origSpans = нормОтрезки(state.origSpans, audio.duration);
+  // После слияния номер мог сдвинуться — ищем отрезок по времени
+  editor.origSel = state.origSpans.findIndex((x) => s && x.start <= s.start && x.end >= s.end);
+  if (!dropEmptyHistory()) saveProject();
+  audio.applyMix();   // расписание пересчитывается на ходу, не дожидаясь перезапуска
+  drawTimeline();
+}
 
 function beginDrag(hit, t) {
   const sp = spanOfRow(hit.row);
@@ -4177,16 +4940,17 @@ function applyDrag(t) {
   d.moved = true;
 
   if (d.kind === 'line-start') {
-    setLineTime(d.row, snapToVoice(t));
+    setLineTime(d.row, примагнитить(t, { кромеСтроки: d.row }));
   } else if (d.kind === 'line-end') {
-    setLineEnd(d.row, snapToVoice(t));
+    setLineEnd(d.row, примагнитить(t, { кромеСтроки: d.row }));
   } else if (d.kind === 'line-move') {
-    const delta = t - d.grabT;
     const hadEnd = line.ручнойКонец;
-    setLineTime(d.row, d.startWas + delta);
+    // Блок целиком тянется за начало: липнет ведущая граница, как в монтажной
+    const ns = примагнитить(d.startWas + (t - d.grabT), { кромеСтроки: d.row });
+    setLineTime(d.row, ns);
     // Конец едет за строкой, только если человек уже задавал его руками:
     // иначе он и так пересчитается от нового начала
-    if (hadEnd) setLineEnd(d.row, d.endWas + delta);
+    if (hadEnd) setLineEnd(d.row, d.endWas + (ns - d.startWas));
   } else if (d.kind === 'word-edge' || d.kind === 'word-move') {
     if (!sp) return;
     const words = ensureWords(line, sp);
@@ -4195,7 +4959,7 @@ function applyDrag(t) {
     if (d.kind === 'word-edge') {
       const lo = (words[k - 1] ? words[k - 1].time : line.time) + MIN_SPAN;
       const hi = (words[k].end != null ? words[k].end : sp.end) - MIN_SPAN;
-      const nt = Math.min(Math.max(snapToVoice(t), lo), Math.max(lo, hi));
+      const nt = Math.min(Math.max(примагнитить(t), lo), Math.max(lo, hi));
       words[k].time = nt;
       if (words[k - 1]) words[k - 1].end = nt;
     } else {
@@ -4219,23 +4983,36 @@ function applyDrag(t) {
   drawTimeline();
 }
 
+/* Перемотка щелчком по пустому месту дорожки */
+function seekTo(t) {
+  const пос = Math.min(Math.max(0, t), audio.duration);
+  if (audio.playing) audio.play(пос);
+  else audio.offset = пос;
+  editor.stageKey = '';
+  renderEditStage();
+  updatePlayerUI();
+  setText('edit-time', fmtTime(audio.position()));
+}
+
 tl.addEventListener('pointerdown', (e) => {
   const rect = tl.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   const hit = timelineHit(x, y);
-  if (hit) {
+  editor.безМагнита = !!e.altKey;
+  if (hit && hit.kind === 'orig-del') {
+    удалитьОтрезок(hit.i);
+    return;
+  }
+  if (hit && hit.kind.startsWith('orig-')) {
+    beginOrigDrag(hit, xToT(x));
+    try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
+  } else if (hit) {
     if (hit.row !== editor.sel) selectLine(hit.row, { scrollList: true });
     beginDrag(hit, xToT(x));
     try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
   } else {
-    const t = Math.min(Math.max(0, xToT(x)), audio.duration);
-    if (audio.playing) audio.play(t);
-    else audio.offset = t;
-    editor.stageKey = '';
-    renderEditStage();
-    updatePlayerUI();
-    setText('edit-time', fmtTime(audio.position()));
+    seekTo(xToT(x));
   }
   drawTimeline();
 });
@@ -4244,15 +5021,25 @@ tl.addEventListener('pointermove', (e) => {
   const rect = tl.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  if (editor.drag) { applyDrag(xToT(x)); return; }
+  // Зажатый Alt отключает магнит на время: так же в Logic Pro и Final Cut
+  editor.безМагнита = !!e.altKey;
+  if (editor.drag) {
+    if (editor.drag.kind.startsWith('orig-')) applyOrigDrag(xToT(x));
+    else applyDrag(xToT(x));
+    return;
+  }
   const hit = timelineHit(x, y);
   tl.style.cursor = !hit ? 'pointer'
-    : hit.kind === 'line-start' || hit.kind === 'line-end' || hit.kind === 'word-edge'
-      ? 'ew-resize' : 'grab';
+    : hit.kind === 'orig-del' ? 'pointer'
+      : hit.kind === 'orig-new' ? 'crosshair'
+        : hit.kind === 'line-start' || hit.kind === 'line-end'
+          || hit.kind === 'word-edge' || hit.kind === 'orig-start' || hit.kind === 'orig-end'
+          ? 'ew-resize' : 'grab';
 });
 
 function endDrag() {
   if (!editor.drag) return;
+  if (editor.drag.kind.startsWith('orig-')) { endOrigDrag(); return; }
   editor.drag = null;
   editor.snapped = null;
   if (!dropEmptyHistory()) {
@@ -4268,6 +5055,18 @@ function endDrag() {
 
 tl.addEventListener('pointerup', endDrag);
 tl.addEventListener('pointercancel', endDrag);
+
+/* Двойной щелчок по отрезку оригинала убирает его — как и крестик
+   у правого края блока. Крестик виден, двойной щелчок привычен. */
+tl.addEventListener('dblclick', (e) => {
+  const rect = tl.getBoundingClientRect();
+  const hit = timelineHit(e.clientX - rect.left, e.clientY - rect.top);
+  if (hit && (hit.kind === 'orig-move' || hit.kind === 'orig-start'
+    || hit.kind === 'orig-end' || hit.kind === 'orig-del')) {
+    e.preventDefault();
+    удалитьОтрезок(hit.i);
+  }
+});
 
 /* Колесо: прокрутка по времени, с Cmd/Ctrl/Alt (и щипком тачпада) — масштаб */
 tl.addEventListener('wheel', (e) => {
@@ -4312,6 +5111,8 @@ $('tl-loop').addEventListener('click', () => setLoop(!editor.loop));
 function setSnap(on) {
   editor.snap = !!on;
   $('tl-snap').classList.toggle('on', editor.snap);
+  editor.snapped = null;
+  drawTimeline();
 }
 
 /* ---------- Прослушивание выбранной строки по кругу ----------
@@ -4476,8 +5277,15 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'KeyL': e.preventDefault(); setLoop(!editor.loop); break;
     case 'KeyS': e.preventDefault(); setSnap(!editor.snap); break;
+    // Выбранный отрезок оригинала — убрать. Строки удаляются кнопкой
+    // в инспекторе: слишком легко снести разметку случайной клавишей
+    case 'Delete':
+    case 'Backspace':
+      if (editor.origSel >= 0) { e.preventDefault(); удалитьОтрезок(editor.origSel); }
+      break;
     case 'Escape':
       if (editor.loop) { e.preventDefault(); setLoop(false); }
+      else if (editor.origSel >= 0) { editor.origSel = -1; drawTimeline(); }
       break;
     case 'Equal':
     case 'NumpadAdd': e.preventDefault(); zoomTimeline(1.5); break;
@@ -4881,6 +5689,9 @@ async function exportVideo() {
 
   const duration = audio.duration;
   const t0 = ctx.currentTime + 0.1;
+  /* Отрезки оригинала — тем же расписанием, что и в плеере: в видео
+     должно попасть ровно то, что человек слышал в караоке */
+  расписатьОтрезки(ctx, vGain, iGain, g, отрезкиОригинала(), t0);
   const cleanup = () => {
     sources.forEach((s) => { try { s.stop(); } catch (e) { /* уже остановлен */ } });
     try { videoTrack.stop(); } catch (e) { /* уже остановлен */ }
@@ -5146,6 +5957,8 @@ document.addEventListener('keydown', (e) => {
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
   if (saved && saved.style) state.style = styleFromSaved(saved);
+  // Отрезки оригинала: длины песни ещё не знаем, обрежем её при загрузке файла
+  if (saved && saved.origSpans) state.origSpans = нормОтрезки(saved.origSpans, 0);
   if (saved && saved.eq) {
     state.eq = {
       low: +saved.eq.low || 0, mid: +saved.eq.mid || 0, high: +saved.eq.high || 0,
