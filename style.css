@@ -957,6 +957,13 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .lyrics-stage.has-bg .stage-line:not(.current) { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
 .stage-line {
   font-family: var(--st-font);
+  /* Текст караоке всегда по середине — так же, как его рисует кадр
+     видео (drawVideoFrame ставит каждый ряд в (W - ширина) / 2).
+     Держим выравнивание на самой строке, а не на сцене: сцена караоке
+     лежит внутри .karaoke-layout, а там текст выровнен влево ради
+     панели настроек, и строки наследовали это выравнивание — короткие
+     строки прижимались к левому краю сцены вместо середины. */
+  text-align: center;
   /* --st-fs — единый кегль на всю песню в пикселях: его считает
      fitStageLines (app.js) от ширины самой сцены и выбранного размера.
      Он один для всех строк, поэтому размер не прыгает от строки к строке. */
@@ -1018,7 +1025,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 [data-anim="slide"] .stage-line.enter { animation: lineSlide 0.28s cubic-bezier(0.22, 0.61, 0.36, 1); }
 @keyframes lineFade { from { opacity: 0; } }
 @keyframes lineSlide { from { opacity: 0; transform: translateY(16px); } }
-.stage-empty { color: var(--text-dim); font-size: 1.1rem; }
+.stage-empty { color: var(--text-dim); font-size: 1.1rem; text-align: center; }
 
 /* --- Отсчёт перед вступлением строки --- */
 .stage-count {
