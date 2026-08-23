@@ -232,6 +232,7 @@ I18N.EN = {
   'шапка.вопросы': 'FAQ',
   'шапка.студия': 'Open the studio',
   'шапка.язык': 'Interface language',
+  'шапка.тема': 'Theme',
 
   /* ---------- Первый экран ---------- */
   'герой.заголовок': 'Turn any song<br><span class="grad-text">into karaoke</span>',
@@ -309,7 +310,7 @@ I18N.EN = {
   'шаг1.перетащи': 'Drop an audio file here<br>or click to choose one',
   'шаг1.форматы': 'MP3 · WAV · OGG · M4A',
   'шаг1.обработка': 'Processing the track…',
-  'шаг1.моно': '⚠️ The file is mono — vocals can’t be ducked, but lyric timing and karaoke will work.',
+  'шаг1.моно': 'The file is mono — vocals can’t be ducked, but lyric timing and karaoke will work.',
   'шаг1.фон.заголовок': 'Karaoke background',
   'шаг1.фон.текст': 'Optional: the picture sits under the text while you sing',
   'шаг1.фон.alt': 'Karaoke background',
@@ -361,7 +362,7 @@ I18N.EN = {
   'шаг2.дальше': 'To the editor →',
 
   /* ---------- Шаг 4: оформление ---------- */
-  'караоке.оформление': '🎨 Look',
+  'караоке.оформление': 'Look',
   'караоке.сбросить': 'Reset',
   'караоке.вкл.текст': 'Text',
   'караоке.вкл.цвет': 'Colour',
@@ -423,21 +424,21 @@ I18N.EN = {
 
   /* ---------- Шаг 4: экспорт ---------- */
   'экспорт.назад': '← Editor',
-  'экспорт.звук': '🔊 Check the sound',
-  'экспорт.lrc': '⬇ Lyrics .lrc',
-  'экспорт.lrcСлова': '⬇ .lrc with words',
+  'экспорт.звук': 'Check the sound',
+  'экспорт.lrc': 'Lyrics .lrc',
+  'экспорт.lrcСлова': '.lrc with words',
   'экспорт.lrcСлова.подсказка': 'Extended LRC: a timestamp for every word inside a line',
-  'экспорт.wav': '⬇ Instrumental .wav',
+  'экспорт.wav': 'Instrumental .wav',
   'экспорт.wav.подсказка': 'Instrumental with the original on the stretches marked in the editor',
   'экспорт.качество': 'Quality',
-  'экспорт.видео': '🎬 Video for YouTube',
+  'экспорт.видео': 'Video for YouTube',
   'экспорт.идёт': 'Recording the video…',
   'экспорт.подсказка': 'Recording runs in real time. You can minimise the window: the export carries on in the background. Don’t close the page before it finishes.',
   'экспорт.отменить': 'Cancel',
 
   /* ---------- Шаг 3: редактор ---------- */
   'ред.справка.заголовок': 'How to fix the timing',
-  'ред.справка.первый': 'The text is on the left — edit it in the list, double-click to jump to a line. The preview is in the middle, the selected-line inspector on the right. The timeline is at the bottom: drag a block’s edges to move a boundary, its middle to move the whole line. Line starts are tapped with the spacebar: the “✎ tap again” button.',
+  'ред.справка.первый': 'The text is on the left — edit it in the list, double-click to jump to a line. The preview is in the middle, the selected-line inspector on the right. The timeline is at the bottom: drag a block’s edges to move a boundary, its middle to move the whole line. Line starts are tapped with the spacebar: the “tap again” button.',
   'ред.справка.оригинал': '<b>The top lane is the original.</b> Drag across it and the real words from the recording play on that stretch instead of the instrumental — handy for an intro you’d rather not sing. Pull the edges to adjust; the cross, a double-click or <kbd>Delete</kbd> removes a stretch. Inside a stretch the original is heard in full, wherever the “Vocals” slider sits in karaoke — and it goes into the .wav instrumental and the recorded video just the same. In the editor itself you won’t hear the difference: the original plays everywhere here, or there would be nothing to time against. To hear the stretches, clear “hear the original” on the right or go to karaoke.',
   'ред.легенда.оригинал': 'original plays here',
   'ред.легенда.голос': 'voice',
@@ -445,16 +446,18 @@ I18N.EN = {
   'ред.легенда.глазок': '≈ rough timing',
   'ред.легенда.слова': 'words of the selected line',
   'ред.легенда.своё': 'own timing, if the line was pulled to the voice',
-  'ред.справка.магнит': '<b>🧲 Snapping.</b> While you drag, edges stick to neighbouring lines, to the playhead, to the edges of original stretches, to vocal onsets and endings (when the envelope is there) and to the edges of the song. A coloured guide appears where it sticks — the colour says what it caught. The threshold is the same at any zoom. Holding <kbd>Alt</kbd> suspends the snap; the <kbd>S</kbd> key turns it off for good.',
+  'ред.справка.магнит': '<b><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg> Snapping.</b> While you drag, edges stick to neighbouring lines, to the playhead, to the edges of original stretches, to vocal onsets and endings (when the envelope is there) and to the edges of the song. A coloured guide appears where it sticks — the colour says what it caught. The threshold is the same at any zoom. Holding <kbd>Alt</kbd> suspends the snap; the <kbd>S</kbd> key turns it off for good.',
   'ред.клавиши': '<kbd>space</kbd> play · <kbd>↑</kbd><kbd>↓</kbd> line · <kbd>←</kbd><kbd>→</kbd> start · <kbd>[</kbd><kbd>]</kbd> end · <kbd>Shift</kbd> finer, <kbd>Alt</kbd> coarser · <kbd>Enter</kbd> audition · <kbd>L</kbd> loop · <kbd>S</kbd> snap · <kbd>Delete</kbd> remove stretch · <kbd><span class="mod-key">Cmd</span>+Z</kbd> undo · wheel scrolls, with <kbd><span class="mod-key">Cmd</span></kbd> zooms',
   'ред.простук.клавиша': 'hit <kbd>space</kbd> at the start of a line — or click here',
-  'ред.простук.отменить': '↶ undo last',
+  'ред.простук.отменить': 'undo last',
   'ред.простук.готово': 'Done',
   'ред.отменить': 'Undo the last action (%s+Z)',
+  'ред.отменить.aria': 'Undo the last action',
   'ред.повторить': 'Redo (%s+Shift+Z)',
-  'ред.покругу': '↻ loop',
+  'ред.повторить.aria': 'Redo the undone action',
+  'ред.покругу': 'loop',
   'ред.покругу.подсказка': 'Play the selected line round and round (key L)',
-  'ред.магнит': '🧲 snap',
+  'ред.магнит': 'snap',
   'ред.магнит.подсказка': 'Snapping: edges stick to neighbouring lines, to the playhead, to original stretches and to the real vocal onset. The S key turns it off for good, holding Alt suspends it for one drag',
   'ред.сдвинуть': 'shift everything',
   'ред.сдвиг.минус': '−0.1',
@@ -473,17 +476,17 @@ I18N.EN = {
   'ред.конец.подсказка': 'Line end in seconds. Enter applies, Esc puts it back',
   'ред.длительность': 'length',
   'ред.секунды': 's',
-  'ред.прослушать': '▶ audition',
+  'ред.прослушать': 'audition',
   'ред.прослушать.подсказка': 'Audition this line (Enter)',
   'ред.слова.подсказка': 'Tap out the words inside this line',
-  'ред.сброс.слова': '⨯ reset words',
+  'ред.сброс.слова': 'reset words',
   'ред.сброс.слова.подсказка': 'Bring back the automatic word split',
-  'ред.простучать': '✎ tap again',
+  'ред.простучать': 'tap again',
   'ред.простучать.подсказка': 'Tap this line and the ones after it again (with the spacebar)',
-  'ред.удалить': '🗑 delete',
+  'ред.удалить': 'delete',
   'ред.удалить.подсказка': 'Remove this line from the karaoke',
   'ред.слышу': 'hear the original',
-  'ред.слова.заголовок': '♪ Word timing',
+  'ред.слова.заголовок': 'Word timing',
   'ред.слова.подсказка2': 'Hit <kbd>space</kbd> the moment each word starts. Esc cancels.',
   'ред.слова.сохранить': 'Save',
   'ред.слова.отменить': 'Cancel',
@@ -529,6 +532,16 @@ I18N.СТРОКИ = {
   'язык.en': { ru: 'Eng', en: 'Eng' },
   'язык.ru.полно': { ru: 'Русский язык интерфейса', en: 'Russian interface' },
   'язык.en.полно': { ru: 'Английский язык интерфейса', en: 'English interface' },
+
+  /* ---------- Переключатель темы ----------
+     Две темы, обе — монтажная плотность (см. style.css): «нейтральная»
+     без цветового акцента и «фирменная», где прежний тёмный грунт
+     и зелёный, но зелёный означает только выделенное и включённое,
+     а не украшает всё подряд. Фирменная — по умолчанию. */
+  'тема.neutral': { ru: 'Нейтральная', en: 'Neutral' },
+  'тема.signature': { ru: 'Фирменная', en: 'Signature' },
+  'тема.neutral.полно': { ru: 'Нейтральная тема оформления', en: 'Neutral theme' },
+  'тема.signature.полно': { ru: 'Фирменная тема оформления', en: 'Signature theme' },
 
   /* ---------- Шрифты сцены ---------- */
   'шрифт.system': { ru: 'Системный', en: 'System' },
@@ -732,8 +745,8 @@ I18N.СТРОКИ = {
   'ред.строкаНеВыбрана': { ru: 'Строка не выбрана', en: 'No line selected' },
   'ред.строкаНомер': { ru: 'Строка №{n}', en: 'Line {n}' },
   'ред.строкаГлазок': { ru: ' · время на глазок', en: ' · rough timing' },
-  'ред.словаКнопка': { ru: '♪ слова', en: '♪ words' },
-  'ред.словаКнопкаГотово': { ru: '♪ слова ✓', en: '♪ words ✓' },
+  'ред.словаКнопка': { ru: 'слова', en: 'words' },
+  'ред.словаКнопкаГотово': { ru: 'слова', en: 'words' },
 
   /* ---------- Подписи на дорожке ---------- */
   'дорожка.оригинал.пусто': {
@@ -746,6 +759,15 @@ I18N.СТРОКИ = {
     ru: 'выбери строку — здесь появятся её слова',
     en: 'select a line — its words will appear here',
   },
+
+  /* ---------- Колонка заголовков дорожек, слева от полос ----------
+     Место под будущую кнопку «слушать только это» уже заложено
+     в вёрстке (см. .tl-head-solo в style.css) — сама кнопка появится
+     отдельным заходом, сейчас только подпись и отступ под неё. */
+  'дорожка.заголовок.время': { ru: 'время', en: 'time' },
+  'дорожка.заголовок.минус': { ru: 'минус', en: 'instrumental' },
+  'дорожка.заголовок.строки': { ru: 'строки', en: 'lines' },
+  'дорожка.заголовок.слова': { ru: 'слова', en: 'words' },
 
   /* ---------- Обновления ---------- */
   'обновление.вышла': { ru: 'Вышла новая версия студии — {v}', en: 'A new version of the studio is out — {v}' },
