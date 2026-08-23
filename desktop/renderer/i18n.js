@@ -205,6 +205,7 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.тема': '<b>The studio now looks like an editing suite.</b> Tighter layout, proper icons instead of mismatched emoji, times down to the millisecond, a column of track names, and the exact time under the cursor while you drag. There is a theme picker too — the green signature look or a neutral grey one, right in the header.',
   'новости.закрыть': 'Close',
   'новости.значок': 'Update',
   'новости.заголовок': 'What’s new in {версия}',
