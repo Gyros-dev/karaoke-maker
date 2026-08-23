@@ -832,6 +832,41 @@ function createWindow() {
             неЗаполнено: пустых,
             вНорме: пустых === 0 && !!кнопка && кнопка.title.includes(ждём + '+Z'),
           };
+        })(),
+        /* Тема оформления: переключатель собрался, атрибут на <html>
+           меняется по клику, выбор переживает перезагрузку (localStorage),
+           и — самое важное — рамка выделения на дорожке (--sel-ring)
+           у тем правда разного цвета, а не только имя атрибута другое. */
+        тема: (() => {
+          const T = window.THEME;
+          if (!T) return { естьМодуль: false, вНорме: false };
+          const studio = document.querySelector('.studio');
+          const кольцо = () => (studio ? getComputedStyle(studio).getPropertyValue('--sel-ring').trim() : null);
+          const кнопокВПереключателе = document.querySelectorAll('.theme-switch .theme-btn').length;
+          const исходная = T.тема();
+          const кольцоФирменная = (исходная === 'signature') ? кольцо() : (() => { T.установить('signature'); return кольцо(); })();
+          T.установить('neutral');
+          const атрибутНейтральная = document.documentElement.dataset.theme;
+          const кольцоНейтральная = кольцо();
+          const сохранилась = (() => {
+            try { return localStorage.getItem('karaoke-theme') === 'neutral'; } catch (e) { return false; }
+          })();
+          T.установить('signature');
+          const атрибутФирменная = document.documentElement.dataset.theme;
+          const кольцоСноваФирменная = кольцо();
+          T.установить(исходная);   // вернуть тему как было до самопроверки
+          return {
+            кнопокВПереключателе,
+            атрибутНейтральная,
+            атрибутФирменная,
+            кольцоФирменная,
+            кольцоНейтральная,
+            сохранилась,
+            вНорме: кнопокВПереключателе === 2
+              && атрибутНейтральная === 'neutral' && атрибутФирменная === 'signature'
+              && !!кольцоФирменная && !!кольцоНейтральная && кольцоФирменная !== кольцоНейтральная
+              && кольцоСноваФирменная === кольцоФирменная && сохранилась,
+          };
         })()
       }))()`);
       /* Ошибки считаем снаружи: страница их нигде не копит, а window.__errors,

@@ -227,7 +227,11 @@
   /* Строка оценки под блоком. Собираем узлами, а не разметкой: текст
      тут наш, но правило проекта одно для всех — никакого innerHTML. */
   function поставитьОценку(el, время, хвост) {
-    el.textContent = '⏳ ';
+    el.textContent = '';
+    // Значок из общего спрайта (см. значокSVG в app.js) вместо ⏳:
+    // эмодзи-часы выглядят по-разному на macOS и Windows
+    el.appendChild(значокSVG('hourglass'));
+    el.append(' ');
     if (время) {
       el.append(t('время.займёт'));
       const b = document.createElement('b');
