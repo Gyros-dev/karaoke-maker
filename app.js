@@ -4,6 +4,22 @@
 
 const $ = (id) => document.getElementById(id);
 
+/* Значок из спрайта (см. .icon-sprite в index.html) — для меток,
+   которые собирает код, а не разметка. SVG требует своего
+   пространства имён, обычным createElement его не собрать. */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const XLINK_NS = 'http://www.w3.org/1999/xlink';
+function значокSVG(имя, cls) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', cls ? `icon ${cls}` : 'icon');
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS(SVG_NS, 'use');
+  use.setAttribute('href', `#i-${имя}`);
+  use.setAttributeNS(XLINK_NS, 'xlink:href', `#i-${имя}`);   // старые движки без href
+  svg.appendChild(use);
+  return svg;
+}
+
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
 const APP_VERSION = '1.9.1';
@@ -1137,6 +1153,19 @@ function fmtLrcTime(sec) {
   const s = Math.floor((cs % 6000) / 100);
   const f = cs % 100;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(f).padStart(2, '0')}`;
+}
+
+/* Точное время у курсора при перетаскивании на дорожке — тысячные доли,
+   без двойного округления (как и в fmtLrcTime). Разделитель дробной
+   части зависит от языка: запятая по-русски, точка по-английски —
+   тем же правилом, что и у кнопок сдвига «−0,1»/«−0.1». */
+function fmtTimeMs(sec) {
+  const ms = Math.round(Math.max(0, sec) * 1000);
+  const m = Math.floor(ms / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const f = ms % 1000;
+  const разд = I18N.язык() === 'ru' ? ',' : '.';
+  return `${m}:${String(s).padStart(2, '0')}${разд}${String(f).padStart(3, '0')}`;
 }
 
 function download(blob, name) {
@@ -2779,8 +2808,17 @@ function setText(id, text) {
   if (el.textContent !== text) el.textContent = text;
 }
 
+/* Кнопка играть/пауза несёт оба значка разом (см. index.html) — виден
+   только нужный, класс переключает CSS. Тот же приём против пересборки
+   узла между нажатием и отпусканием мыши, что и в setText, но textContent
+   тут не годится: он стёр бы оба вложенных <svg>. */
+function setPlayIcon(id, playing) {
+  const el = $(id);
+  if (el.classList.contains('playing') !== playing) el.classList.toggle('playing', playing);
+}
+
 function updatePlayerUI() {
-  setText('btn-play', audio.playing ? '⏸' : '▶');
+  setPlayIcon('btn-play', audio.playing);
   setText('time-current', fmtTime(audio.position()));
   setText('time-total', fmtTime(audio.duration));
   if (!seekDragging && audio.duration) {
@@ -2806,7 +2844,7 @@ function tickPlayer() {
   // Обновление редактора
   if ($('step-3').classList.contains('active') && editor.peaks) {
     setText('edit-time', fmtTime(audio.position()));
-    setText('btn-edit-play', audio.playing ? '⏸' : '▶');
+    setPlayIcon('btn-edit-play', audio.playing);
     tickLoop();
     // В режиме простукивания предпросмотр убран с глаз — считать его незачем
     if (tap.active) setText('tap-time', fmtTime(audio.position()));
@@ -3650,7 +3688,7 @@ function renderEditList() {
     if (hasWords(line)) {
       mark = document.createElement('span');
       mark.className = 'word-mark';
-      mark.textContent = '♪';
+      mark.appendChild(значокSVG('note'));
       mark.title = t('ред.слова.помечены');
     }
 
@@ -3757,14 +3795,15 @@ function применитьПолеСтроки(какой) {
   поле.classList.remove('bad');
   const было = какой === 'start' ? sp.start : sp.end;
   delete поле.dataset.набирают;   // набор закончен, поле снова можно обновлять
-  if (Math.abs(v - было) >= 0.005) selPanelNudge(какой, v - было);
+  // Половина шага в тысячных (0.001): было 0.005 — половина сотых
+  if (Math.abs(v - было) >= 0.0005) selPanelNudge(какой, v - было);
   updateSelInfo();
   /* Поле перезаполняем и когда оно в фокусе (updateSelInfo такие
      обходит): иначе после Enter в нём осталось бы набранное число,
      а следом пришедшее событие change приняло бы его за новую правку
      и сдвинуло строку второй раз. */
   const стало = spanOfRow(editor.sel);
-  if (стало) поле.value = (какой === 'start' ? стало.start : стало.end).toFixed(2);
+  if (стало) поле.value = (какой === 'start' ? стало.start : стало.end).toFixed(3);
 }
 
 ['sel-start', 'sel-end'].forEach((id) => {
@@ -4330,18 +4369,26 @@ function updateEditStage() {
    перерисовка идёт каждый кадр вместе с указателем воспроизведения.
    ============================================================ */
 
-const LANE_RULER = 18;
-const LANE_ORIG = 22;
-const LANE_VOICE = 34;
-const LANE_WAVE = 46;
-const LANE_LINES = 38;
-const LANE_WORDS = 24;
+/* Высоты полос — по-монтажному тесные (было 18/22/34/46/38/24):
+   вплотную к демке из scratchpad, но без потери читаемости. */
+const LANE_RULER = 16;
+const LANE_ORIG = 18;
+const LANE_VOICE = 28;
+const LANE_WAVE = 38;
+const LANE_LINES = 30;
+const LANE_WORDS = 20;
 const EDGE_GRAB = 6;      // сколько пикселей у края блока считаются «за край»
 const SNAP_PX = 12;       // на таком расстоянии от точки магнит притягивает границу
 const MIN_SPAN = 0.08;    // короче строку и слово не делаем
+/* Тот же моноширинный стек, что и --ed-num в style.css. Канвас переменные
+   CSS не читает, поэтому строка своя — держать в одном месте с CSS
+   не получится, но менять её приходится редко. */
+const CANVAS_NUM_FONT = 'ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace';
 
 /* Полосы дорожки: где какая лежит и какой высоты. Полоса голоса
-   появляется, только когда огибающая есть. */
+   появляется, только когда огибающая есть. Ключи те же, что и подписи
+   колонки заголовков слева от канваса (см. renderTimelineHeads) —
+   порядок и состав полос менять только вместе с ней. */
 function timelineLanes() {
   /* На низком экране дорожка ужимается: редактор должен помещаться
      в окно целиком, а высота нужнее сетке строк и предпросмотру. */
@@ -4359,9 +4406,49 @@ function timelineLanes() {
   return L;
 }
 
+/* ---------- Колонка заголовков дорожек ----------
+   Живёт рядом с канвасом, вне его: подписи читаются как настоящий
+   текст (без ручной отрисовки под каждый масштаб экрана), а левый
+   отступ освобождает канвас под сами полосы. Место под будущую кнопку
+   «слушать только это» зарезервировано пустым блоком — сама кнопка
+   появится отдельным заходом (см. .tl-head-solo-space в style.css). */
+const TL_HEAD_LABEL = {
+  ruler: 'дорожка.заголовок.время',
+  orig: 'дорожка.оригинал',
+  voice: 'дорожка.голос',
+  wave: 'дорожка.заголовок.минус',
+  lines: 'дорожка.заголовок.строки',
+  words: 'дорожка.заголовок.слова',
+};
+// Только эти полосы получают кнопку-заглушку: у времени и волны
+// solo-слушать нечего, там и так весь микс
+const TL_HEAD_SOLO = { orig: true, voice: true, lines: true };
+function renderTimelineHeads(L) {
+  const heads = $('tl-heads');
+  if (!heads) return;
+  heads.textContent = '';
+  Object.keys(L).forEach((key) => {
+    if (key === 'total') return;
+    const lane = L[key];
+    const row = document.createElement('div');
+    row.className = 'tl-head-row';
+    row.style.height = `${lane.h}px`;
+    const label = document.createElement('span');
+    label.textContent = t(TL_HEAD_LABEL[key] || key);
+    row.appendChild(label);
+    if (TL_HEAD_SOLO[key]) {
+      const space = document.createElement('span');
+      space.className = 'tl-head-solo-space';
+      row.appendChild(space);
+    }
+    heads.appendChild(row);
+  });
+}
+
 function resizeTimeline() {
   const c = $('timeline');
-  const h = timelineLanes().total;
+  const L = timelineLanes();
+  const h = L.total;
   c.style.height = `${h}px`;
   // Ширину задаёт вёрстка (width: 100%), мы только меряем: считать её
   // от родителя нельзя — там своё поле, и канвас вылезал за край
@@ -4369,6 +4456,7 @@ function resizeTimeline() {
   const dpr = window.devicePixelRatio || 1;
   c.width = Math.round(w * dpr);
   c.height = Math.round(h * dpr);
+  renderTimelineHeads(L);
 }
 
 function timelineDims() {
@@ -4457,10 +4545,17 @@ function drawOrigLane(g, lane, W) {
     const txt = clipText(g, t('дорожка.оригинал'), w - 8 - (крестик ? ORIG_DEL_W : 0));
     if (txt) g.fillText(txt, x0 + 4, lane.y + lane.h / 2);
     if (крестик) {
-      g.textAlign = 'center';
-      g.fillStyle = 'rgba(255, 228, 230, 0.85)';
-      g.fillText('✕', x1 - ORIG_DEL_W / 2 - 2, lane.y + lane.h / 2);
-      g.textAlign = 'left';
+      // Крестик значком, а не символом текста: тот же набор, что и
+      // в остальной оболочке, и не зависит от системного шрифта
+      const cx = x1 - ORIG_DEL_W / 2 - 2, cy = lane.y + lane.h / 2, r = 3.2;
+      g.strokeStyle = 'rgba(255, 228, 230, 0.85)';
+      g.lineWidth = 1.3;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(cx - r, cy - r); g.lineTo(cx + r, cy + r);
+      g.moveTo(cx + r, cy - r); g.lineTo(cx - r, cy + r);
+      g.stroke();
+      g.lineCap = 'butt';
     }
   });
   g.textBaseline = 'alphabetic';
@@ -4530,7 +4625,7 @@ function drawWaveLane(g, lane, W) {
 
 /* ---------- Блоки строк ---------- */
 function drawLineBlocks(g, lane, W) {
-  g.font = '11px sans-serif';
+  g.font = '10px sans-serif';
   g.textAlign = 'left';
   g.textBaseline = 'middle';
   for (const sp of editorSpans()) {
@@ -4543,14 +4638,20 @@ function drawLineBlocks(g, lane, W) {
     const y = lane.y + 3;
     const h = lane.h - 6;
 
-    roundRect(g, x0, y, w, h, 5);
+    roundRect(g, x0, y, w, h, 4);
     g.fillStyle = sel ? 'rgba(132, 204, 22, 0.34)'
       : guess ? 'rgba(245, 158, 11, 0.22)' : 'rgba(16, 185, 129, 0.24)';
     g.fill();
+    /* Выделенный блок обведён ярко и со свечением — самый светлый
+       контур на дорожке, а не мягкая подсветка, как раньше. Цвет
+       берём из темы (edTheme.selRing): жёлтый в нейтральной,
+       зелёный в фирменной — это её третье из четырёх мест акцента. */
     g.lineWidth = sel ? 2 : 1;
-    g.strokeStyle = sel ? '#a3e635' : guess ? '#f59e0b' : '#10b981';
+    g.strokeStyle = sel ? edTheme.selRing : guess ? '#f59e0b' : '#10b981';
     g.setLineDash(guess ? [4, 3] : []);
+    if (sel) { g.shadowColor = edTheme.selGlow; g.shadowBlur = 6; }
     g.stroke();
+    g.shadowBlur = 0;
     g.setLineDash([]);
 
     /* Где строка спета по словам (core) и докуда её тянет голос (end) —
@@ -4568,7 +4669,7 @@ function drawLineBlocks(g, lane, W) {
     }
 
     // Ручки по краям — чтобы было видно, за что тянуть
-    g.fillStyle = sel ? '#a3e635' : guess ? '#f59e0b' : '#10b981';
+    g.fillStyle = sel ? edTheme.selRing : guess ? '#f59e0b' : '#10b981';
     g.fillRect(x0, y, 2, h);
     g.fillRect(x1 - 2, y, 2, h);
 
@@ -4643,7 +4744,7 @@ function drawTimeline() {
   const L = timelineLanes();
   clampScroll();
 
-  g.fillStyle = '#0e0e15';
+  g.fillStyle = edTheme.ground;
   g.fillRect(0, 0, W, H);
 
   drawOrigLane(g, L.orig, W);
@@ -4673,10 +4774,12 @@ function drawTimeline() {
   // Линейка времени
   const step = editor.pxPerSec >= 60 ? 1 : editor.pxPerSec >= 25 ? 2 : editor.pxPerSec >= 12 ? 5 : 10;
   const viewDur = W / editor.pxPerSec;
-  g.fillStyle = '#0e0e15';
+  g.fillStyle = edTheme.ground;
   g.fillRect(0, 0, W, L.ruler);
   g.fillStyle = '#9a9ab0';
-  g.font = '10px sans-serif';
+  // Моноширинный: время бежит вперёд, и цифры не должны подрагивать
+  // от смены ширины символов на каждом кадре (см. пункт про тысячные)
+  g.font = '10px ' + CANVAS_NUM_FONT;
   g.textAlign = 'left';
   for (let t = Math.ceil(editor.scrollT / step) * step; t <= editor.scrollT + viewDur; t += step) {
     const x = tToX(t);
@@ -4912,12 +5015,12 @@ function updateSelInfo() {
     поле.disabled = !sp;
     if (document.activeElement === поле && поле.dataset.набирают) return;
     поле.classList.remove('bad');
-    поле.value = sp ? v.toFixed(2) : '';
+    поле.value = sp ? v.toFixed(3) : '';
   };
   заполнить('sel-start', sp ? sp.start : 0);
   заполнить('sel-end', sp ? sp.end : 0);
   const dur = $('sel-dur');
-  if (dur) dur.textContent = sp ? Math.max(0, sp.end - sp.start).toFixed(2) : '—';
+  if (dur) dur.textContent = sp ? Math.max(0, sp.end - sp.start).toFixed(3) : '—';
 
   // Пока строка не выбрана, работать не с чем — кнопки гаснут
   const panel = $('sel-panel');
@@ -4926,8 +5029,10 @@ function updateSelInfo() {
   $('btn-sel-words').disabled = !sp;
   $('btn-sel-del').disabled = !state.lines.length;
   const marked = !!(line && hasWords(line));
+  // Подпись не меняется, меняется только галочка справа от неё (CSS,
+  // по классу .marked) — раньше подпись целиком переписывалась текстом
+  // «слова ✓», но textContent стёр бы вложенные <svg> значков
   $('btn-sel-words').classList.toggle('marked', marked);
-  $('btn-sel-words').textContent = t(marked ? 'ред.словаКнопкаГотово' : 'ред.словаКнопка');
   $('btn-sel-words-reset').classList.toggle('hidden', !marked);
 }
 
@@ -5020,6 +5125,8 @@ function applyOrigDrag(t) {
     s.start = Math.min(Math.max(nt, гр.lo), Math.max(гр.lo, гр.hi - длина));
     s.end = s.start + длина;
   }
+  // Подпись у курсора показывает именно ту границу, за которую тащат
+  editor.dragTip = d.kind === 'orig-end' ? s.end : s.start;
   drawTimeline();
 }
 
@@ -5027,6 +5134,7 @@ function endOrigDrag() {
   const d = editor.drag;
   editor.drag = null;
   editor.snapped = null;
+  hideDragTip();
   const s = state.origSpans[d.i];
   /* Просто щелчок по пустому месту полосы — это не «отрезок в ноль
      длиной», а перемотка: ставим указатель туда, куда ткнули */
@@ -5078,11 +5186,14 @@ function applyDrag(t) {
   if (!line) return;
   const sp = spanOfRow(d.row);
   d.moved = true;
+  editor.dragTip = null;
 
   if (d.kind === 'line-start') {
     setLineTime(d.row, примагнитить(t, { кромеСтроки: d.row }));
+    editor.dragTip = line.time;
   } else if (d.kind === 'line-end') {
     setLineEnd(d.row, примагнитить(t, { кромеСтроки: d.row }));
+    editor.dragTip = lineEnd(syncedLines(), syncedLines().indexOf(line));
   } else if (d.kind === 'line-move') {
     const hadEnd = line.ручнойКонец;
     // Блок целиком тянется за начало: липнет ведущая граница, как в монтажной
@@ -5091,6 +5202,7 @@ function applyDrag(t) {
     // Конец едет за строкой, только если человек уже задавал его руками:
     // иначе он и так пересчитается от нового начала
     if (hadEnd) setLineEnd(d.row, d.endWas + (ns - d.startWas));
+    editor.dragTip = line.time;
   } else if (d.kind === 'word-edge' || d.kind === 'word-move') {
     if (!sp) return;
     const words = ensureWords(line, sp);
@@ -5116,11 +5228,29 @@ function applyDrag(t) {
       if (words[k - 1]) words[k - 1].end = nt;
       if (words[k + 1]) words[k + 1].time = Math.max(nt + width, words[k + 1].time);
     }
+    editor.dragTip = words[k].time;
   }
   editor.spansKey = '';
   refreshTimes();
   editor.stageKey = '';
   drawTimeline();
+}
+
+/* Подпись с точным временем у курсора, пока тянут границу — тысячные
+   доли, чтобы человек видел, куда именно встала точка, не заглядывая
+   в поля инспектора. Координата — своя для канваса, а не курсора:
+   .tl-canvas-wrap — его offsetParent, поэтому смещение считается
+   от него и не зависит от полей вокруг канваса. */
+function showDragTip(x, sec) {
+  const tip = $('tl-tip');
+  if (!tip || sec == null) return;
+  tip.textContent = fmtTimeMs(sec);
+  tip.style.left = `${tl.offsetLeft + x}px`;
+  tip.classList.remove('hidden');
+}
+function hideDragTip() {
+  const tip = $('tl-tip');
+  if (tip) tip.classList.add('hidden');
 }
 
 /* Перемотка щелчком по пустому месту дорожки */
@@ -5166,6 +5296,7 @@ tl.addEventListener('pointermove', (e) => {
   if (editor.drag) {
     if (editor.drag.kind.startsWith('orig-')) applyOrigDrag(xToT(x));
     else applyDrag(xToT(x));
+    showDragTip(x, editor.dragTip);
     return;
   }
   const hit = timelineHit(x, y);
@@ -5182,6 +5313,7 @@ function endDrag() {
   if (editor.drag.kind.startsWith('orig-')) { endOrigDrag(); return; }
   editor.drag = null;
   editor.snapped = null;
+  hideDragTip();
   if (!dropEmptyHistory()) {
     saveProject();
     renderEditList();
@@ -6199,6 +6331,97 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ============================================================
+   Переключение темы
+
+   Две темы монтажной оболочки студии (см. .studio в style.css):
+   «фирменная» (signature, по умолчанию) — прежний синевато-чёрный
+   грунт и зелёный ровно в четырёх местах; «нейтральная» (neutral) —
+   серый грунт без оттенка и жёлтая рамка выделения. Устроено как
+   язык: атрибут на <html>, ключ в localStorage, переключатель
+   собирается кодом и стоит в шапке рядом с языковым.
+
+   Цвета для канваса дорожки (там CSS не читается сам) кэшируются
+   в edTheme и обновляются только при смене темы — на каждый кадр
+   отрисовки дорожки getComputedStyle звать не по карману. */
+const ТЕМЫ = ['signature', 'neutral'];
+const КЛЮЧ_ТЕМЫ = 'karaoke-theme';
+const ТЕМА_ПО_УМОЛЧАНИЮ = 'signature';
+
+function прочитатьТему() {
+  try {
+    const т = localStorage.getItem(КЛЮЧ_ТЕМЫ);
+    if (ТЕМЫ.includes(т)) return т;
+  } catch (e) { /* хранилище недоступно — остаёмся на теме по умолчанию */ }
+  return ТЕМА_ПО_УМОЛЧАНИЮ;
+}
+
+let тема = прочитатьТему();
+
+const edTheme = { selRing: '#34d399', selGlow: 'rgba(52, 211, 153, 0.5)', ground: '#0e0e15' };
+function обновитьЦветаТемы() {
+  const узел = document.querySelector('.studio');
+  if (!узел) return;
+  const cs = getComputedStyle(узел);
+  const читать = (имя, запасной) => {
+    const v = cs.getPropertyValue(имя).trim();
+    return v || запасной;
+  };
+  edTheme.selRing = читать('--sel-ring', edTheme.selRing);
+  edTheme.selGlow = читать('--sel-ring-glow', edTheme.selGlow);
+  edTheme.ground = читать('--ed-canvas-bg', edTheme.ground);
+}
+
+function применитьТему() {
+  document.documentElement.dataset.theme = тема;
+  обновитьЦветаТемы();
+  if (editor.peaks) drawTimeline();
+}
+
+function установитьТему(новая) {
+  if (!ТЕМЫ.includes(новая) || новая === тема) return;
+  тема = новая;
+  try { localStorage.setItem(КЛЮЧ_ТЕМЫ, тема); } catch (e) { /* некуда писать */ }
+  применитьТему();
+  собратьПереключателиТемы();
+}
+
+/* Переключатель собирается кодом теми же приёмами, что и языковой:
+   подписи одинаково читаются на любом языке, порядок кнопок общий,
+   и держать их в разметке незачем (см. собратьПереключателиЯзыка). */
+function собратьПереключателиТемы() {
+  document.querySelectorAll('.theme-switch').forEach((узел) => {
+    узел.textContent = '';
+    ТЕМЫ.forEach((код) => {
+      const кнопка = document.createElement('button');
+      кнопка.type = 'button';
+      кнопка.className = 'theme-btn';
+      кнопка.dataset.theme = код;
+      кнопка.textContent = t('тема.' + код);
+      кнопка.title = t('тема.' + код + '.полно');
+      кнопка.setAttribute('aria-label', кнопка.title);
+      const свой = код === тема;
+      кнопка.classList.toggle('active', свой);
+      кнопка.setAttribute('aria-pressed', свой ? 'true' : 'false');
+      кнопка.addEventListener('click', () => установитьТему(код));
+      узел.appendChild(кнопка);
+    });
+  });
+}
+
+// Атрибут ставим сразу при загрузке скрипта — до первой отрисовки
+// дорожки холста, чтобы edTheme не начинал с сигнатурных цветов
+// по умолчанию, если сохранена нейтральная тема
+document.documentElement.dataset.theme = тема;
+
+/* Наружу — тем же путём, что и I18N: пригодится и самопроверке
+   приложения (см. desktop/main.js), и для ручной проверки в консоли */
+window.THEME = {
+  ТЕМЫ,
+  тема: () => тема,
+  установить: установитьТему,
+};
+
+/* ============================================================
    Переключение языка
 
    Словарь и сама подстановка живут в i18n.js — здесь только то,
@@ -6251,6 +6474,11 @@ function собратьПереключателиЯзыка() {
 document.addEventListener('i18n', () => {
   расставитьМодификаторы();
   собратьПереключателиЯзыка();
+  собратьПереключателиТемы();
+  // Не завязано на editor.peaks: timelineLanes() — чистая функция
+  // высот, колонку заголовков можно и нужно перевести в любой момент,
+  // даже если сама дорожка ещё не открыта или уже закрыта
+  renderTimelineHeads(timelineLanes());
   заполнитьШрифты();
   updateStyleUI();
   updateEqUI();
@@ -6285,6 +6513,8 @@ document.addEventListener('i18n', () => {
 (function init() {
   расставитьМодификаторы();
   собратьПереключателиЯзыка();
+  собратьПереключателиТемы();
+  обновитьЦветаТемы();
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
   if (saved && saved.style) state.style = styleFromSaved(saved);

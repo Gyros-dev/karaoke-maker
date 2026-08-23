@@ -20,6 +20,38 @@
 </head>
 <body>
 
+<!-- ============ Значки оболочки ============
+     Один спрайт на всё приложение: элементы SVG, спрятанные из потока,
+     кнопки достают их через <use href="#i-имя">. Ни одной внешней
+     ссылки — того требует политика безопасности (default-src 'self'),
+     и того же требует ровный вид на macOS и Windows: у эмодзи там
+     разный рисунок, ширина и высота строки, у SVG — нет.
+     Начертание одно на весь набор: линия 1.3, скруглённые концы. -->
+<svg class="icon-sprite hidden" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.4v9.2c0 .5.55.8 1 .55l7.4-4.6a.65.65 0 0 0 0-1.1L6 2.85c-.45-.25-1 .05-1 .55z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 16 16"><rect x="4.3" y="3.3" width="2.7" height="9.4" rx="0.6" fill="currentColor"/><rect x="9" y="3.3" width="2.7" height="9.4" rx="0.6" fill="currentColor"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 16 16"><path d="M3.5 8a4.5 4.5 0 1 1 1.4 3.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M2.2 4.6v3.6h3.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 16 16"><path d="M12.5 8a4.5 4.5 0 1 0-1.4 3.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M13.8 4.6v3.6h-3.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-loop" viewBox="0 0 16 16"><path d="M2.8 6.1h9.4l-2-2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.2 9.9H3.8l2 2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-magnet" viewBox="0 0 16 16"><path d="M4.2 11V6.3a3.8 3.8 0 0 1 7.6 0V11" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4.2 8.7h2.5M9.3 8.7h2.5" stroke="currentColor" stroke-width="1.4"/><path d="M4.2 8.7V11a1.6 1.6 0 0 0 1.6 1.6M11.8 8.7V11a1.6 1.6 0 0 1-1.6 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 16 16"><path d="M3 4.3h10M6.3 4.3V2.7c0-.3.25-.55.55-.55h2.3c.3 0 .55.25.55.55v1.6" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.4 4.3l.6 8.4c.04.55.5 1 1.05 1h3.9c.55 0 1-.45 1.05-1l.6-8.4" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M6.6 7v4M9.4 7v4" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 16 16"><path d="M10.6 2.6l2.8 2.8-7.9 7.9-3.4.6.6-3.4z" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round" stroke-linecap="round"/><path d="M9.3 3.9l2.8 2.8" stroke="currentColor" stroke-width="1.25"/></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 16 16"><path d="M8 1.8a2.1 2.1 0 0 0-2.1 2.1v3.8a2.1 2.1 0 0 0 4.2 0V3.9A2.1 2.1 0 0 0 8 1.8z" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M4.3 7.4a3.7 3.7 0 0 0 7.4 0M8 11.1v2.9M6.2 14h3.6" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></symbol>
+    <symbol id="i-hourglass" viewBox="0 0 16 16"><path d="M4.3 2h7.4M4.3 14h7.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M4.8 2c0 2.7 1.6 3.3 3.2 4.2 1.6-.9 3.2-1.5 3.2-4.2M4.8 14c0-2.7 1.6-3.3 3.2-4.2 1.6.9 3.2 1.5 3.2 4.2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 16 16"><path d="M8 2.2a5.8 5.8 0 1 0 0 11.6c.9 0 1.3-.45 1.3-1 0-.28-.1-.47-.28-.72-.16-.24-.27-.44-.27-.73 0-.55.47-.95 1.02-.95h1.1a2.9 2.9 0 0 0 2.9-2.9c0-2.9-2.6-5.3-5.77-5.3z" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/><circle cx="5.3" cy="6.4" r=".75" fill="currentColor"/><circle cx="8" cy="4.9" r=".75" fill="currentColor"/><circle cx="10.6" cy="6.4" r=".75" fill="currentColor"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 16 16"><path d="M2 6.1h2.2L7.8 3.5v9L4.2 9.9H2z" fill="currentColor"/><path d="M10.1 5.6a3.1 3.1 0 0 1 0 4.8M11.9 4.1a5.5 5.5 0 0 1 0 7.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.3v7.3M4.9 7.3L8 10.5l3.1-3.2M3 13.2h10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-video" viewBox="0 0 16 16"><path d="M2 6.4l.85-3.2h9l-.85 3.2M2 6.4h11V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/><path d="M4.7 3.2l1 3.2M7.7 3.2l1 3.2" stroke="currentColor" stroke-width="1.05"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 16 16"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M6.05 6.15a1.95 1.95 0 1 1 2.75 1.78c-.6.28-.8.6-.8 1.17v.25" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.2" r=".72" fill="currentColor"/></symbol>
+    <symbol id="i-note" viewBox="0 0 16 16"><circle cx="4.4" cy="12.1" r="1.9" fill="currentColor"/><circle cx="10.3" cy="10.6" r="1.9" fill="currentColor"/><path d="M6.3 12.1V3.6L12.2 2v8.6" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.2 14.3 13a.9.9 0 0 1-.78 1.35H2.48A.9.9 0 0 1 1.7 13L8 2.2z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.4v3.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.8" r=".8" fill="currentColor"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.4l3.1 3.1L13 4.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
 <div class="update-bar hidden" id="update-bar">
   <span class="update-dot"></span>
   <span id="update-text" data-i18n="обновление.вышлаБезНомера">Вышла новая версия студии</span>
@@ -34,7 +66,7 @@
 <div class="whatsnew hidden" id="whatsnew">
   <div class="whatsnew-box" role="dialog" aria-modal="true" aria-labelledby="whatsnew-title">
     <button class="whatsnew-close" id="whatsnew-close" aria-label="Закрыть" title="Закрыть"
-      data-i18n-aria="новости.закрыть" data-i18n-title="новости.закрыть">✕</button>
+      data-i18n-aria="новости.закрыть" data-i18n-title="новости.закрыть"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
     <span class="whatsnew-badge"><span class="dot"></span> <span data-i18n="новости.значок">Обновление</span></span>
     <h3 id="whatsnew-title" data-i18n="новости.заголовок">Что нового в версии {версия}</h3>
     <ul class="whatsnew-list">
@@ -153,7 +185,7 @@
 <header class="site-header">
   <a class="logo" href="#top">
     <img class="logo-img" id="logo-img" src="icons/icon-192.png" alt="" width="32" height="32">
-    <span class="logo-icon hidden" id="logo-fallback">🎤</span>
+    <span class="logo-icon hidden" id="logo-fallback"><svg class="icon" aria-hidden="true"><use href="#i-mic"></use></svg></span>
     <span class="logo-text">Karaoke&nbsp;Punch</span>
   </a>
   <nav class="site-nav">
@@ -163,19 +195,24 @@
     <a href="#faq" data-i18n="шапка.вопросы">Вопросы</a>
   </nav>
   <a class="btn btn-primary btn-small" href="#studio" data-i18n="шапка.студия">Открыть студию</a>
-  <!-- Переключатель языка. Без флагов: флаг обозначает страну, а не
-       язык, и английским пользуются далеко не только в одной из них.
-       Подписи собирает app.js — они одинаково читаются на обоих
-       языках, поэтому в разметке их нет.
+  <!-- Переключатели языка и темы стоят парой, без флагов и палитр —
+       флаг обозначает страну, а не язык, а образец темы точнее покажет
+       сама студия, чем цветной кружок в шапке. Подписи обоих собирает
+       app.js — они одинаково читаются на любом языке и в любой теме,
+       поэтому в разметке их нет.
 
-       Стоит последним в шапке нарочно. Шапка раскладывает содержимое
-       по краям, поэтому у последнего правый край упирается в её поле
-       и никуда не съезжает. Раньше переключатель стоял между меню
-       и кнопкой студии — и при смене языка уезжал на полсотни
-       пикселей: переводятся и подписи меню, и подпись кнопки,
-       а свободное место шапка каждый раз делит заново. -->
-  <span class="lang-switch" id="lang-switch" role="group"
-    aria-label="Язык интерфейса" data-i18n-aria="шапка.язык"></span>
+       Пара стоит последней в шапке нарочно и держится одним flex-элементом.
+       Шапка раскладывает содержимое по краям, поэтому у последнего элемента
+       правый край упирается в её поле и никуда не съезжает. Раньше
+       переключатель языка стоял между меню и кнопкой студии — и при смене
+       языка уезжал на полсотни пикселей: переводятся и подписи меню,
+       и подпись кнопки, а свободное место шапка каждый раз делит заново. -->
+  <span class="header-switches">
+    <span class="theme-switch" id="theme-switch" role="group"
+      aria-label="Тема оформления" data-i18n-aria="шапка.тема"></span>
+    <span class="lang-switch" id="lang-switch" role="group"
+      aria-label="Язык интерфейса" data-i18n-aria="шапка.язык"></span>
+  </span>
 </header>
 
 <!-- ===================== HERO ===================== -->
@@ -387,14 +424,14 @@
     <button class="step-tab" data-step="4" disabled data-i18n-html="студия.шаг4"><span>4</span> Караоке</button>
     <a class="steps-help" href="#how" aria-label="Как пользоваться"
       data-i18n-aria="студия.справка.aria" data-i18n-title="студия.справка.подсказка"
-      title="Короткое руководство: рекомендованный порядок работы, редактор и экспорт"><span
-      aria-hidden="true">❔</span><span class="steps-help-text" data-i18n="студия.справка">Как пользоваться</span></a>
+      title="Короткое руководство: рекомендованный порядок работы, редактор и экспорт"><svg
+      class="icon" aria-hidden="true"><use href="#i-help"></use></svg><span class="steps-help-text" data-i18n="студия.справка">Как пользоваться</span></a>
   </div>
 
   <!-- Шаг 1: загрузка -->
   <div class="step-panel active" id="step-1">
     <div class="dropzone" id="dropzone" tabindex="0">
-      <div class="dropzone-icon">🎵</div>
+      <div class="dropzone-icon"><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg></div>
       <p class="dropzone-title" data-i18n-html="шаг1.перетащи">Перетащи сюда аудиофайл<br>или нажми, чтобы выбрать</p>
       <p class="dropzone-hint" data-i18n="шаг1.форматы">MP3 · WAV · OGG · M4A</p>
       <input type="file" id="file-input" accept="audio/*" hidden>
@@ -405,13 +442,13 @@
     </div>
     <div class="track-info hidden" id="track-info">
       <div class="track-row">
-        <div class="track-icon">💿</div>
+        <div class="track-icon"><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg></div>
         <div>
           <div class="track-name" id="track-name"></div>
           <div class="track-meta" id="track-meta"></div>
         </div>
       </div>
-      <p class="mono-warning hidden" id="mono-warning" data-i18n="шаг1.моно">⚠️ Файл моно — приглушить вокал не получится, но разметка текста и караоке будут работать.</p>
+      <p class="mono-warning hidden" id="mono-warning"><svg class="icon" aria-hidden="true"><use href="#i-warn"></use></svg> <span data-i18n="шаг1.моно">Файл моно — приглушить вокал не получится, но разметка текста и караоке будут работать.</span></p>
       <div class="bg-upload">
         <img id="bg-preview" class="bg-preview hidden" alt="Фон караоке" data-i18n-alt="шаг1.фон.alt">
         <div class="bg-upload-text">
@@ -461,7 +498,7 @@
            колонка не превращается в бесконечный список. -->
       <aside class="karaoke-side">
         <div class="side-head">
-          <b data-i18n="караоке.оформление">🎨 Оформление</b>
+          <b><svg class="icon" aria-hidden="true"><use href="#i-palette"></use></svg><span data-i18n="караоке.оформление">Оформление</span></b>
           <button class="nudge-btn" id="st-reset" data-i18n="караоке.сбросить">Сбросить</button>
         </div>
         <div class="side-tabs" id="side-tabs" role="tablist">
@@ -643,26 +680,26 @@
       </aside>
 
       <!-- Правое окно: предпросмотр. Разворачивается на всю страницу
-           кнопкой ⤢ (или клавишей F), обратно — Esc. -->
+           значком (или клавишей F), обратно — Esc. -->
       <div class="karaoke-main" id="karaoke-main">
         <div class="stage-wrap" id="stage-wrap">
           <div class="lyrics-stage" id="lyrics-stage"></div>
           <button class="stage-full-btn" id="btn-stage-full" title="Развернуть предпросмотр (F)"
             data-i18n-title="караоке.развернуть" data-i18n-aria="караоке.развернуть"
-            aria-label="Развернуть предпросмотр">⤢</button>
+            aria-label="Развернуть предпросмотр"><svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg></button>
         </div>
         <!-- Плеер и громкость вокала — одной строкой под предпросмотром:
              каждый лишний ряд отнимает высоту у самой сцены -->
         <div class="transport">
           <div class="player-bar">
-            <button class="play-btn" id="btn-play">▶</button>
+            <button class="play-btn" id="btn-play"><svg class="icon i-play" aria-hidden="true"><use href="#i-play"></use></svg><svg class="icon i-pause" aria-hidden="true"><use href="#i-pause"></use></svg></button>
             <span class="time" id="time-current">0:00</span>
             <input type="range" id="seek" min="0" max="1000" value="0">
             <span class="time" id="time-total">0:00</span>
           </div>
           <div class="mixer" data-i18n-title="караоке.микшер.подсказка"
             title="Отрезки оригинала, размеченные в редакторе, звучат целиком независимо от этого ползунка">
-            <span class="mixer-icon">🎤</span>
+            <span class="mixer-icon"><svg class="icon" aria-hidden="true"><use href="#i-mic"></use></svg></span>
             <label for="vocal-mix" data-i18n="караоке.вокал">Вокал</label>
             <input type="range" id="vocal-mix" min="0" max="100" value="0">
             <span class="mixer-value" id="vocal-mix-value">0%</span>
@@ -673,14 +710,14 @@
 
     <div class="export-row">
       <button class="btn btn-ghost" id="btn-back-3" data-i18n="экспорт.назад">← Редактор</button>
-      <button class="btn btn-ghost" id="btn-sound-check" data-i18n="экспорт.звук">🔊 Проверить звук</button>
-      <button class="btn btn-ghost" id="btn-export-lrc" data-i18n="экспорт.lrc">⬇ Текст .lrc</button>
-      <button class="btn btn-ghost hidden" id="btn-export-lrc-words" data-i18n="экспорт.lrcСлова"
+      <button class="btn btn-ghost" id="btn-sound-check"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg><span data-i18n="экспорт.звук">Проверить звук</span></button>
+      <button class="btn btn-ghost" id="btn-export-lrc"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.lrc">Текст .lrc</span></button>
+      <button class="btn btn-ghost hidden" id="btn-export-lrc-words"
         data-i18n-title="экспорт.lrcСлова.подсказка"
-        title="Расширенный LRC: время каждого слова внутри строки">⬇ .lrc со словами</button>
-      <button class="btn btn-ghost" id="btn-export-wav" data-i18n="экспорт.wav"
+        title="Расширенный LRC: время каждого слова внутри строки"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.lrcСлова">.lrc со словами</span></button>
+      <button class="btn btn-ghost" id="btn-export-wav"
         data-i18n-title="экспорт.wav.подсказка"
-        title="Минусовка с оригиналом на отрезках, размеченных в редакторе">⬇ Минусовка .wav</button>
+        title="Минусовка с оригиналом на отрезках, размеченных в редакторе"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.wav">Минусовка .wav</span></button>
       <label class="btn btn-ghost export-quality" for="video-quality"><span data-i18n="экспорт.качество">Качество</span>
         <select id="video-quality">
           <option value="720">HD · 1280×720</option>
@@ -688,7 +725,7 @@
           <option value="1440">2K · 2560×1440</option>
         </select>
       </label>
-      <button class="btn btn-primary" id="btn-export-video" data-i18n="экспорт.видео">🎬 Видео для YouTube</button>
+      <button class="btn btn-primary" id="btn-export-video"><svg class="icon" aria-hidden="true"><use href="#i-video"></use></svg><span data-i18n="экспорт.видео">Видео для YouTube</span></button>
     </div>
 
     <div class="export-overlay hidden" id="export-overlay">
@@ -717,7 +754,7 @@
         Слева текст — правь прямо в списке, двойной клик перематывает на строку.
         Посередине просмотр, справа инспектор выбранной строки. Внизу дорожка:
         тяни за края блока — сдвинется граница, за середину — вся строка.
-        Начала строк простукиваются пробелом: кнопка «✎ простучать заново».
+        Начала строк простукиваются пробелом: кнопка «простучать заново».
       </p>
       <p data-i18n-html="ред.справка.оригинал">
         <b>Верхняя полоса — оригинал.</b> Протяни по ней мышью — на этом куске вместо
@@ -739,7 +776,7 @@
         <span class="tl-key"><i class="sw sw-own"></i> <span data-i18n="ред.легенда.своё">своё время, если строку подтянуло к голосу</span></span>
       </div>
       <p data-i18n-html="ред.справка.магнит">
-        <b>🧲 Магнит.</b> При перетаскивании границы прилипают к краям соседних строк,
+        <b><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg> Магнит.</b> При перетаскивании границы прилипают к краям соседних строк,
         к указателю воспроизведения, к границам отрезков оригинала, к вступлениям
         и концам пения (когда огибающая голоса есть) и к краям песни. В месте
         прилипания встаёт цветная направляющая — цвет говорит, за что зацепилось.
@@ -770,7 +807,7 @@
         <span class="time" id="tap-time">0:00</span>
       </div>
       <div class="tap-actions">
-        <button class="btn btn-ghost" id="btn-tap-undo" disabled data-i18n="ред.простук.отменить">↶ отменить последнюю</button>
+        <button class="btn btn-ghost" id="btn-tap-undo" disabled><svg class="icon" aria-hidden="true"><use href="#i-undo"></use></svg><span data-i18n="ред.простук.отменить">отменить последнюю</span></button>
         <button class="btn btn-primary" id="btn-tap-done" data-i18n="ред.простук.готово">Готово</button>
       </div>
     </div>
@@ -779,23 +816,25 @@
          в середине, масштаб дорожки справа — как в монтажной программе -->
     <div class="ed-bar" id="ed-bar">
       <span class="ed-group">
-        <button class="play-btn small" id="btn-edit-play">▶</button>
+        <button class="play-btn small" id="btn-edit-play"><svg class="icon i-play" aria-hidden="true"><use href="#i-play"></use></svg><svg class="icon i-pause" aria-hidden="true"><use href="#i-pause"></use></svg></button>
         <span class="ed-clock">
           <b class="time" id="edit-time">0:00</b>
           <span class="time" id="edit-total">0:00</span>
         </span>
       </span>
       <span class="ed-group">
-        <button class="nudge-btn" id="tl-undo" data-i18n-mod-title="ред.отменить"
-          data-mod-title="Отменить последнее действие (%s+Z)" disabled>↶</button>
-        <button class="nudge-btn" id="tl-redo" data-i18n-mod-title="ред.повторить"
-          data-mod-title="Повторить отменённое (%s+Shift+Z)" disabled>↷</button>
+        <button class="nudge-btn icon-btn" id="tl-undo" data-i18n-mod-title="ред.отменить"
+          data-i18n-aria="ред.отменить.aria" data-mod-title="Отменить последнее действие (%s+Z)"
+          aria-label="Отменить последнее действие" disabled><svg class="icon" aria-hidden="true"><use href="#i-undo"></use></svg></button>
+        <button class="nudge-btn icon-btn" id="tl-redo" data-i18n-mod-title="ред.повторить"
+          data-i18n-aria="ред.повторить.aria" data-mod-title="Повторить отменённое (%s+Shift+Z)"
+          aria-label="Повторить отменённое" disabled><svg class="icon" aria-hidden="true"><use href="#i-redo"></use></svg></button>
       </span>
       <span class="ed-group">
-        <button class="nudge-btn" id="tl-loop" data-i18n="ред.покругу" data-i18n-title="ред.покругу.подсказка"
-          title="Играть выбранную строку по кругу (клавиша L)">↻ по кругу</button>
-        <button class="nudge-btn on" id="tl-snap" data-i18n="ред.магнит" data-i18n-title="ред.магнит.подсказка"
-          title="Магнит: границы прилипают к краям соседних строк, к указателю, к отрезкам оригинала и к настоящему вступлению голоса. Клавиша S — выключить совсем, зажатый Alt — отключить на время перетаскивания">🧲 магнит</button>
+        <button class="nudge-btn" id="tl-loop" data-i18n-title="ред.покругу.подсказка"
+          title="Играть выбранную строку по кругу (клавиша L)"><svg class="icon" aria-hidden="true"><use href="#i-loop"></use></svg><span data-i18n="ред.покругу">по кругу</span></button>
+        <button class="nudge-btn on" id="tl-snap" data-i18n-title="ред.магнит.подсказка"
+          title="Магнит: границы прилипают к краям соседних строк, к указателю, к отрезкам оригинала и к настоящему вступлению голоса. Клавиша S — выключить совсем, зажатый Alt — отключить на время перетаскивания"><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg><span data-i18n="ред.магнит">магнит</span></button>
       </span>
       <!-- Сдвиг всей разметки разом: раньше жил на шаге «Синхронизация» -->
       <span class="ed-group" id="shift-all">
@@ -845,7 +884,7 @@
           <div class="insp-row">
             <label class="sel-label" for="sel-start" data-i18n="ред.начало">начало</label>
             <span class="sel-field">
-              <input class="sel-num" id="sel-start" type="number" step="0.01"
+              <input class="sel-num" id="sel-start" type="number" step="0.001"
                      inputmode="decimal" autocomplete="off" disabled
                      data-i18n-title="ред.начало.подсказка"
                      title="Начало строки в секундах. Enter — применить, Esc — вернуть как было">
@@ -855,7 +894,7 @@
           <div class="insp-row">
             <label class="sel-label" for="sel-end" data-i18n="ред.конец">конец</label>
             <span class="sel-field">
-              <input class="sel-num" id="sel-end" type="number" step="0.01"
+              <input class="sel-num" id="sel-end" type="number" step="0.001"
                      inputmode="decimal" autocomplete="off" disabled
                      data-i18n-title="ред.конец.подсказка"
                      title="Конец строки в секундах. Enter — применить, Esc — вернуть как было">
@@ -870,16 +909,16 @@
             </span>
           </div>
           <div class="insp-actions">
-            <button class="nudge-btn" id="btn-sel-play" data-i18n="ред.прослушать" data-i18n-title="ред.прослушать.подсказка"
-              title="Прослушать эту строку (Enter)">▶ прослушать</button>
-            <button class="nudge-btn" id="btn-sel-words" data-i18n="ред.словаКнопка" data-i18n-title="ред.слова.подсказка"
-              title="Простучать слова внутри строки">♪ слова</button>
-            <button class="nudge-btn" id="btn-sel-words-reset" data-i18n="ред.сброс.слова" data-i18n-title="ред.сброс.слова.подсказка"
-              title="Вернуть автоматическое деление слов">⨯ сбросить слова</button>
-            <button class="nudge-btn" id="btn-sel-tap" data-i18n="ред.простучать" data-i18n-title="ред.простучать.подсказка"
-              title="Простучать эту строку и следующие заново (пробелом)">✎ простучать заново</button>
-            <button class="nudge-btn" id="btn-sel-del" data-i18n="ред.удалить" data-i18n-title="ред.удалить.подсказка"
-              title="Убрать эту строку из караоке">🗑 удалить</button>
+            <button class="nudge-btn" id="btn-sel-play" data-i18n-title="ред.прослушать.подсказка"
+              title="Прослушать эту строку (Enter)"><svg class="icon" aria-hidden="true"><use href="#i-play"></use></svg><span data-i18n="ред.прослушать">прослушать</span></button>
+            <button class="nudge-btn" id="btn-sel-words" data-i18n-title="ред.слова.подсказка"
+              title="Простучать слова внутри строки"><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg><span class="btn-label" data-i18n="ред.словаКнопка">слова</span><svg class="icon icon-check" aria-hidden="true"><use href="#i-check"></use></svg></button>
+            <button class="nudge-btn" id="btn-sel-words-reset" data-i18n-title="ред.сброс.слова.подсказка"
+              title="Вернуть автоматическое деление слов"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg><span data-i18n="ред.сброс.слова">сбросить слова</span></button>
+            <button class="nudge-btn" id="btn-sel-tap" data-i18n-title="ред.простучать.подсказка"
+              title="Простучать эту строку и следующие заново (пробелом)"><svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg><span data-i18n="ред.простучать">простучать заново</span></button>
+            <button class="nudge-btn" id="btn-sel-del" data-i18n-title="ред.удалить.подсказка"
+              title="Убрать эту строку из караоке"><svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg><span data-i18n="ред.удалить">удалить</span></button>
           </div>
           <label class="sel-vocal" data-i18n-title="ред.вокал.есть"
             title="В редакторе по умолчанию звучит оригинал: размечать на слух без голоса невозможно">
@@ -892,7 +931,7 @@
 
     <div class="word-tap hidden" id="word-tap">
       <div class="word-tap-head">
-        <b data-i18n="ред.слова.заголовок">♪ Разметка слов</b>
+        <b><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg> <span data-i18n="ред.слова.заголовок">Разметка слов</span></b>
         <span class="word-tap-hint" data-i18n-html="ред.слова.подсказка2">Жми <kbd>пробел</kbd> в момент, когда начинается очередное слово. Esc — отменить.</span>
       </div>
       <div class="word-tap-line" id="word-tap-line"></div>
@@ -903,9 +942,16 @@
       </div>
     </div>
 
-    <!-- Дорожка во всю ширину, как в монтажной программе -->
+    <!-- Дорожка во всю ширину, как в монтажной программе. Заголовки
+         полос — отдельная колонка слева от канваса, их содержимое
+         строит app.js (см. renderTimelineHeads) по высотам тех же
+         полос, что рисует сам канвас. -->
     <div class="timeline-wrap">
-      <canvas id="timeline" height="160"></canvas>
+      <div class="tl-heads" id="tl-heads"></div>
+      <div class="tl-canvas-wrap">
+        <canvas id="timeline" height="160"></canvas>
+        <div class="tl-tip hidden" id="tl-tip"></div>
+      </div>
     </div>
 
     <div class="panel-actions">

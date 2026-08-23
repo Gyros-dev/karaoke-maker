@@ -52,6 +52,70 @@
   --radius: 16px;
 }
 
+/* ============ Монтажная плотность студии ============
+   Значения по образцу монтажных программ (Logic Pro, Final Cut):
+   мельче скругления, ниже строка, вдвое теснее поля. Область
+   действия — .studio (все четыре шага), сама сцена караоке
+   (.lyrics-stage, .edit-stage, .stage-wrap) эти переменные не
+   использует и остаётся нынешнего крупного вида. Цифровое
+   начертание — системный моноширинный: свой файл шрифта грузить
+   незачем, а табличные цифры (font-variant-numeric) у него уже есть. */
+:root {
+  --ed-radius: 5px;
+  --ed-radius-ctl: 4px;
+  --ed-row: 24px;
+  --ed-gap: 0.35rem;
+  --ed-pad: 0.4rem;
+  --ed-font: 12px;
+  --ed-num: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+}
+
+/* ============ Тема оформления ============
+   «Фирменная» (signature, по умолчанию) держит прежний синевато-чёрный
+   грунт, а зелёный — ровно в четырёх местах: кнопка воспроизведения,
+   включённый переключатель, выделенный блок, цифры счётчика.
+   «Нейтральная» (neutral) убирает оттенок из грунта и держит вместо
+   зелёного жёлтую рамку выделения — ей самое место там, где важно
+   заметить, а не показать бренд.
+   Тема — атрибут на <html>, как и язык (см. app.js, «Переключение
+   темы»); переменные ниже видны только внутри .studio и не трогают
+   остальной сайт. */
+.studio {
+  /* Грунт фирменной темы совпадает с нынешними --bg-card/--border/--text
+     сайта — их не переопределяем, только четыре места акцента и то,
+     чего в общих переменных нет (фон самого канваса дорожки). */
+  --ed-canvas-bg: #0e0e15;
+  --sel-ring: #34d399;
+  --sel-ring-bg: rgba(52, 211, 153, 0.14);
+  --sel-ring-glow: rgba(52, 211, 153, 0.5);
+  --accent-btn-bg: var(--grad-btn);
+  --accent-btn-glow: 0 4px 16px rgba(16, 185, 129, 0.4);
+  --accent-on-bg: rgba(16, 185, 129, 0.16);
+  --accent-on-border: #2f9d76;
+  --accent-on-text: #9fe9c8;
+  --accent-clock: #7fe3bb;
+}
+html[data-theme="neutral"] .studio {
+  /* Серый грунт без оттенка — переопределяем сами общие переменные:
+     все селекторы редактора уже читают var(--bg-card)/var(--border)
+     и подхватят новые значения сами, без переписывания каждого правила. */
+  --bg-card: #232326;
+  --bg-soft: #1c1c1e;
+  --border: #38383c;
+  --text: #e8e8ea;
+  --text-dim: #9b9ba1;
+  --ed-canvas-bg: #1a1a1c;
+  --sel-ring: #f0c419;
+  --sel-ring-bg: rgba(240, 196, 25, 0.14);
+  --sel-ring-glow: rgba(240, 196, 25, 0.5);
+  --accent-btn-bg: #3a3a40;
+  --accent-btn-glow: none;
+  --accent-on-bg: rgba(255, 255, 255, 0.08);
+  --accent-on-border: #4d4d55;
+  --accent-on-text: var(--text);
+  --accent-clock: var(--text);
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }
@@ -113,6 +177,27 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .btn-ghost:not(:disabled):hover { border-color: var(--violet); color: var(--text); }
 .btn-big { font-size: 1.15rem; padding: 1rem 2.4rem; }
 .btn-small { font-size: 0.9rem; padding: 0.55rem 1.2rem; }
+
+/* ============ Значки ============
+   Один спрайт (см. index.html, .icon-sprite) на всё приложение вместо
+   эмодзи: у эмодзи разный рисунок на macOS и Windows — разная ширина
+   и высота строки, это было видно на снимках. Значок наследует цвет
+   текста (currentColor) и садится по кеглю кнопки (1em), поэтому
+   в любом месте выглядит одинаково и не требует своего размера. */
+.icon {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  vertical-align: -0.15em;
+}
+/* Кнопка со значком и подписью: небольшой зазор между ними, значок
+   слева. У кнопок с одним только значком (без подписи) зазора нет —
+   его и нечему разделять. */
+.btn .icon, .nudge-btn .icon, .steps-help .icon, .whatsnew-close .icon,
+.stage-full-btn .icon, .side-head .icon { margin-right: 0.4em; }
+.whatsnew-close .icon, .stage-full-btn .icon { margin-right: 0; }
+.icon-check { margin-left: 0.35em; margin-right: 0 !important; }
+#btn-sel-words:not(.marked) .icon-check { display: none; }
 
 /* ============ Полоса обновления ============ */
 .update-bar {
@@ -187,6 +272,42 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    в em, поэтому вместе с кеглем сжимается и она. */
 @media (max-width: 1120px) {
   .lang-btn { font-size: 0.74rem; padding: 0.3rem 0; }
+}
+
+/* Переключатель темы стоит рядом с языковым, в одном flex-элементе
+   шапки (см. .header-switches) — так пара держится вместе и не
+   съезжает при разной длине подписей на разных языках. Манера та же:
+   обойма-таблетка, активная кнопка подсвечена, ширина не скачет. */
+.header-switches { display: inline-flex; align-items: center; gap: 0.5rem; }
+.theme-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.theme-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.theme-btn + .theme-btn { border-left: 1px solid var(--border); }
+.theme-btn:hover { color: var(--text); }
+.theme-btn.active { color: var(--text); background: rgba(16, 185, 129, 0.16); }
+@media (max-width: 1120px) {
+  .theme-btn { font-size: 0.74rem; padding: 0.3rem 0.55rem; }
+}
+/* На совсем узком окне меню и так прячется (см. ниже .site-nav) —
+   темой можно пожертвовать раньше языка: язык важнее для чтения */
+@media (max-width: 760px) {
+  .theme-switch { display: none; }
 }
 
 /* ============ Шапка ============ */
@@ -683,11 +804,13 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .nudge { display: flex; gap: 0.25rem; }
 .nudge-btn {
-  min-width: 34px;
-  padding: 0.15rem 0.4rem;
+  min-width: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--ed-radius-ctl);
   color: var(--text-dim);
   font-family: inherit;
   font-size: 0.75rem;
@@ -697,6 +820,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .nudge-btn:hover:not(:disabled) { border-color: var(--violet); color: var(--text); }
 .nudge-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Кнопка только со значком, без подписи (отменить/повторить) — квадратная */
+.nudge-btn.icon-btn { min-width: 0; width: 26px; justify-content: center; padding: 0.15rem; }
+.nudge-btn.icon-btn .icon { margin-right: 0; }
 
 /* --- Шаг 3: редактор ---
    Редактор — самый плотный экран студии. Он делит высоту окна между
@@ -717,17 +843,18 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   margin: 0;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--ed-radius);
   background: var(--bg-card);
   overflow: hidden;
+  font-size: var(--ed-font);
 }
 .ed-pane-head {
   flex-shrink: 0;
-  padding: 0.3rem 0.7rem;
+  padding: 0.3rem var(--ed-pad);
   border-bottom: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-dim);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -738,8 +865,8 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.6rem;
+  gap: var(--ed-gap);
+  padding: var(--ed-pad);
 }
 .ed-viewer .edit-stage-wrap { margin: 0; padding: 0.5rem; }
 /* Справка редактора свёрнута: развернул — прочитал — свернул обратно */
@@ -756,8 +883,8 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    поэтому окну просмотра отдана заметная доля. */
 .editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 230px;
-  gap: 0.6rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 210px;
+  gap: var(--ed-gap);
   flex: 1;
   min-height: 150px;
 }
@@ -772,44 +899,54 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .edit-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.8rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.9rem;
+  gap: 0.4rem;
+  height: var(--ed-row);
+  padding: 0 0.5rem;
+  /* Волосяной разделитель, не рамка: на плотной сетке из 24-пиксельных
+     строк полноценная граница каждой строки рябит сильнее, чем помогает */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: var(--ed-font);
 }
 .edit-row:last-child { border-bottom: none; }
 .edit-row.current-row { background: rgba(16, 185, 129, 0.1); }
-/* Выбранная строка — та, которой слушаются клавиши, панель и дорожка */
+/* Выбранная строка — та, которой слушаются клавиши, панель и дорожка.
+   Рамка яркая и цветом совпадает с выделением на дорожке (тема
+   решает, жёлтая она или зелёная — см. --sel-ring) */
 .edit-row.selected-row {
-  background: rgba(132, 204, 22, 0.13);
-  box-shadow: inset 3px 0 0 #84cc16;
+  background: var(--sel-ring-bg);
+  box-shadow: inset 2px 0 0 var(--sel-ring);
 }
-.edit-row .ts { min-width: 3rem; flex-shrink: 0; }
-.edit-row .end-ts { min-width: 3.6rem; }
+.edit-row .ts, .edit-row .end-ts, .edit-row .dur-ts, .edit-row .num {
+  font-family: var(--ed-num);
+  font-variant-numeric: tabular-nums;
+}
+.edit-row .ts { min-width: 2.7rem; flex-shrink: 0; }
+.edit-row .end-ts { min-width: 3.2rem; }
 .edit-row .dur-ts {
-  min-width: 2.6rem;
+  min-width: 2.3rem;
   color: var(--text-dim);
   font-weight: 400;
   text-align: right;
 }
 .edit-row .num {
-  min-width: 1.6rem;
+  min-width: 1.5rem;
   flex-shrink: 0;
   color: var(--text-dim);
-  font-size: 0.8rem;
+  font-size: 0.9em;
   text-align: right;
 }
 /* Тихая пометка: слова этой строки размечены вручную */
-.word-mark { color: #84cc16; font-size: 0.85rem; cursor: help; flex-shrink: 0; }
+.word-mark { color: #84cc16; flex-shrink: 0; display: inline-flex; }
+.word-mark .icon { width: 0.85em; height: 0.85em; }
 .edit-text {
   flex: 1;
   min-width: 90px;
   outline: none;
-  padding: 0.1rem 0.35rem;
-  border-radius: 6px;
+  padding: 0.05rem 0.3rem;
+  border-radius: var(--ed-radius-ctl);
   /* Явный цвет курсора: в Windows он берётся системный и на тёмном
      фоне становится невидимым */
-  caret-color: #34d399;
+  caret-color: var(--sel-ring);
 }
 .edit-text:focus { background: rgba(255, 255, 255, 0.07); }
 
@@ -833,21 +970,22 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .sel-unit { color: var(--text-dim); font-size: 0.75rem; }
 /* Поле со значением. Рамка почти не видна, пока в поле не вошли:
    инспектор не должен выглядеть анкетой. */
+/* Ширина под "-12.345" — тысячные добавили знак, поле стало чуть шире */
 .sel-num {
-  width: 4.6rem;
+  width: 5.2rem;
   padding: 0.2rem 0.35rem;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--ed-radius-ctl);
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
-  font-family: inherit;
-  font-size: 0.82rem;
+  font-family: var(--ed-num);
+  font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   text-align: right;
   line-height: 1.35;
 }
 input.sel-num:hover:not(:disabled) { border-color: var(--border); }
-input.sel-num:focus { outline: none; border-color: #34d399; background: rgba(16, 185, 129, 0.12); }
+input.sel-num:focus { outline: none; border-color: var(--sel-ring); background: var(--sel-ring-bg); }
 input.sel-num:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Введено недопустимое — поле краснеет, но значение не пропадает:
    человек видит, что именно он набрал, и может поправить */
@@ -860,10 +998,10 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .sel-num::-webkit-outer-spin-button,
 .sel-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .sel-num { -moz-appearance: textfield; appearance: textfield; }
-.insp-actions { display: flex; flex-direction: column; gap: 0.3rem; }
-.insp-actions .nudge-btn { text-align: left; padding: 0.3rem 0.5rem; }
-.sel-panel .ed-pane-body { gap: 0.45rem; }
-.sel-label { color: var(--text-dim); font-size: 0.78rem; }
+.insp-actions { display: flex; flex-direction: column; gap: 0.25rem; }
+.insp-actions .nudge-btn { display: flex; align-items: center; text-align: left; padding: 0.3rem 0.5rem; }
+.sel-panel .ed-pane-body { gap: 0.4rem; }
+.sel-label { color: var(--text-dim); font-size: 0.85em; }
 .sel-vocal {
   display: flex;
   align-items: center;
@@ -875,8 +1013,8 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 }
 .sel-vocal input { accent-color: #10b981; cursor: pointer; }
 .sel-vocal:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
-#btn-sel-tap { border-color: #34d399; color: #34d399; }
-#btn-sel-words.marked { border-color: #34d399; color: #34d399; }
+#btn-sel-tap { border-color: var(--sel-ring); color: var(--sel-ring); }
+#btn-sel-words.marked { border-color: var(--sel-ring); color: var(--sel-ring); }
 
 /* --- Режим простукивания ---
    Забирает экран себе: сетка строк, предпросмотр и панель выбранной
@@ -1039,61 +1177,118 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.4rem 0.9rem;
+  gap: 0.35rem 0.7rem;
   flex-shrink: 0;
-  padding: 0.4rem 0.6rem;
+  padding: var(--ed-pad) 0.5rem;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--ed-radius);
   background: var(--bg-card);
   color: var(--text-dim);
-  font-size: 0.8rem;
+  font-size: var(--ed-font);
 }
 .ed-group { display: flex; align-items: center; gap: 0.4rem; }
 .ed-group .nudge-btn { white-space: nowrap; }
 .ed-right { margin-left: auto; }
 .ed-label { white-space: nowrap; }
-/* Часы — как табло в монтажной: текущее время крупно, длина песни рядом */
+/* Часы — как табло в монтажной: текущее время крупно, длина песни рядом.
+   Цифры счётчика — одно из четырёх мест фирменного зелёного
+   (--accent-clock); в нейтральной теме это просто цвет текста. */
 .ed-clock {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
-  padding: 0.15rem 0.6rem;
+  gap: 0.35rem;
+  padding: 0.1rem 0.5rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--ed-radius-ctl);
   background: var(--bg-soft);
+  font-family: var(--ed-num);
+  font-variant-numeric: tabular-nums;
 }
-.ed-clock b { color: #34d399; font-size: 1rem; font-weight: 600; }
+.ed-clock b { color: var(--accent-clock); font-size: 0.95rem; font-weight: 600; }
 
 .timeline-wrap {
   flex-shrink: 0;
+  display: flex;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--ed-radius);
   background: var(--bg-card);
-  padding: 0.5rem 0.6rem;
+  overflow: hidden;
 }
 .tl-shift-label { white-space: nowrap; }
-/* Подпись выбранной строки — первая строка инспектора */
+/* Подпись выбранной строки — первая строка инспектора. Тот же цвет,
+   что и рамка выделения: это часть одной и той же обратной связи. */
 .tl-sel {
   display: block;
-  color: #34d399;
+  color: var(--sel-ring);
   font-size: 0.82rem;
+  font-family: var(--ed-num);
   font-variant-numeric: tabular-nums;
   line-height: 1.35;
 }
-/* Включённый переключатель дорожки (по кругу, притягивание к голосу) */
+/* Включённый переключатель дорожки (по кругу, притягивание к голосу) —
+   второе из четырёх мест акцента темы */
 .nudge-btn.on {
-  border-color: #34d399;
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.14);
+  border-color: var(--accent-on-border);
+  color: var(--accent-on-text);
+  background: var(--accent-on-bg);
+}
+/* ---------- Колонка заголовков дорожек ----------
+   Слева от полос, вне канваса: подписи и место под будущую кнопку
+   «слушать только это» (см. дорожка.заголовок.* в i18n.js). Высота
+   каждой строки колонки подгоняется под высоту её полосы кодом
+   (см. renderTimelineHeads в app.js) — иначе при появлении полосы
+   голоса (только в приложении, после удаления вокала) колонка
+   и канвас разъедутся по высоте. */
+.tl-heads {
+  flex: none;
+  width: 84px;
+  border-right: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+  overflow: hidden;
+}
+.tl-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* Место под будущую кнопку соло — ширина зарезервирована, чтобы её
+   вставка потом не сдвинула подписи и не потребовала перевёрстки */
+.tl-head-solo-space { flex: none; width: 14px; }
+.tl-canvas-wrap { position: relative; flex: 1; min-width: 0; padding: 0.5rem 0.6rem; }
+/* Подпись с точным временем у курсора при перетаскивании границы —
+   тысячные доли, как и в полях инспектора (см. applyDrag в app.js) */
+.tl-tip {
+  position: absolute;
+  z-index: 6;
+  top: 2px;
+  transform: translateX(-50%);
+  font-family: var(--ed-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  background: #0d0d10;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
 }
 #timeline {
   display: block;
   width: 100%;
   /* До первого замера (resizeTimeline) — высота дорожек: иначе канвас
      тянется по своим 300×160 и раздувает шаг вчетверо.
-     18 линейка + 22 оригинал + 46 волна + 38 строки + 24 слова */
-  height: 148px;
-  border-radius: 8px;
+     16 линейка + 18 оригинал + 38 волна + 30 строки + 20 слова */
+  height: 122px;
+  border-radius: var(--ed-radius-ctl);
   cursor: pointer;
   touch-action: none;
 }
@@ -1353,16 +1548,25 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .play-btn {
   width: 52px; height: 52px;
   flex-shrink: 0;
+  display: grid;
+  place-items: center;
   border: none;
   border-radius: 50%;
-  background: var(--grad-btn);
+  background: var(--accent-btn-bg, var(--grad-btn));
+  box-shadow: var(--accent-btn-glow, none);
   color: #fff;
   font-size: 1.2rem;
   cursor: pointer;
   transition: transform 0.15s;
 }
 .play-btn:hover { transform: scale(1.07); }
-.time { font-variant-numeric: tabular-nums; color: var(--text-dim); font-size: 0.9rem; min-width: 2.8rem; }
+/* Значок игры/паузы: оба лежат в разметке, виден только нужный —
+   так переключение не трогает DOM (см. setPlayIcon в app.js) */
+.play-btn .icon { width: 40%; height: 40%; }
+.play-btn .i-pause { display: none; }
+.play-btn.playing .i-play { display: none; }
+.play-btn.playing .i-pause { display: block; }
+.time { font-variant-numeric: tabular-nums; font-family: var(--ed-num); color: var(--text-dim); font-size: 0.9rem; min-width: 2.8rem; }
 
 input[type="range"] {
   flex: 1;
