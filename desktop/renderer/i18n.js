@@ -205,6 +205,7 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.слова': '<b>Words now have settings of their own.</b> Precise editing used to stop at the line — a word could only be dragged. A selected word now has numeric start, end and length fields, the same keys as a line, loop playback and snapping. Next to them: “spread”, which lays the words out across the line by syllable count.',
   'новости.тема': '<b>The studio now looks like an editing suite.</b> Tighter layout, proper icons instead of mismatched emoji, times down to the millisecond, a column of track names, and the exact time under the cursor while you drag. There is a theme picker too — the green signature look or a neutral grey one, right in the header.',
   'новости.закрыть': 'Close',
   'новости.значок': 'Update',
