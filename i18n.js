@@ -439,7 +439,7 @@ I18N.EN = {
 
   /* ---------- Шаг 3: редактор ---------- */
   'ред.справка.заголовок': 'How to fix the timing',
-  'ред.справка.первый': 'The text is on the left — edit it in the list, double-click to jump to a line. The preview is in the middle, the selected-line inspector on the right. The timeline is at the bottom: drag a block’s edges to move a boundary, its middle to move the whole line. Line starts are tapped with the spacebar: the “tap again” button.',
+  'ред.справка.первый': 'The text is on the left — edit it in the list, double-click to jump to a line. The preview is in the middle, the selected-line and selected-word inspector on the right. The timeline is at the bottom: drag a block’s edges to move a boundary, its middle to move the whole line; the bottom lane works the same way for word edges, and clicking a word selects it — its numbers show up in the inspector. Line starts are tapped with the spacebar: the “tap again” button.',
   'ред.справка.оригинал': '<b>The top lane is the original.</b> Drag across it and the real words from the recording play on that stretch instead of the instrumental — handy for an intro you’d rather not sing. Pull the edges to adjust; the cross, a double-click or <kbd>Delete</kbd> removes a stretch. Inside a stretch the original is heard in full, wherever the “Vocals” slider sits in karaoke — and it goes into the .wav instrumental and the recorded video just the same. In the editor itself you won’t hear the difference: the original plays everywhere here, or there would be nothing to time against. To hear the stretches, clear “hear the original” on the right or go to karaoke.',
   'ред.легенда.оригинал': 'original plays here',
   'ред.легенда.голос': 'voice',
@@ -447,7 +447,7 @@ I18N.EN = {
   'ред.легенда.глазок': '≈ rough timing',
   'ред.легенда.слова': 'words of the selected line',
   'ред.легенда.своё': 'own timing, if the line was pulled to the voice',
-  'ред.справка.магнит': '<b><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg> Snapping.</b> While you drag, edges stick to neighbouring lines, to the playhead, to the edges of original stretches, to vocal onsets and endings (when the envelope is there) and to the edges of the song. A coloured guide appears where it sticks — the colour says what it caught. The threshold is the same at any zoom. Holding <kbd>Alt</kbd> suspends the snap; the <kbd>S</kbd> key turns it off for good.',
+  'ред.справка.магнит': '<b><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg> Snapping.</b> While you drag, edges stick to neighbouring lines, to neighbouring word edges, to the playhead, to the edges of original stretches, to vocal onsets and endings (when the envelope is there) and to the edges of the song. A coloured guide appears where it sticks — the colour says what it caught. The threshold is the same at any zoom. Holding <kbd>Alt</kbd> suspends the snap; the <kbd>S</kbd> key turns it off for good.',
   'ред.клавиши': '<kbd>space</kbd> play · <kbd>↑</kbd><kbd>↓</kbd> line · <kbd>←</kbd><kbd>→</kbd> start · <kbd>[</kbd><kbd>]</kbd> end · <kbd>Shift</kbd> finer, <kbd>Alt</kbd> coarser · <kbd>Enter</kbd> audition · <kbd>L</kbd> loop · <kbd>S</kbd> snap · <kbd>Delete</kbd> remove stretch · <kbd><span class="mod-key">Cmd</span>+Z</kbd> undo · wheel scrolls, with <kbd><span class="mod-key">Cmd</span></kbd> zooms',
   'ред.простук.клавиша': 'hit <kbd>space</kbd> at the start of a line — or click here',
   'ред.простук.отменить': 'undo last',
@@ -459,7 +459,7 @@ I18N.EN = {
   'ред.покругу': 'loop',
   'ред.покругу.подсказка': 'Play the selected line round and round (key L)',
   'ред.магнит': 'snap',
-  'ред.магнит.подсказка': 'Snapping: edges stick to neighbouring lines, to the playhead, to original stretches and to the real vocal onset. The S key turns it off for good, holding Alt suspends it for one drag',
+  'ред.магнит.подсказка': 'Snapping: edges stick to neighbouring lines, to neighbouring word edges, to the playhead, to original stretches and to the real vocal onset. The S key turns it off for good, holding Alt suspends it for one drag',
   'ред.сдвинуть': 'shift everything',
   'ред.сдвиг.минус': '−0.1',
   'ред.сдвиг.плюс': '+0.1',
@@ -482,6 +482,8 @@ I18N.EN = {
   'ред.слова.подсказка': 'Tap out the words inside this line',
   'ред.сброс.слова': 'reset words',
   'ред.сброс.слова.подсказка': 'Bring back the automatic word split',
+  'ред.распределить': 'spread out',
+  'ред.распределить.подсказка': 'Lay the line’s words out evenly by syllable count',
   'ред.простучать': 'tap again',
   'ред.простучать.подсказка': 'Tap this line and the ones after it again (with the spacebar)',
   'ред.удалить': 'delete',
@@ -491,6 +493,11 @@ I18N.EN = {
   'ред.слова.подсказка2': 'Hit <kbd>space</kbd> the moment each word starts. Esc cancels.',
   'ред.слова.сохранить': 'Save',
   'ред.слова.отменить': 'Cancel',
+  /* ---------- Панель выбранного слова ---------- */
+  'ред.словоЗаголовок': 'Word',
+  'ред.началоСлова.подсказка': 'Word start in seconds. The line’s first word has no handle of its own — it moves with the line start',
+  'ред.конецСлова.подсказка': 'Word end in seconds. The line’s last word has no handle of its own — it moves with the line end',
+  'ред.слово.поКругу.подсказка': 'Play this word round and round, with a short run-up and tail (key L)',
   'ред.назад': '← Lyrics',
   'ред.дальше': 'Karaoke →',
 
@@ -748,6 +755,8 @@ I18N.СТРОКИ = {
   'ред.строкаГлазок': { ru: ' · время на глазок', en: ' · rough timing' },
   'ред.словаКнопка': { ru: 'слова', en: 'words' },
   'ред.словаКнопкаГотово': { ru: 'слова', en: 'words' },
+  'ред.словоНеВыбрано': { ru: 'Слово не выбрано', en: 'No word selected' },
+  'ред.словоНомер': { ru: 'Слово №{n} из {всего}', en: 'Word {n} of {всего}' },
 
   /* ---------- Подписи на дорожке ---------- */
   'дорожка.оригинал.пусто': {

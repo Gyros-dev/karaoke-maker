@@ -518,5 +518,9 @@
     };
   }
 
-  return { fit, align, norm, similarity, syllables, parseLyrics, MATCH_MIN };
+  /* spread наружу — редактор пользуется им отдельно от fit(): команда
+     «распределить» в панели слова раскладывает слова уже готовой строки
+     по числу слогов той же самой функцией, безо всякого распознавания
+     речи (см. распределитьСлова в app.js). */
+  return { fit, align, norm, similarity, syllables, spread, parseLyrics, MATCH_MIN };
 });

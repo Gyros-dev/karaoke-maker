@@ -1016,6 +1016,29 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 #btn-sel-tap { border-color: var(--sel-ring); color: var(--sel-ring); }
 #btn-sel-words.marked { border-color: var(--sel-ring); color: var(--sel-ring); }
 
+/* --- Панель выбранного слова ---
+   Зеркало панели строки чуть выше: тот же .insp-row, то же .sel-num,
+   просто с отдельным маленьким заголовком-разделителем, чтобы было
+   видно, где кончается строка и начинается слово. */
+.sel-subhead {
+  margin-top: 0.15rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sel-word {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.sel-word.empty { opacity: 0.75; }
+/* .nudge-btn.on уже красит включённое кольцо строки акцентом темы —
+   у слова тот же класс, та же покраска, ничего своего добавлять не надо */
+
 /* --- Режим простукивания ---
    Забирает экран себе: сетка строк, предпросмотр и панель выбранной
    строки уходят с глаз, дорожка и метки на ней остаются. */

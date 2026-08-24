@@ -49,6 +49,7 @@
     <symbol id="i-note" viewBox="0 0 16 16"><circle cx="4.4" cy="12.1" r="1.9" fill="currentColor"/><circle cx="10.3" cy="10.6" r="1.9" fill="currentColor"/><path d="M6.3 12.1V3.6L12.2 2v8.6" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></symbol>
     <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.2 14.3 13a.9.9 0 0 1-.78 1.35H2.48A.9.9 0 0 1 1.7 13L8 2.2z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.4v3.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.8" r=".8" fill="currentColor"/></symbol>
     <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.4l3.1 3.1L13 4.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-spread" viewBox="0 0 16 16"><path d="M2.5 2v12M8 3.4v9.2M13.5 2v12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
   </defs>
 </svg>
 
@@ -759,9 +760,11 @@
       <summary data-i18n="ред.справка.заголовок">Как править разметку</summary>
       <p data-i18n="ред.справка.первый">
         Слева текст — правь прямо в списке, двойной клик перематывает на строку.
-        Посередине просмотр, справа инспектор выбранной строки. Внизу дорожка:
-        тяни за края блока — сдвинется граница, за середину — вся строка.
-        Начала строк простукиваются пробелом: кнопка «простучать заново».
+        Посередине просмотр, справа инспектор выбранной строки и выбранного слова.
+        Внизу дорожка: тяни за края блока — сдвинется граница, за середину — вся
+        строка; на нижней полосе так же тянутся границы слов, а щелчок по слову
+        выбирает его — числа появляются в инспекторе. Начала строк простукиваются
+        пробелом: кнопка «простучать заново».
       </p>
       <p data-i18n-html="ред.справка.оригинал">
         <b>Верхняя полоса — оригинал.</b> Протяни по ней мышью — на этом куске вместо
@@ -784,11 +787,11 @@
       </div>
       <p data-i18n-html="ред.справка.магнит">
         <b><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg> Магнит.</b> При перетаскивании границы прилипают к краям соседних строк,
-        к указателю воспроизведения, к границам отрезков оригинала, к вступлениям
-        и концам пения (когда огибающая голоса есть) и к краям песни. В месте
-        прилипания встаёт цветная направляющая — цвет говорит, за что зацепилось.
-        Порог одинаков на любом масштабе. Зажатый <kbd>Alt</kbd> отключает магнит
-        на время, клавиша <kbd>S</kbd> — совсем.
+        к границам соседних слов, к указателю воспроизведения, к границам отрезков
+        оригинала, к вступлениям и концам пения (когда огибающая голоса есть) и
+        к краям песни. В месте прилипания встаёт цветная направляющая — цвет говорит,
+        за что зацепилось. Порог одинаков на любом масштабе. Зажатый <kbd>Alt</kbd>
+        отключает магнит на время, клавиша <kbd>S</kbd> — совсем.
       </p>
       <p class="timeline-keys" data-i18n-html="ред.клавиши">
         <kbd>пробел</kbd> играть · <kbd>↑</kbd><kbd>↓</kbd> строка · <kbd>←</kbd><kbd>→</kbd> начало
@@ -841,7 +844,7 @@
         <button class="nudge-btn" id="tl-loop" data-i18n-title="ред.покругу.подсказка"
           title="Играть выбранную строку по кругу (клавиша L)"><svg class="icon" aria-hidden="true"><use href="#i-loop"></use></svg><span data-i18n="ред.покругу">по кругу</span></button>
         <button class="nudge-btn on" id="tl-snap" data-i18n-title="ред.магнит.подсказка"
-          title="Магнит: границы прилипают к краям соседних строк, к указателю, к отрезкам оригинала и к настоящему вступлению голоса. Клавиша S — выключить совсем, зажатый Alt — отключить на время перетаскивания"><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg><span data-i18n="ред.магнит">магнит</span></button>
+          title="Магнит: границы прилипают к краям соседних строк, к границам соседних слов, к указателю, к отрезкам оригинала и к настоящему вступлению голоса. Клавиша S — выключить совсем, зажатый Alt — отключить на время перетаскивания"><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg><span data-i18n="ред.магнит">магнит</span></button>
       </span>
       <!-- Сдвиг всей разметки разом: раньше жил на шаге «Синхронизация» -->
       <span class="ed-group" id="shift-all">
@@ -922,6 +925,11 @@
               title="Простучать слова внутри строки"><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg><span class="btn-label" data-i18n="ред.словаКнопка">слова</span><svg class="icon icon-check" aria-hidden="true"><use href="#i-check"></use></svg></button>
             <button class="nudge-btn" id="btn-sel-words-reset" data-i18n-title="ред.сброс.слова.подсказка"
               title="Вернуть автоматическое деление слов"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg><span data-i18n="ред.сброс.слова">сбросить слова</span></button>
+            <!-- Раскладка слов поровну по числу слогов — та же, что в подгонке
+                 своего текста (align.js). Видна только там, где он загружен,
+                 то есть в приложении, см. updateSelInfo -->
+            <button class="nudge-btn hidden" id="btn-sel-words-spread" data-i18n-title="ред.распределить.подсказка"
+              title="Разложить слова строки поровну по числу слогов"><svg class="icon" aria-hidden="true"><use href="#i-spread"></use></svg><span data-i18n="ред.распределить">распределить</span></button>
             <button class="nudge-btn" id="btn-sel-tap" data-i18n-title="ред.простучать.подсказка"
               title="Простучать эту строку и следующие заново (пробелом)"><svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg><span data-i18n="ред.простучать">простучать заново</span></button>
             <button class="nudge-btn" id="btn-sel-del" data-i18n-title="ред.удалить.подсказка"
@@ -932,6 +940,45 @@
             <input type="checkbox" id="sel-vocal" checked>
             <span data-i18n="ред.слышу">слышу оригинал</span>
           </label>
+
+          <!-- Панель выбранного слова — зеркало панели строки выше: то же
+               начало/конец/длительность, то же кольцо. Слово выбирается
+               щелчком по его блоку на полосе слов дорожки. -->
+          <div class="sel-word empty" id="word-panel">
+            <div class="sel-subhead" data-i18n="ред.словоЗаголовок">Слово</div>
+            <span class="tl-sel" id="tl-word-sel" data-i18n="ред.словоНеВыбрано">Слово не выбрано</span>
+            <div class="insp-row">
+              <label class="sel-label" for="sel-word-start" data-i18n="ред.начало">начало</label>
+              <span class="sel-field">
+                <input class="sel-num" id="sel-word-start" type="number" step="0.001"
+                       inputmode="decimal" autocomplete="off" disabled
+                       data-i18n-title="ред.началоСлова.подсказка"
+                       title="Начало слова в секундах. У первого слова строки своей ручки нет — его двигает начало строки">
+                <span class="sel-unit" data-i18n="ред.секунды">с</span>
+              </span>
+            </div>
+            <div class="insp-row">
+              <label class="sel-label" for="sel-word-end" data-i18n="ред.конец">конец</label>
+              <span class="sel-field">
+                <input class="sel-num" id="sel-word-end" type="number" step="0.001"
+                       inputmode="decimal" autocomplete="off" disabled
+                       data-i18n-title="ред.конецСлова.подсказка"
+                       title="Конец слова в секундах. У последнего слова строки своей ручки нет — его двигает конец строки">
+                <span class="sel-unit" data-i18n="ред.секунды">с</span>
+              </span>
+            </div>
+            <div class="insp-row">
+              <span class="sel-label" data-i18n="ред.длительность">длительность</span>
+              <span class="sel-field">
+                <span class="sel-num sel-num-ro" id="sel-word-dur">—</span>
+                <span class="sel-unit" data-i18n="ред.секунды">с</span>
+              </span>
+            </div>
+            <div class="insp-actions">
+              <button class="nudge-btn" id="btn-word-loop" disabled data-i18n-title="ред.слово.поКругу.подсказка"
+                title="Играть это слово по кругу, с небольшим разгоном и хвостом (клавиша L)"><svg class="icon" aria-hidden="true"><use href="#i-loop"></use></svg><span data-i18n="ред.покругу">по кругу</span></button>
+            </div>
+          </div>
         </div>
       </aside>
     </div>

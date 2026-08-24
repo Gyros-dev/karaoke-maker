@@ -2011,6 +2011,7 @@ function refreshTimes() {
       ? '' : t('ред.длина', { v: (lineEnd(synced, i) - lineStart(synced, i)).toFixed(1) });
   });
   updateSelInfo();
+  updateWordInfo();
 }
 
 /* ============================================================
@@ -3349,8 +3350,10 @@ const editor = {
   stageKey: '',
 
   sel: -1,       // выбранная строка (номер в state.lines), -1 — ничего
+  wordSel: -1,   // выбранное слово внутри неё (номер в массиве слов), -1 — ничего
   origSel: -1,   // выбранный отрезок оригинала (номер в state.origSpans)
-  loop: false,   // играть выбранную строку по кругу
+  loop: false,   // играть выбранную строку (или слово) по кругу
+  loopScope: 'line', // что именно крутит кольцо: 'line' или 'word'
   snap: true,     // магнит: притягивать границы к осмысленным точкам
   безМагнита: false, // зажат Alt — магнит отключён на время
   snapped: null,  // { t, вид } — куда притянулось, для направляющей
@@ -4718,17 +4721,22 @@ function drawWordBlocks(g, lane, W) {
     const x1 = tToX(w.end);
     if (x1 < -20 || x0 > W + 20) return;
     const width = Math.max(2, x1 - x0);
+    const sel = k === editor.wordSel;
     roundRect(g, x0, lane.y + 3, width, lane.h - 7, 3);
-    g.fillStyle = manual
+    g.fillStyle = sel ? 'rgba(52, 211, 153, 0.4)' : manual
       ? (k % 2 ? 'rgba(132, 204, 22, 0.28)' : 'rgba(132, 204, 22, 0.2)')
       : (k % 2 ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.13)');
     g.fill();
-    g.lineWidth = 1;
-    g.strokeStyle = manual ? 'rgba(163, 230, 53, 0.8)' : 'rgba(148, 163, 184, 0.5)';
-    g.setLineDash(manual ? [] : [3, 3]);
+    // Выбранное слово обведено ярко, тем же цветом, что и выбранная
+    // строка (edTheme.selRing) — тема решает, жёлтый он или зелёный
+    g.lineWidth = sel ? 2 : 1;
+    g.strokeStyle = sel ? edTheme.selRing : manual ? 'rgba(163, 230, 53, 0.8)' : 'rgba(148, 163, 184, 0.5)';
+    g.setLineDash(sel || manual ? [] : [3, 3]);
+    if (sel) { g.shadowColor = edTheme.selGlow; g.shadowBlur = 5; }
     g.stroke();
+    g.shadowBlur = 0;
     g.setLineDash([]);
-    g.fillStyle = manual ? '#e8f7cf' : 'rgba(226, 232, 240, 0.75)';
+    g.fillStyle = sel ? '#f2f7e6' : manual ? '#e8f7cf' : 'rgba(226, 232, 240, 0.75)';
     const txt = clipText(g, w.text.trim(), width - 6);
     if (txt) g.fillText(txt, x0 + 3, lane.y + lane.h / 2);
   });
@@ -4751,12 +4759,14 @@ function drawTimeline() {
   if (L.voice) drawVoiceLane(g, L.voice, W);
   drawWaveLane(g, L.wave, W);
 
-  // Кольцевое прослушивание: отрезок, который крутится, слегка подсвечен
+  // Кольцевое прослушивание: отрезок, который крутится, слегка подсвечен.
+  // Границы берём из loopBounds() — той же функции, что ведёт само
+  // кольцо: строки или слова, смотря что сейчас крутится (editor.loopScope)
   if (editor.loop) {
-    const sp = spanOfRow(editor.sel);
-    if (sp) {
-      const x0 = tToX(sp.start - LOOP_LEAD);
-      const x1 = tToX(sp.end + LOOP_TAIL);
+    const b = loopBounds();
+    if (b) {
+      const x0 = tToX(b.from);
+      const x1 = tToX(b.to);
       g.fillStyle = 'rgba(132, 204, 22, 0.09)';
       // L.ruler — полоса, а не число: раньше здесь стояло само L.ruler,
       // и высота выходила NaN, то есть подсветка не рисовалась вовсе
@@ -4845,12 +4855,20 @@ function timelineHit(x, y) {
     const sp = spanOfRow(editor.sel);
     if (sp) {
       const words = lineWords(sp.line, sp);
+      /* Края — отдельным проходом по всем словам, раньше тела любого из
+         них, — как у блоков строк чуть ниже. Раньше это была одна общая
+         петля: тело слова k проверялось в той же итерации, что и его
+         СОБСТВЕННЫЙ левый край, а правый край (он же левый край слова
+         k+1) прятался в СЛЕДУЮЩЕЙ итерации — которая никогда не наступала,
+         потому что тело слова k уже перехватывало эту точку первым.
+         Половина зоны прилипания у границы оказывалась недостижимой:
+         подвести курсор можно было только строго справа от неё. */
+      for (let k = 1; k < words.length; k++) {
+        if (Math.abs(x - tToX(words[k].start)) <= EDGE_GRAB) return { kind: 'word-edge', row: sp.row, k };
+      }
       for (let k = 0; k < words.length; k++) {
         const x0 = tToX(words[k].start);
         const x1 = tToX(words[k].end);
-        // Границу между словами тянем за левый край — кроме самого первого:
-        // начало первого слова — это начало строки, у него своя ручка
-        if (k > 0 && Math.abs(x - x0) <= EDGE_GRAB) return { kind: 'word-edge', row: sp.row, k };
         if (x >= x0 && x <= x1) return { kind: 'word-move', row: sp.row, k };
       }
     }
@@ -4878,10 +4896,13 @@ function timelineHit(x, y) {
    Границы при перетаскивании прилипают к осмысленным точкам — как
    в Logic Pro и Final Cut. Куда липнет:
      • к началам и концам соседних строк;
+     • к границам соседних слов (включая слова той же строки, если
+       граница не примыкает к ним впритык);
      • к указателю воспроизведения;
      • к границам отрезков оригинала;
      • к вступлениям и концам пения — если огибающая голоса есть
-       (в приложении после удаления вокала нейросетью);
+       (в приложении после удаления вокала нейросетью). Для слов это
+       особенно полезно: огибающая показывает начало каждого слога;
      • к самым краям песни.
 
    Порог задан в ПИКСЕЛЯХ, а не в секундах: на любом масштабе граница
@@ -4898,15 +4919,16 @@ function timelineHit(x, y) {
 
 /* Чем меньше вес, тем важнее точка при равном расстоянии: попасть
    в указатель или в край соседней строки нужнее, чем в огибающую */
-const ВЕС_МАГНИТА = { указатель: 0, строка: 1, оригинал: 1, голос: 2, край: 3 };
+const ВЕС_МАГНИТА = { указатель: 0, строка: 1, оригинал: 1, слово: 1, голос: 2, край: 3 };
 const ЦВЕТ_МАГНИТА = {
-  указатель: '#f2f2f7', строка: '#a3e635', оригинал: '#fb7185',
+  указатель: '#f2f2f7', строка: '#a3e635', оригинал: '#fb7185', слово: '#facc15',
   голос: '#38bdf8', край: '#9a9ab0',
 };
 
 /* Все точки, к которым сейчас имеет смысл липнуть.
-   что.кромеСтроки — номер строки, которую тащат (сама к себе не липнет),
-   что.кроме — номер отрезка оригинала, который тащат. */
+   что.кромеСтроки — номер строки, которую тащат (сама к себе не липнет,
+   и её слова тоже — они и так упираются в границу вплотную, см.
+   wordEdgeCore), что.кроме — номер отрезка оригинала, который тащат. */
 function точкиМагнита(что) {
   const о = что || {};
   const точки = [];
@@ -4917,6 +4939,13 @@ function точкиМагнита(что) {
     if (sp.row === о.кромеСтроки) continue;
     добавить(sp.start, 'строка');
     добавить(sp.end, 'строка');
+    /* Слова соседних строк — цели не хуже самих строк: вступление
+       следующего слова часто ближе к тому, что тащат, чем начало
+       или конец всей строки */
+    for (const w of lineWords(sp.line, sp)) {
+      добавить(w.start, 'слово');
+      добавить(w.end, 'слово');
+    }
   }
   добавить(audio.position(), 'указатель');
   отрезкиОригинала().forEach((s, i) => {
@@ -4965,7 +4994,11 @@ function snapToVoice(t) {
 function selectLine(row, opts) {
   const o = opts || {};
   const line = state.lines[row];
+  const было = editor.sel;
   editor.sel = line && line.time != null ? row : -1;
+  // Строка сменилась — выбор слова снимается: слово принадлежало прежней
+  // строке, и панель слова показывала бы чужие границы
+  if (editor.sel !== было) editor.wordSel = -1;
   document.querySelectorAll('#edit-list .edit-row').forEach((el) => {
     el.classList.toggle('selected-row', +el.dataset.row === editor.sel);
   });
@@ -4975,6 +5008,7 @@ function selectLine(row, opts) {
   }
   if (o.scrollTimeline) showTime(spanOfRow(editor.sel));
   updateSelInfo();
+  updateWordInfo();
   drawTimeline();
 }
 
@@ -5034,7 +5068,201 @@ function updateSelInfo() {
   // «слова ✓», но textContent стёр бы вложенные <svg> значков
   $('btn-sel-words').classList.toggle('marked', marked);
   $('btn-sel-words-reset').classList.toggle('hidden', !marked);
+
+  /* «Распределить» — только там, где есть сам алгоритм (см. распределитьСлова)
+     и строка, где действительно есть что раскладывать (больше одного слова) */
+  const spreadBtn = $('btn-sel-words-spread');
+  if (spreadBtn) {
+    const alignReady = typeof Align !== 'undefined' && typeof Align.spread === 'function';
+    const chunks = line ? splitWords(line.text) : [];
+    spreadBtn.classList.toggle('hidden', !alignReady);
+    spreadBtn.disabled = !sp || chunks.length < 2;
+  }
 }
+
+/* ============================================================
+   Панель выбранного слова
+
+   Зеркало панели строки: то же самое начало/конец/длительность,
+   те же клавиши, то же кольцо — только на границах одного слова
+   внутри уже выбранной строки. Слово выбирается щелчком по его
+   блоку на полосе слов (см. обработчик pointerdown на tl).
+   ============================================================ */
+
+/* Выбранное слово, посчитанное так же, как рисует его сама полоса —
+   через lineWords, а не через сырые line.words: тогда числа в панели
+   совпадают с тем, что на самом деле нарисовано на дорожке. */
+function selectedWord() {
+  if (editor.wordSel < 0) return null;
+  const sp = spanOfRow(editor.sel);
+  if (!sp) return null;
+  const words = lineWords(sp.line, sp);
+  if (!words[editor.wordSel]) return null;
+  return { row: editor.sel, k: editor.wordSel, words, sp };
+}
+
+/* Подпись и поля панели выбранного слова — та же логика, что у
+   updateSelInfo, просто на одно слово внутри строки. */
+function updateWordInfo() {
+  const head = $('tl-word-sel');
+  if (!head) return;
+  const info = selectedWord();
+  // Слово могло исчезнуть (строку сбросили, укоротили текст) — снимаем выбор
+  if (editor.wordSel >= 0 && !info) editor.wordSel = -1;
+  head.textContent = !info ? t('ред.словоНеВыбрано')
+    : t('ред.словоНомер', { n: info.k + 1, всего: info.words.length });
+
+  const w = info ? info.words[info.k] : null;
+  // Своей ручки для перетаскивания нет у самого первого и самого
+  // последнего слова строки — их края держат сама строка, см. wordEdgeCore
+  const можноНачало = !!info && info.k > 0;
+  const можноКонец = !!info && info.k < info.words.length - 1;
+  const заполнить = (id, v, можно) => {
+    const поле = $(id);
+    if (!поле) return;
+    поле.disabled = !можно;
+    if (document.activeElement === поле && поле.dataset.набирают) return;
+    поле.classList.remove('bad');
+    поле.value = можно && v != null ? v.toFixed(3) : '';
+  };
+  заполнить('sel-word-start', w ? w.start : null, можноНачало);
+  заполнить('sel-word-end', w ? w.end : null, можноКонец);
+  const dur = $('sel-word-dur');
+  if (dur) dur.textContent = w ? Math.max(0, w.end - w.start).toFixed(3) : '—';
+
+  const panel = $('word-panel');
+  if (panel) panel.classList.toggle('empty', !info);
+  const loopBtn = $('btn-word-loop');
+  if (loopBtn) {
+    loopBtn.disabled = !info;
+    loopBtn.classList.toggle('on', editor.loop && editor.loopScope === 'word');
+  }
+}
+
+/* Граница между словом idx−1 и словом idx — общая часть перетаскивания
+   мышью (см. applyDrag, ветка word-edge) и правки клавишами/полем.
+   Магнит внутрь не входит: его накладывает вызывающий, у мыши он есть,
+   у набора числа и у стрелок — нет, как и у самой строки. */
+function wordEdgeCore(row, idx, t) {
+  const line = state.lines[row];
+  const sp = spanOfRow(row);
+  if (!line || !sp) return null;
+  const words = ensureWords(line, sp);
+  if (idx < 1 || !words[idx]) return null;
+  const lo = (words[idx - 1] ? words[idx - 1].time : line.time) + MIN_SPAN;
+  const hi = (words[idx].end != null ? words[idx].end : sp.end) - MIN_SPAN;
+  const nt = Math.min(Math.max(t, lo), Math.max(lo, hi));
+  words[idx].time = nt;
+  words[idx - 1].end = nt;
+  return nt;
+}
+
+/* Подстройка границы слова с клавиатуры или полем — как nudgeLine
+   для строки: чистая правка времени, без истории (её кладёт вызывающий) */
+function nudgeWordEdge(row, idx, delta) {
+  const sp = spanOfRow(row);
+  if (!sp) return null;
+  const words = ensureWords(sp.line, sp);
+  if (!words[idx]) return null;
+  const nt = wordEdgeCore(row, idx, words[idx].time + delta);
+  refreshTimes();
+  saveProject();
+  return nt;
+}
+
+/* Правка полей «начало»/«конец» панели слова — зеркало применитьПолеСтроки:
+   сдвиг считается от показанного (display) значения, а прикладывается
+   как разница к настоящей метке — тем же приёмом, что и у строки, это
+   не даёт разъехаться показанным и подлинным числам при сдвиге строки. */
+function применитьПолеСлова(какой) {
+  const поле = $(какой === 'start' ? 'sel-word-start' : 'sel-word-end');
+  if (!поле) return;
+  const info = selectedWord();
+  if (!info) { updateWordInfo(); return; }
+  const idx = какой === 'start' ? info.k : info.k + 1;
+  const можно = idx >= 1 && idx < info.words.length;
+  const v = читатьСекунды(поле.value);
+  if (v == null || v < 0) { поле.classList.add('bad'); return; }
+  поле.classList.remove('bad');
+  const было = какой === 'start' ? info.words[info.k].start : info.words[info.k].end;
+  delete поле.dataset.набирают;
+  if (можно && Math.abs(v - было) >= 0.0005) {
+    pushHistory();
+    nudgeWordEdge(info.row, idx, v - было);
+    dropEmptyHistory();
+    renderEditList();
+    editor.stageKey = '';
+    renderEditStage();
+    drawTimeline();
+  }
+  updateWordInfo();
+  const снова = selectedWord();
+  if (снова) поле.value = (какой === 'start' ? снова.words[info.k].start : снова.words[info.k].end).toFixed(3);
+}
+
+['sel-word-start', 'sel-word-end'].forEach((id) => {
+  const поле = $(id);
+  if (!поле) return;
+  const какой = id === 'sel-word-start' ? 'start' : 'end';
+  поле.addEventListener('input', () => { поле.dataset.набирают = '1'; });
+  поле.addEventListener('change', () => применитьПолеСлова(какой));
+  поле.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); применитьПолеСлова(какой); }
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      delete поле.dataset.набирают;
+      поле.classList.remove('bad');
+      поле.blur();
+      updateWordInfo();
+    }
+  });
+  поле.addEventListener('blur', () => {
+    delete поле.dataset.набирают;
+    поле.classList.remove('bad');
+    updateWordInfo();
+  });
+});
+
+/* ---------- «Распределить»: слова строки поровну по числу слогов ----------
+   Раскладка — та же самая, что в подгонке своего текста под песню
+   (desktop/renderer/align.js, функция spread): длинное по слогам слово
+   поёт дольше короткого. Здесь не переизобретаем счёт слогов — зовём
+   ту же функцию через Align, экспортированную специально для этого
+   (см. align.js). Доступно только там, где Align вообще загружен —
+   то есть в приложении: на сайте подгонки текста нет, взять счёт
+   слогов неоткуда. */
+function распределитьСлова(row) {
+  if (typeof Align === 'undefined' || typeof Align.spread !== 'function') return false;
+  const line = state.lines[row];
+  const sp = spanOfRow(row);
+  if (!line || !sp) return false;
+  const chunks = splitWords(line.text);
+  if (chunks.length < 2) return false;
+  pushHistory();
+  const words = chunks.map((text) => ({ text }));
+  const times = new Array(words.length).fill(null);
+  const span = Math.max(MIN_SPAN, (sp.core != null ? sp.core : sp.end) - sp.start);
+  Align.spread(times, words, 0, words.length - 1, sp.start, span);
+  // Хвост распева — как и в автоделении: последнее слово тянется, пока
+  // звучит голос, а не обрывается ровно на core
+  const last = times[times.length - 1];
+  last.end = Math.max(last.end, sp.end);
+  line.words = chunks.map((text, k) => ({ text, time: times[k].time, end: times[k].end }));
+  dropEmptyHistory();
+  editor.wordSel = -1;
+  editor.spansKey = '';
+  refreshTimes();
+  renderEditList();
+  editor.stageKey = '';
+  renderEditStage();
+  updateWordExportBtn();
+  saveProject();
+  drawTimeline();
+  return true;
+}
+$('btn-sel-words-spread').addEventListener('click', () => {
+  if (editor.sel >= 0) распределитьСлова(editor.sel);
+});
 
 /* ---------- Правка отрезков оригинала ----------
    Отрезки лежат в state.origSpans по возрастанию времени и не налезают
@@ -5209,20 +5437,21 @@ function applyDrag(t) {
     const k = d.k;
     if (!words[k]) return;
     if (d.kind === 'word-edge') {
-      const lo = (words[k - 1] ? words[k - 1].time : line.time) + MIN_SPAN;
-      const hi = (words[k].end != null ? words[k].end : sp.end) - MIN_SPAN;
-      const nt = Math.min(Math.max(примагнитить(t), lo), Math.max(lo, hi));
-      words[k].time = nt;
-      if (words[k - 1]) words[k - 1].end = nt;
+      // Общая часть с клавишами и полем инспектора — см. wordEdgeCore.
+      // Магнит здесь накладывает только мышь, поэтому он снаружи
+      const nt = wordEdgeCore(d.row, k, примагнитить(t, { кромеСтроки: d.row }));
+      if (nt != null) words[k].time = nt;
     } else {
-      // Слово целиком: двигаем его вместе с обеими границами
+      // Слово целиком: двигаем его вместе с обеими границами — как
+      // тянется вся строка за начало (line-move), той же примагнитить
       const src = d.words && d.words[k] ? d.words[k] : words[k];
       const delta = t - d.grabT;
       const width = (src.end != null ? src.end : src.time + 0.3) - src.time;
       const lo = (words[k - 1] ? words[k - 1].time : line.time) + MIN_SPAN;
       const hi = (words[k + 1] ? words[k + 1].end != null ? words[k + 1].end : sp.end : sp.end)
         - width - MIN_SPAN;
-      const nt = Math.min(Math.max(src.time + delta, lo), Math.max(lo, hi));
+      const raw = примагнитить(src.time + delta, { кромеСтроки: d.row });
+      const nt = Math.min(Math.max(raw, lo), Math.max(lo, hi));
       words[k].time = nt;
       words[k].end = nt + width;
       if (words[k - 1]) words[k - 1].end = nt;
@@ -5275,13 +5504,27 @@ tl.addEventListener('pointerdown', (e) => {
     return;
   }
   if (hit && hit.kind.startsWith('orig-')) {
+    if (editor.wordSel !== -1) { editor.wordSel = -1; updateWordInfo(); }
     beginOrigDrag(hit, xToT(x));
     try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
   } else if (hit) {
+    // Смена строки сама снимает выбор слова (см. selectLine) — поэтому
+    // слово выбираемуже ПОСЛЕ неё, а не до
     if (hit.row !== editor.sel) selectLine(hit.row, { scrollList: true });
+    /* Слово выбирается щелчком по его блоку на полосе слов — тем же
+       кликом, что начинает перетаскивание. Клик где угодно ещё (по
+       строке, по её краю) снимает выбор слова: панель и подсветка
+       не должны показывать чужую границу. */
+    const хитСлова = hit.kind === 'word-edge' || hit.kind === 'word-move';
+    if (editor.wordSel !== (хитСлова ? hit.k : -1)) {
+      editor.wordSel = хитСлова ? hit.k : -1;
+      updateWordInfo();
+    }
     beginDrag(hit, xToT(x));
     try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
   } else {
+    // Пустое место дорожки — тоже снимает выбор слова
+    if (editor.wordSel !== -1) { editor.wordSel = -1; updateWordInfo(); }
     seekTo(xToT(x));
   }
   drawTimeline();
@@ -5378,7 +5621,12 @@ $('tl-fit').addEventListener('click', () => {
 $('tl-undo').addEventListener('click', undoEdit);
 $('tl-redo').addEventListener('click', redoEdit);
 $('tl-snap').addEventListener('click', () => setSnap(!editor.snap));
-$('tl-loop').addEventListener('click', () => setLoop(!editor.loop));
+$('tl-loop').addEventListener('click', () => {
+  setLoop(!(editor.loop && editor.loopScope === 'line'), 'line');
+});
+$('btn-word-loop').addEventListener('click', () => {
+  setLoop(!(editor.loop && editor.loopScope === 'word'), 'word');
+});
 
 function setSnap(on) {
   editor.snap = !!on;
@@ -5387,13 +5635,27 @@ function setSnap(on) {
   drawTimeline();
 }
 
-/* ---------- Прослушивание выбранной строки по кругу ----------
-   Кольцо крутит отрезок «немного до строки — строка — немного после».
-   Вокал при этом включён всегда: подгонять на слух иначе не выйдет. */
+/* ---------- Прослушивание по кругу: строка или слово ----------
+   Кольцо крутит отрезок «немного до — само — немного после». Вокал
+   при этом включён всегда: подгонять на слух иначе не выйдет.
+
+   Слово — тот же приём, только отрезок короче: разгон и хвост меньше,
+   иначе половина кольца ушла бы на тишину вокруг короткого слова. */
 const LOOP_LEAD = 0.8;
 const LOOP_TAIL = 0.5;
+const WORD_LOOP_LEAD = 0.4;
+const WORD_LOOP_TAIL = 0.3;
 
 function loopBounds() {
+  if (editor.loopScope === 'word') {
+    const info = selectedWord();
+    if (!info) return null;
+    const w = info.words[info.k];
+    return {
+      from: Math.max(0, w.start - WORD_LOOP_LEAD),
+      to: Math.min(audio.duration, w.end + WORD_LOOP_TAIL),
+    };
+  }
   const sp = spanOfRow(editor.sel);
   if (!sp) return null;
   return {
@@ -5402,9 +5664,17 @@ function loopBounds() {
   };
 }
 
-function setLoop(on) {
-  editor.loop = !!on && editor.sel >= 0;
-  $('tl-loop').classList.toggle('on', editor.loop);
+/* scope — 'line' или 'word'; по умолчанию тот, что уже крутится.
+   Кнопки и клавиша L передают его явно, поэтому щелчок по «слову»
+   всегда включает именно словесное кольцо, даже если крутилась строка. */
+function setLoop(on, scope) {
+  const желаемый = scope || editor.loopScope || 'line';
+  const доступно = желаемый === 'word' ? editor.wordSel >= 0 : editor.sel >= 0;
+  editor.loopScope = желаемый;
+  editor.loop = !!on && доступно;
+  $('tl-loop').classList.toggle('on', editor.loop && editor.loopScope === 'line');
+  const wordBtn = $('btn-word-loop');
+  if (wordBtn) wordBtn.classList.toggle('on', editor.loop && editor.loopScope === 'word');
   const b = loopBounds();
   if (editor.loop && b) {
     audio.play(b.from);
@@ -5501,12 +5771,32 @@ function moveSelection(delta) {
 }
 
 /* Подстройка выбранной строки с клавиатуры — с записью в историю */
+/* Выбрано слово — стрелки и скобки двигают его границу, а не строку.
+   Переучиваться не приходится: клавиши те же самые, слово просто
+   главнее, пока оно выбрано (та же грамматика, что у кольца, см. KeyL). */
 function nudgeSelected(what, delta) {
+  if (editor.wordSel >= 0) { nudgeSelectedWord(what, delta); return; }
   if (editor.sel < 0) return;
   pushHistory();
   if (what === 'start') nudgeLine(editor.sel, delta);
   else nudgeLineEnd(editor.sel, delta);
   dropEmptyHistory();   // сдвиг упёрся в соседнюю строку — отменять нечего
+  renderEditList();
+  editor.stageKey = '';
+  renderEditStage();
+  drawTimeline();
+}
+
+function nudgeSelectedWord(what, delta) {
+  const info = selectedWord();
+  if (!info) return;
+  const idx = what === 'start' ? info.k : info.k + 1;
+  // Своей ручки нет — как и у мыши (первое и последнее слово строки
+  // держит сама строка), тогда клавиша молча ничего не делает
+  if (idx < 1 || idx >= info.words.length) return;
+  pushHistory();
+  nudgeWordEdge(info.row, idx, delta);
+  dropEmptyHistory();
   renderEditList();
   editor.stageKey = '';
   renderEditStage();
@@ -5547,7 +5837,14 @@ document.addEventListener('keydown', (e) => {
       e.preventDefault();
       if (editor.sel >= 0) playLine(editor.sel);
       break;
-    case 'KeyL': e.preventDefault(); setLoop(!editor.loop); break;
+    // Кольцо — выбранного слова, если оно есть, иначе строки: та же
+    // грамматика, что у стрелок и скобок ниже, слово главнее строки
+    case 'KeyL': {
+      e.preventDefault();
+      const scope = editor.wordSel >= 0 ? 'word' : 'line';
+      setLoop(!(editor.loop && editor.loopScope === scope), scope);
+      break;
+    }
     case 'KeyS': e.preventDefault(); setSnap(!editor.snap); break;
     // Выбранный отрезок оригинала — убрать. Строки удаляются кнопкой
     // в инспекторе: слишком легко снести разметку случайной клавишей
@@ -5557,6 +5854,7 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'Escape':
       if (editor.loop) { e.preventDefault(); setLoop(false); }
+      else if (editor.wordSel >= 0) { e.preventDefault(); editor.wordSel = -1; updateWordInfo(); drawTimeline(); }
       else if (editor.origSel >= 0) { editor.origSel = -1; drawTimeline(); }
       break;
     case 'Equal':
