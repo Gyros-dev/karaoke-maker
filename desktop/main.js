@@ -560,6 +560,187 @@ function createWindow() {
             if (!былаАктивна) панель.classList.remove('active');
           }
         })(),
+        /* Правка слов — зеркало панели строки: выбор слова щелчком,
+           снятие выбора при смене строки, числовые поля (верное/неверное
+           значение), клавиши той же грамматики (стрелки/скобки, Shift
+           мельче, Alt крупнее — но у слова, не у строки), магнит на
+           границе слова (без него/с ним — числа должны разойтись),
+           кольцо слова и «распределить» по слогам (Align.spread).
+           Своя короткая «песня» с голосом, кончающимся ровно на 5.01 с —
+           туда и должен притянуть магнит. */
+        правкаСлов: (() => {
+          const былиСтроки = state.lines;
+          const былБуфер = state.originalBuffer;
+          const былаДлина = audio.duration;
+          const былГолос = { level: voice.level, runs: voice.runs };
+          const панель = document.getElementById('step-3');
+          const былаАктивна = панель.classList.contains('active');
+          const былSnap = editor.snap;
+          try {
+            const SR = 8000, dur = 20;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const buf = ctx.createBuffer(1, SR * dur, SR);
+            const d = buf.getChannelData(0);
+            for (let i = 0; i < d.length; i++) d[i] = 0.2 * Math.sin(i / 20);
+            state.originalBuffer = buf;
+            audio.duration = dur;
+            state.lines = [
+              { text: 'Раз два три четыре', time: 2, end: null, ручнойКонец: false, сомнительная: false },
+              { text: 'Пять шесть семь', time: 10, end: null, ручнойКонец: false, сомнительная: false },
+            ];
+            clearVoiceTrack();
+            панель.classList.add('active');
+            editor.peaks = null;
+            clearHistory();
+            openEditor();
+
+            // Голос: звучит 2–5.01 и 10–13 — конец первого отрезка это
+            // и есть точка, к которой должен притянуть магнит
+            const n = Math.floor(dur * VOICE_RATE);
+            const level = new Uint8Array(n);
+            for (let i = 0; i < n; i++) {
+              const t = i / VOICE_RATE;
+              const поют = (t >= 2 && t <= 5.01) || (t >= 10 && t <= 13);
+              level[i] = voiceDbCode(поют ? -5 : -50);
+            }
+            voice.level = level;
+            voice.runs = buildVoiceRuns(level);
+            editor.peaks = null;
+            openEditor();
+
+            const sp0 = () => spanOfRow(0);
+            const слова0 = () => lineWords(sp0().line, sp0());
+
+            // Выбор слова и снятие выбора при смене строки
+            selectLine(0, {});
+            editor.wordSel = 1;   // «два»
+            updateWordInfo();
+            const выборЕсть = editor.wordSel === 1 && !!selectedWord();
+            selectLine(1, {});
+            const снялсяПриСмене = editor.wordSel === -1;
+            selectLine(0, {});
+            editor.wordSel = 1;
+            updateWordInfo();
+
+            // Поле «начало»: отрицательное отклоняется и красит поле,
+            // число не трогается; верное — применяется, сосед подтягивается
+            const было1 = слова0()[1].start;
+            const fStart = document.getElementById('sel-word-start');
+            fStart.value = '-3';
+            fStart.dispatchEvent(new Event('change', { bubbles: true }));
+            const плохоеОтклонено = fStart.classList.contains('bad') && слова0()[1].start === было1;
+            fStart.value = '3.5';
+            fStart.dispatchEvent(new Event('change', { bubbles: true }));
+            const w1 = слова0();
+            const полеПрименилось = !fStart.classList.contains('bad')
+              && Math.abs(w1[1].start - 3.5) < 1e-6 && w1[0].end === w1[1].start;
+            fStart.blur();
+
+            // Клавиши: у выбранного слова, не у строки; Shift мельче, Alt крупнее
+            const строкаДо = state.lines[0].time;
+            const нажать = (code, opts) => document.dispatchEvent(
+              new KeyboardEvent('keydown', Object.assign({ code, bubbles: true }, opts)));
+            нажать('ArrowRight');
+            const послеШага = слова0()[1].start;
+            нажать('ArrowRight', { shiftKey: true });
+            const послеМельче = слова0()[1].start;
+            нажать('ArrowLeft', { altKey: true });
+            const послеКрупнее = слова0()[1].start;
+            const клавишиРаботают = Math.abs(послеШага - (3.5 + NUDGE_STEP)) < 1e-6
+              && Math.abs(послеМельче - (послеШага + NUDGE_FINE)) < 1e-6
+              && Math.abs(послеКрупнее - (послеМельче - NUDGE_COARSE)) < 1e-6
+              && state.lines[0].time === строкаДо;
+
+            // Магнит на границе слова «три»/«четыре»: конец голоса читаем
+            // настоящий (buildVoiceRuns округляет его до своего шага, поэтому
+            // не 5.01 ровно), а все четыре слова перед проверкой расставляем
+            // в заведомо известные, широкие границы — иначе они унаследовали
+            // бы место от правки полем и клавишами чуть выше, и цель могла
+            // оказаться за пределами допустимого диапазона
+            const голосКонец = voice.runs[0].end;
+            const словаДоМагнита = ensureWords(state.lines[0], sp0());
+            словаДоМагнита[0].time = 2; словаДоМагнита[0].end = 3;
+            словаДоМагнита[1].time = 3; словаДоМагнита[1].end = 4;
+            словаДоМагнита[2].time = 4; словаДоМагнита[2].end = 8;
+            словаДоМагнита[3].time = 8; словаДоМагнита[3].end = 9;
+            clearHistory();
+            const цельМагнита = голосКонец - 0.15;   // рядом, но не вплотную
+
+            editor.snap = false;
+            beginDrag({ kind: 'word-edge', row: 0, k: 3 }, 8);
+            applyDrag(цельМагнита);
+            endDrag();
+            const безМагнита = +слова0()[3].start.toFixed(3);
+            undoEdit();
+            editor.snap = true;
+            beginDrag({ kind: 'word-edge', row: 0, k: 3 }, 8);
+            applyDrag(цельМагнита);
+            endDrag();
+            const сМагнитом = слова0()[3].start;
+            const магнитРаботает = Math.abs(безМагнита - цельМагнита) <= 0.02
+              && Math.abs(сМагнитом - голосКонец) < 1e-6;
+
+            // Кольцо слова: границы считаются от самого слова, с разгоном
+            // и хвостом короче, чем у строки
+            editor.wordSel = 2;
+            updateWordInfo();
+            const словоДляКольца = selectedWord();
+            editor.loopScope = 'word';
+            const кольцоB = loopBounds();
+            const кольцоСлова = !!(словоДляКольца && кольцоB
+              && Math.abs(кольцоB.from - Math.max(0, словоДляКольца.words[2].start - 0.4)) < 1e-6
+              && Math.abs(кольцоB.to - Math.min(dur, словоДляКольца.words[2].end + 0.3)) < 1e-6);
+
+            // «Распределить»: то же самое Align.spread, что и в подгонке
+            // текста — доступно только там, где Align загружен
+            const alignДоступен = typeof Align !== 'undefined' && typeof Align.spread === 'function';
+            let распределилось = false;
+            let кнопкаРаспределитьВидна = false;
+            if (alignДоступен) {
+              editor.wordSel = -1;
+              распределитьСлова(0);
+              const sp = sp0();
+              const w = lineWords(sp.line, sp);
+              распределилось = hasWords(state.lines[0]) && w.length === 4
+                && Math.abs(w[0].start - sp.start) < 1e-6
+                && w.every((x, i) => i === 0 || Math.abs(x.start - w[i - 1].end) < 1e-6);
+              updateSelInfo();
+              кнопкаРаспределитьВидна = !document.getElementById('btn-sel-words-spread').classList.contains('hidden');
+            }
+
+            return {
+              выборЕсть,
+              снялсяПриСмене,
+              плохоеОтклонено,
+              полеПрименилось,
+              клавишиРаботают,
+              безМагнита,
+              сМагнитом,
+              магнитРаботает,
+              кольцоСлова,
+              alignДоступен,
+              распределилось,
+              кнопкаРаспределитьВидна,
+              вНорме: выборЕсть && снялсяПриСмене && плохоеОтклонено && полеПрименилось
+                && клавишиРаботают && магнитРаботает && кольцоСлова
+                && (!alignДоступен || (распределилось && кнопкаРаспределитьВидна)),
+            };
+          } finally {
+            state.lines = былиСтроки;
+            state.originalBuffer = былБуфер;
+            audio.duration = былаДлина;
+            voice.level = былГолос.level;
+            voice.runs = былГолос.runs;
+            editor.peaks = null;
+            editor.sel = -1;
+            editor.wordSel = -1;
+            editor.spansKey = '';
+            editor.snap = былSnap;
+            editor.loop = false;
+            clearHistory();
+            if (!былаАктивна) панель.classList.remove('active');
+          }
+        })(),
         /* Режим простукивания. Проверяем не наличие кнопок, а само
            поведение: забирает ли режим экран себе и по каким правилам
            переписываются метки. Стучим не вызовами tapHit, а пробелом
