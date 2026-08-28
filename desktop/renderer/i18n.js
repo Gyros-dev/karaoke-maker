@@ -225,7 +225,7 @@ I18N.EN = {
   'новости.язык': '<b>\u{1F30D} The interface speaks English now.</b> The language switch sits in the header \u2014 in reach from every step of the studio. Everything you see is translated \u2014 labels, hints, questions, the guide and messages. Your lyrics, of course, stay yours.',
   'новости.установщик': '<b>📦 The installer is 40 MB lighter.</b> A second copy of the neural-network engine had been slipping into the app by oversight — 131 MB that nothing ever loaded. It’s gone now: 202 MB instead of 242.',
   'новости.клавиши': '<b>⌨️ Key names match your system.</b> On Windows the hints said “Cmd+Z” — a key that isn’t there. The code was right all along; only the labels lied.',
-  'новости.вокал': '<b>🎚 Vocal removal is cleaner and faster.</b> We switched to the very model UVR5 runs. Measured against an instrumental made by the real UVR5, the match went from 84 % to 94 %. The model is three times lighter too — 64 MB instead of 172. And the wait is shorter: the old “accurate mode” with three passes turned out to add nothing — the difference from a single pass is down at the noise floor — so one pass is now the default.',
+  'новости.вокал': '<b>🎚 Vocal removal is cleaner and faster.</b> We switched to the very model UVR5 runs. Measured against an instrumental made by the real UVR5, the match went from 84% to 94%. The model is three times lighter too — 64 MB instead of 172. And the wait is shorter: the old “accurate mode” with three passes turned out to add nothing — the difference from a single pass is down at the noise floor — so one pass is now the default.',
   'новости.имя': '<b>🥊 The studio is now called Karaoke Punch.</b> Only the name changed: every project, every timing and every downloaded model stayed put and moved across on its own.',
   'новости.оригинал': '<b>🎤 Bring the original back where you want it.</b> Sometimes the opening should stay as it is — someone is talking, or another voice is singing — and you take over after that. On the editor timeline you mark the stretches where the original plays instead of the instrumental: drag to create, pull the edges, delete what you don’t need. Works the same in karaoke, in the exported instrumental and in the video.',
   'новости.магнит': '<b>🧲 Edges snap.</b> While you drag a line edge it sticks to neighbouring lines, to the playhead, to the edges of original-audio stretches and to real vocal onsets. Holding Alt suspends the snap for that drag — same as Logic Pro and Final Cut.',
@@ -281,7 +281,7 @@ I18N.EN = {
   'настольная.мак.шаг1': 'Open the downloaded <code>.dmg</code> and drag “Karaoke Punch” into Applications — the disk image window has an arrow showing where.',
   'настольная.мак.шаг2': 'Launch the app. The system refuses with a window titled <b>“Karaoke Punch” Not Opened</b> — “Apple could not verify…”. Press <b>Done</b> in it. Not “Move to Trash”: that button throws the app away.',
   'настольная.мак.шаг3': 'Open System Settings → Privacy &amp; Security and scroll down to the Security section. There you will now see “Karaoke Punch” was blocked to protect your Mac and an <b>Open Anyway</b> button.',
-  'настольная.мак.шаг4': 'A <b>second</b> window pops up — “Open „Karaoke Punch“?”. Press <b>Open Anyway</b> again. This is where people get stuck: it looks as if the first press did nothing — it did, the system simply asks twice.',
+  'настольная.мак.шаг4': 'A <b>second</b> window pops up — “Open ‘Karaoke Punch’?”. Press <b>Open Anyway</b> again. This is where people get stuck: it looks as if the first press did nothing — it did, the system simply asks twice.',
   'настольная.мак.шаг5': 'That’s it. From now on the app opens like any other, with nothing to confirm.',
   'настольная.мак.терминал': 'The quick way, if a command feels easier: drag the app into Applications, open Terminal and clear the “downloaded from the internet” flag — then there are no windows at all.',
   'настольная.виндоус.как': '<b>Windows.</b> SmartScreen shows a blue window → “More info” → “Run anyway”.',
@@ -469,7 +469,7 @@ I18N.EN = {
   'караоке.высокие': 'High <small>cymbals, air</small>',
   'караоке.эквалайзер.сбросить': 'Reset',
   'караоке.эквалайзер.подсказка': 'Applies in the player and goes into the video',
-  'караоке.заметка.вокал': 'Vocal level lives under the preview — that’s where you can hear it straight away.',
+  'караоке.заметка.вокал': 'Vocal level lives under the preview — that’s where you can hear it straight away',
   'караоке.развернуть': 'Expand the preview (F)',
   'караоке.вокал': 'Vocals',
   'караоке.микшер.подсказка': 'Original-audio stretches marked in the editor play in full regardless of this slider',
@@ -593,7 +593,7 @@ I18N.EN = {
   'faq.1.вопрос': 'Why aren’t the vocals removed completely?',
   'faq.1.ответ': 'In the browser the studio uses the classic “centre channel subtraction” trick: the voice is usually recorded identically in the left and right channels, so it can be subtracted out. Reverb, backing vocals and processing stay — for karaoke at home that’s usually enough. Full removal is a job for neural networks, and there’s a <a href="#desktop">desktop version</a> for that.',
   'faq.2.вопрос': 'How do I get a really clean instrumental?',
-  'faq.2.ответ1': '<b>The easiest way is the <a href="#desktop">desktop version</a>:</b> it has a “Remove the vocals with a neural network” button that does everything for you. It uses the local UVR-MDX-NET-Inst_HQ_3 model — the very one UVR5 runs, so the result is the same: we compared our instrumental against one from the real UVR5 and came within 6 % by amplitude, and almost all of that difference is not vocal residue but a different way of cutting the song into chunks.',
+  'faq.2.ответ1': '<b>The easiest way is the <a href="#desktop">desktop version</a>:</b> it has a “Remove the vocals with a neural network” button that does everything for you. It uses the local UVR-MDX-NET-Inst_HQ_3 model — the very one UVR5 runs, so the result is the same: we compared our instrumental against one from the real UVR5 and came within 6% by amplitude, and almost all of that difference is not vocal residue but a different way of cutting the song into chunks.',
   'faq.2.ответ2': 'If you’d rather not install anything, run the song through a neural network separately and load the finished file into the “Your own instrumental” field on step one. The free option is <b>Ultimate Vocal Remover (UVR5)</b>: it runs locally — pick an MDX-Net model (the same UVR-MDX-NET-Inst_HQ_3, for instance) and save the “Instrumental” track. Among paid services, LALAL.AI and Moises give comparable quality.',
   'faq.2.ответ3': 'The instrumental file has to be the same song at the same length as the original — otherwise the lyrics will drift.',
   'faq.3.вопрос': 'Are my files uploaded anywhere?',
@@ -642,7 +642,7 @@ I18N.СТРОКИ = {
      Уверенность и подсказки ставит код (обновитьСетку в app.js):
      число внутри них считается на месте, в разметке его быть не может. */
   'ред.доли.нетТемпа': {
-    ru: 'Темп ещё не определён: откройте песню и зайдите в редактор',
+    ru: 'Темп ещё не определён: открой песню и зайди в редактор',
     en: 'Tempo not detected yet: open a song and enter the editor',
   },
   'ред.доли.руками': { ru: 'своё', en: 'own' },
@@ -653,13 +653,13 @@ I18N.СТРОКИ = {
       + 'Double-click the field to restore the detected value',
   },
   'ред.доли.уверенность.подсказка': {
-    ru: 'Темп {bpm} определён с уверенностью {n} %. Ошибся — набери своё число',
+    ru: 'Темп {bpm} определён с уверенностью {n}%. Ошибся — набери своё число',
     en: 'Tempo {bpm} detected with {n}% confidence. Wrong? Type your own number',
   },
   'ред.доли.двойственный': {
-    ru: 'Темп {bpm}, уверенность {n} %. Вдвое медленнее или вдвое быстрее '
-      + 'подходит почти так же — если сетка встала не туда, поделите темп '
-      + 'надвое или умножьте на два',
+    ru: 'Темп {bpm}, уверенность {n}%. Вдвое медленнее или вдвое быстрее '
+      + 'подходит почти так же — если сетка встала не туда, подели темп '
+      + 'надвое или умножь на два',
     en: 'Tempo {bpm}, confidence {n}%. Half or double the tempo fits almost '
       + 'as well — if the grid looks wrong, halve or double the number',
   },
@@ -807,7 +807,7 @@ I18N.СТРОКИ = {
   'текст.потеряется': {
     ru: {
       one: 'Разметка {n} строки потеряется — в новом тексте такой строки нет:\n\n',
-      few: 'Разметка {n} строк потеряется — в новом тексте таких строк нет:\n\n',
+      few: 'Разметка {n} строки потеряется — в новом тексте таких строк нет:\n\n',
       many: 'Разметка {n} строк потеряется — в новом тексте таких строк нет:\n\n',
       other: 'Разметка {n} строк потеряется — в новом тексте таких строк нет:\n\n',
     },
@@ -876,7 +876,7 @@ I18N.СТРОКИ = {
   'экспорт.имяМинус': { ru: '{имя} (минус).wav', en: '{имя} (instrumental).wav' },
   'экспорт.имяВидео': { ru: '{имя} (караоке).{ext}', en: '{имя} (karaoke).{ext}' },
   'экспорт.моно': {
-    ru: 'Для моно-файла минусовку сделать нельзя.',
+    ru: 'Для монофайла минусовку сделать нельзя.',
     en: 'An instrumental can’t be made from a mono file.',
   },
   'экспорт.готовимШрифт': { ru: 'Готовим шрифт…', en: 'Preparing the font…' },
@@ -986,11 +986,11 @@ I18N.СТРОКИ = {
      прибавка: своей дорожки с голосом нет, он берётся вычитанием
      минусовки из песни. Двойной щелчок возвращает умолчание. */
   'дорожка.уровень': {
-    ru: 'Уровень «{имя}» в наушниках: {v} %. Двойной щелчок — вернуть как было',
+    ru: 'Уровень «{имя}» в наушниках: {v}%. Двойной щелчок — вернуть как было',
     en: '“{имя}” level in your headphones: {v}%. Double-click puts it back',
   },
   'дорожка.уровень.оригинал': {
-    ru: 'Уровень оригинала в наушниках: {v} %. На нуле остаётся чистая минусовка, '
+    ru: 'Уровень оригинала в наушниках: {v}%. На нуле остаётся чистая минусовка, '
       + 'на сотне голос звучит как в записи. Двойной щелчок — вернуть как было',
     en: 'Original level in your headphones: {v}%. At zero only the instrumental is left, '
       + 'at 100 the voice is as recorded. Double-click puts it back',
@@ -1172,7 +1172,21 @@ I18N.СТРОКИ = {
       + 'Try removing the vocals on step one first — it comes out noticeably better '
       + 'on a clean voice. Choosing the language by hand helps too.',
   },
-  'asr.меткаРаспознано': { ru: 'Текст распознан: {n} строк.', en: 'Lyrics transcribed: {n} lines.' },
+  /* Число строк стоит внутри фразы, поэтому формы заданы по правилам
+     каждого языка: «1 строка», «3 строки», «5 строк» — иначе получалось
+     «Текст распознан: 3 строк». */
+  'asr.меткаРаспознано': {
+    ru: {
+      one: 'Текст распознан: {n} строка.',
+      few: 'Текст распознан: {n} строки.',
+      many: 'Текст распознан: {n} строк.',
+      other: 'Текст распознан: {n} строк.',
+    },
+    en: {
+      one: 'Lyrics transcribed: {n} line.',
+      other: 'Lyrics transcribed: {n} lines.',
+    },
+  },
   'asr.меткаРаспознаноХвост': {
     ru: ' Времена строк и слов проставлены. Это черновик: строки стоит вычитать.',
     en: ' Line and word timings are in place. It’s a draft: the lines are worth proofreading.',
