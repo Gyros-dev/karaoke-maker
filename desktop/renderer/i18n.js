@@ -1215,8 +1215,8 @@ I18N.СТРОКИ = {
       + 'the lyrics to this song.',
   },
   'asr.меткаВремена': {
-    ru: 'Времена проставлены: {строк} строк, {слов} слов.',
-    en: 'Timings are in place: {строк} lines, {слов} words.',
+    ru: 'Времена проставлены. Строк: {строк}, слов: {слов}.',
+    en: 'Timings are in place. Lines: {строк}, words: {слов}.',
   },
   'asr.меткаРасслышала': {
     ru: ' Нейросеть точно расслышала {процент}% слов.',
@@ -1231,10 +1231,10 @@ I18N.СТРОКИ = {
     en: ' No lines with rough timing.',
   },
   'asr.итогРазложено': {
-    ru: 'Текст разложен по песне: {строк} строк, {слов} слов.\n\n'
+    ru: 'Текст разложен по песне. Строк: {строк}, слов: {слов}.\n\n'
       + 'Нейросеть точно расслышала {процент}% слов — их время настоящее. '
       + 'Остальные расставлены между ними по числу слогов.',
-    en: 'The lyrics are laid out over the song: {строк} lines, {слов} words.\n\n'
+    en: 'The lyrics are laid out over the song. Lines: {строк}, words: {слов}.\n\n'
       + 'The network heard {процент}% of the words for certain — their timing is real. '
       + 'The rest are spaced between them by syllable count.',
   },
