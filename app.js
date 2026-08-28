@@ -3622,8 +3622,17 @@ $('btn-export-lrc-words').addEventListener('click', () => {
   const body = lines.map((l, i) => {
     const span = lineSpan(lines, i);
     const words = lineWords(l, span);
+    /* Пауза между словами: в расширенном LRC конец слова — это метка
+       следующего, поэтому паузу выражаем лишней меткой на конце слова.
+       Плееры, которые её понимают, гасят подсветку до начала следующего
+       слова; остальные просто прочитают текст, как и раньше. */
     const inner = words
-      .map((w) => `<${fmtLrcTime(w.start)}>${w.text}`)
+      .map((w, k) => {
+        const след = words[k + 1];
+        const пауза = след && след.start - w.end > СТЫК
+          ? `<${fmtLrcTime(w.end)}>` : '';
+        return `<${fmtLrcTime(w.start)}>${w.text}${пауза}`;
+      })
       .join('')
       .replace(/\s+$/, '');
     // Метка конца строки — чтобы плеер знал, когда гасить подсветку
@@ -3739,6 +3748,7 @@ const editor = {
   loopScope: 'line', // что именно крутит кольцо: 'line' или 'word'
   snap: true,     // магнит: притягивать границы к осмысленным точкам
   безМагнита: false, // зажат Alt — магнит отключён на время
+  одинКрай: false,   // зажат Cmd/Ctrl — тянем один край стыка, а не оба
   snapped: null,  // { t, вид } — куда притянулось, для направляющей
   hearVocal: true, // в редакторе по умолчанию звучит оригинал с вокалом
   solo: null,      // 'orig' | 'voice' | 'inst' — слушаем только одну дорожку
@@ -4786,6 +4796,16 @@ const LANE_WORDS = 20;
 const EDGE_GRAB = 6;      // сколько пикселей у края блока считаются «за край»
 const SNAP_PX = 12;       // на таком расстоянии от точки магнит притягивает границу
 const MIN_SPAN = 0.08;    // короче строку и слово не делаем
+/* Ближе этого конец слова и начало следующего считаются одной точкой —
+   стыком. Раньше стык был единственным, что вообще бывает: конец слова
+   всегда равнялся началу следующего, и паузу между словами выразить
+   было нечем. Теперь края умеют расходиться (см. «Пауза между словами»
+   в README), и стык — это просто их частный случай. Порог маленький,
+   но не нулевой: числа приходят и от подгонки, и от округлений. */
+const СТЫК = 0.004;
+function стыкли(a, b) {
+  return a != null && b != null && Math.abs(a - b) <= СТЫК;
+}
 /* Тот же моноширинный стек, что и --ed-num в style.css. Канвас переменные
    CSS не читает, поэтому строка своя — держать в одном месте с CSS
    не получится, но менять её приходится редко. */
@@ -5363,7 +5383,15 @@ function timelineHit(x, y) {
          Половина зоны прилипания у границы оказывалась недостижимой:
          подвести курсор можно было только строго справа от неё. */
       for (let k = 1; k < words.length; k++) {
-        if (Math.abs(x - tToX(words[k].start)) <= EDGE_GRAB) return { kind: 'word-edge', row: sp.row, k };
+        /* Сваренные края — одна ручка на двоих («стык»), разошедшиеся —
+           две разные: у левого слова конец, у правого начало. Иначе
+           паузу между словами нечем было бы ни сделать, ни убрать. */
+        if (стыкли(words[k - 1].end, words[k].start)) {
+          if (Math.abs(x - tToX(words[k].start)) <= EDGE_GRAB) return { kind: 'word-edge', row: sp.row, k };
+        } else {
+          if (Math.abs(x - tToX(words[k - 1].end)) <= EDGE_GRAB) return { kind: 'word-end', row: sp.row, k: k - 1 };
+          if (Math.abs(x - tToX(words[k].start)) <= EDGE_GRAB) return { kind: 'word-start', row: sp.row, k };
+        }
       }
       for (let k = 0; k < words.length; k++) {
         const x0 = tToX(words[k].start);
@@ -5444,6 +5472,20 @@ function точкиМагнита(что) {
     for (const w of lineWords(sp.line, sp)) {
       добавить(w.start, 'слово');
       добавить(w.end, 'слово');
+    }
+  }
+  /* Края слов ТОЙ ЖЕ строки, которую сейчас тянут. Обычно своя строка
+     целью не считается (иначе граница липла бы сама к себе), но когда
+     разводят или сводят края слов, соседний край — единственная нужная
+     цель: без него паузу не закрыть обратно вплотную. Сам двигаемый
+     край из целей исключаем — он и есть то, что едет за мышью. */
+  if (о.свои != null) {
+    const своя = editorSpans().find((sp) => sp.row === о.свои);
+    if (своя) {
+      lineWords(своя.line, своя).forEach((w, i) => {
+        if (i !== о.безНачала) добавить(w.start, 'слово');
+        if (i !== о.безКонца) добавить(w.end, 'слово');
+      });
     }
   }
   добавить(audio.position(), 'указатель');
@@ -5675,14 +5717,62 @@ function wordEdgeCore(row, idx, t) {
   return nt;
 }
 
+/* Один край, а не стык: конец слова idx или начало слова idx — каждый
+   сам по себе. Так между словами появляется пауза (или закрывается,
+   если край подвели вплотную к соседу). Границы те же, что и у стыка,
+   только соседа за собой не тянем.
+
+   Возвращает поставленное время или null, если двигать нечего. */
+function wordEdgeOneCore(row, idx, край, t) {
+  const line = state.lines[row];
+  const sp = spanOfRow(row);
+  if (!line || !sp) return null;
+  const words = ensureWords(line, sp);
+  const w = words[idx];
+  if (!w) return null;
+  if (край === 'end') {
+    const lo = w.time + MIN_SPAN;
+    // Дальше начала следующего слова конец не пускаем: слова не налезают
+    const hi = words[idx + 1] ? words[idx + 1].time : sp.end;
+    const nt = Math.min(Math.max(t, lo), Math.max(lo, hi));
+    w.end = nt;
+    return nt;
+  }
+  const lo = words[idx - 1]
+    ? (words[idx - 1].end != null ? words[idx - 1].end : words[idx - 1].time + MIN_SPAN)
+    : sp.start;
+  const hi = (w.end != null ? w.end : sp.end) - MIN_SPAN;
+  const nt = Math.min(Math.max(t, lo), Math.max(lo, hi));
+  w.time = nt;
+  return nt;
+}
+
 /* Подстройка границы слова с клавиатуры или полем — как nudgeLine
    для строки: чистая правка времени, без истории (её кладёт вызывающий) */
-function nudgeWordEdge(row, idx, delta) {
+/* Пока края сварены, поле и клавиша двигают стык целиком — как раньше:
+   набрал начало слова, сосед подтянулся, паузе взяться неоткуда.
+   А если края уже разведены (мышью с Cmd/Ctrl или подгонкой, которая
+   ставит концы слов по распознаванию), двигается ровно тот край,
+   о котором поле: пауза остаётся паузой и правится по числу.
+   Аргумент «край» говорит, чей это край: 'start' — слова idx,
+   'end' — слова idx−1. */
+function nudgeWordEdge(row, idx, delta, край) {
   const sp = spanOfRow(row);
   if (!sp) return null;
   const words = ensureWords(sp.line, sp);
   if (!words[idx]) return null;
-  const nt = wordEdgeCore(row, idx, words[idx].time + delta);
+  const пред = words[idx - 1];
+  const сварены = стыкли(пред ? пред.end : null, words[idx].time);
+  let nt;
+  if (сварены || !край) {
+    nt = wordEdgeCore(row, idx, words[idx].time + delta);
+  } else if (край === 'end') {
+    if (!пред) return null;
+    const было = пред.end != null ? пред.end : words[idx].time;
+    nt = wordEdgeOneCore(row, idx - 1, 'end', было + delta);
+  } else {
+    nt = wordEdgeOneCore(row, idx, 'start', words[idx].time + delta);
+  }
   refreshTimes();
   saveProject();
   return nt;
@@ -5706,7 +5796,7 @@ function применитьПолеСлова(какой) {
   delete поле.dataset.набирают;
   if (можно && Math.abs(v - было) >= 0.0005) {
     pushHistory();
-    nudgeWordEdge(info.row, idx, v - было);
+    nudgeWordEdge(info.row, idx, v - было, какой);
     dropEmptyHistory();
     renderEditList();
     editor.stageKey = '';
@@ -5904,11 +5994,21 @@ function beginDrag(hit, t) {
   const sp = spanOfRow(hit.row);
   if (!sp) return;
   pushHistory();
+  /* Где стоял стык, когда за него взялись. Нужен, чтобы Cmd/Ctrl мог
+     развести края в обе стороны от одной и той же точки: влево едет
+     конец левого слова, вправо — начало правого, а второй край
+     остаётся ровно там, где был. */
+  let стыкWas = null;
+  if (hit.kind === 'word-edge') {
+    const ws = lineWords(sp.line, sp);
+    if (ws[hit.k]) стыкWas = ws[hit.k].start;
+  }
   editor.drag = {
     kind: hit.kind,
     row: hit.row,
     k: hit.k,
     grabT: t,
+    стыкWas,
     startWas: sp.line.time,
     endWas: lineEnd(syncedLines(), syncedLines().indexOf(sp.line)),
     words: hasWords(sp.line) ? sp.line.words.map((w) => ({ ...w })) : null,
@@ -5949,33 +6049,68 @@ function applyDrag(t) {
     // иначе он и так пересчитается от нового начала
     if (hadEnd) setLineEnd(d.row, d.endWas + (ns - d.startWas));
     editor.dragTip = line.time;
+  } else if (d.kind === 'word-start' || d.kind === 'word-end') {
+    /* Один край слова, а не стык: так и делается пауза между словами.
+       Магнит здесь цепляется и за края слов той же строки — иначе
+       закрыть паузу обратно, подведя край к соседу, было бы нечем. */
+    if (!sp) return;
+    const край = d.kind === 'word-end' ? 'end' : 'start';
+    const цель = примагнитить(t, {
+      кромеСтроки: d.row,
+      свои: d.row,
+      безНачала: край === 'start' ? d.k : -1,
+      безКонца: край === 'end' ? d.k : -1,
+    });
+    const nt = wordEdgeOneCore(d.row, d.k, край, цель);
+    if (nt != null) editor.dragTip = nt;
   } else if (d.kind === 'word-edge' || d.kind === 'word-move') {
     if (!sp) return;
     const words = ensureWords(line, sp);
     const k = d.k;
     if (!words[k]) return;
-    if (d.kind === 'word-edge') {
+    if (d.kind === 'word-edge' && editor.одинКрай && d.стыкWas != null) {
+      /* Cmd/Ctrl разводит стык на два края: влево уезжает конец левого
+         слова, вправо — начало правого, второй край стоит там, где был.
+         Так же в Logic Pro и Final Cut: обычное перетаскивание двигает
+         стык, с модификатором — только один край. */
+      const цель = примагнитить(t, {
+        кромеСтроки: d.row, свои: d.row, безНачала: k, безКонца: k - 1,
+      });
+      if (цель <= d.стыкWas) {
+        if (words[k].time !== d.стыкWas) words[k].time = d.стыкWas;
+        const nt = wordEdgeOneCore(d.row, k - 1, 'end', цель);
+        if (nt != null) editor.dragTip = nt;
+      } else {
+        if (words[k - 1] && words[k - 1].end !== d.стыкWas) words[k - 1].end = d.стыкWas;
+        const nt = wordEdgeOneCore(d.row, k, 'start', цель);
+        if (nt != null) editor.dragTip = nt;
+      }
+    } else if (d.kind === 'word-edge') {
       // Общая часть с клавишами и полем инспектора — см. wordEdgeCore.
       // Магнит здесь накладывает только мышь, поэтому он снаружи
       const nt = wordEdgeCore(d.row, k, примагнитить(t, { кромеСтроки: d.row }));
       if (nt != null) words[k].time = nt;
+      editor.dragTip = words[k].time;
     } else {
-      // Слово целиком: двигаем его вместе с обеими границами — как
-      // тянется вся строка за начало (line-move), той же примагнитить
+      /* Слово целиком: обе границы едут вместе, ширина сохраняется —
+         как клип в монтажной программе. Соседей за собой не тянем:
+         слово ходит в своём промежутке и упирается в соседей, а паузы,
+         если они есть, остаются паузами. */
       const src = d.words && d.words[k] ? d.words[k] : words[k];
       const delta = t - d.grabT;
       const width = (src.end != null ? src.end : src.time + 0.3) - src.time;
-      const lo = (words[k - 1] ? words[k - 1].time : line.time) + MIN_SPAN;
-      const hi = (words[k + 1] ? words[k + 1].end != null ? words[k + 1].end : sp.end : sp.end)
-        - width - MIN_SPAN;
-      const raw = примагнитить(src.time + delta, { кромеСтроки: d.row });
+      const пред = words[k - 1];
+      const след = words[k + 1];
+      const lo = пред ? (пред.end != null ? пред.end : пред.time + MIN_SPAN) : sp.start;
+      const hi = (след ? след.time : sp.end) - width;
+      const raw = примагнитить(src.time + delta, {
+        кромеСтроки: d.row, свои: d.row, безНачала: k, безКонца: k,
+      });
       const nt = Math.min(Math.max(raw, lo), Math.max(lo, hi));
       words[k].time = nt;
       words[k].end = nt + width;
-      if (words[k - 1]) words[k - 1].end = nt;
-      if (words[k + 1]) words[k + 1].time = Math.max(nt + width, words[k + 1].time);
+      editor.dragTip = nt;
     }
-    editor.dragTip = words[k].time;
   }
   editor.spansKey = '';
   refreshTimes();
@@ -6017,6 +6152,7 @@ tl.addEventListener('pointerdown', (e) => {
   const y = e.clientY - rect.top;
   const hit = timelineHit(x, y);
   editor.безМагнита = !!e.altKey;
+  editor.одинКрай = !!(e.metaKey || e.ctrlKey);
   if (hit && hit.kind === 'orig-del') {
     удалитьОтрезок(hit.i);
     return;
@@ -6033,7 +6169,8 @@ tl.addEventListener('pointerdown', (e) => {
        кликом, что начинает перетаскивание. Клик где угодно ещё (по
        строке, по её краю) снимает выбор слова: панель и подсветка
        не должны показывать чужую границу. */
-    const хитСлова = hit.kind === 'word-edge' || hit.kind === 'word-move';
+    const хитСлова = hit.kind === 'word-edge' || hit.kind === 'word-move'
+      || hit.kind === 'word-start' || hit.kind === 'word-end';
     if (editor.wordSel !== (хитСлова ? hit.k : -1)) {
       editor.wordSel = хитСлова ? hit.k : -1;
       updateWordInfo();
@@ -6054,6 +6191,10 @@ tl.addEventListener('pointermove', (e) => {
   const y = e.clientY - rect.top;
   // Зажатый Alt отключает магнит на время: так же в Logic Pro и Final Cut
   editor.безМагнита = !!e.altKey;
+  /* Cmd/Ctrl разводит стык слов на два края. Читаем на каждом движении,
+     а не только при нажатии: модификатор можно взять и посреди
+     перетаскивания — как в монтажных программах */
+  editor.одинКрай = !!(e.metaKey || e.ctrlKey);
   if (editor.drag) {
     if (editor.drag.kind.startsWith('orig-')) applyOrigDrag(xToT(x));
     else applyDrag(xToT(x));
@@ -6065,7 +6206,8 @@ tl.addEventListener('pointermove', (e) => {
     : hit.kind === 'orig-del' ? 'pointer'
       : hit.kind === 'orig-new' ? 'crosshair'
         : hit.kind === 'line-start' || hit.kind === 'line-end'
-          || hit.kind === 'word-edge' || hit.kind === 'orig-start' || hit.kind === 'orig-end'
+          || hit.kind === 'word-edge' || hit.kind === 'word-start' || hit.kind === 'word-end'
+          || hit.kind === 'orig-start' || hit.kind === 'orig-end'
           ? 'ew-resize' : 'grab';
 });
 
@@ -6313,7 +6455,7 @@ function nudgeSelectedWord(what, delta) {
   // держит сама строка), тогда клавиша молча ничего не делает
   if (idx < 1 || idx >= info.words.length) return;
   pushHistory();
-  nudgeWordEdge(info.row, idx, delta);
+  nudgeWordEdge(info.row, idx, delta, what);
   dropEmptyHistory();
   renderEditList();
   editor.stageKey = '';

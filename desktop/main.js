@@ -926,6 +926,115 @@ function createWindow() {
             былиАктивны.forEach((p) => p.classList.add('active'));
           }
         })(),
+        /* Пауза между словами. Раньше конец слова был обязан равняться
+           началу следующего: перетаскивание сваривало соседей, и паузу
+           выразить было нечем. Проверяем оба поведения сразу — обычное
+           перетаскивание стыка по-прежнему сваривает, с Cmd/Ctrl края
+           расходятся, — а заодно то, ради чего это делалось: заливка
+           караоке в паузе стоит, и расширенный LRC несёт лишнюю метку
+           на конце слова. */
+        паузаМеждуСловами: (() => {
+          const былиСтроки = state.lines;
+          const былБуфер = state.originalBuffer;
+          const былаДлина = audio.duration;
+          const былSnap = editor.snap;
+          const былКрай = editor.одинКрай;
+          const панель = document.getElementById('step-3');
+          const былаАктивна = панель.classList.contains('active');
+          try {
+            const SR = 8000, dur = 20;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            state.originalBuffer = ctx.createBuffer(1, SR * dur, SR);
+            audio.duration = dur;
+            state.lines = [
+              { text: 'Раз два три четыре', time: 2, end: null, ручнойКонец: false, сомнительная: false },
+              { text: 'Пять шесть семь', time: 12, end: null, ручнойКонец: false, сомнительная: false },
+            ];
+            панель.classList.add('active');
+            clearVoiceTrack();
+            editor.peaks = null;
+            editor.snap = false;   // здесь мерим руками, магнит только помешает
+            clearHistory();
+            openEditor();
+            selectLine(0, {});
+
+            const слова = () => {
+              const sp = spanOfRow(0);
+              return lineWords(sp.line, sp).map((w) => ({
+                t: w.text.trim(), s: +w.start.toFixed(3), e: +w.end.toFixed(3),
+              }));
+            };
+            const было = слова();
+            const стыкБыл = Math.abs(было[1].e - было[2].s) < 1e-9;
+
+            // Обычное перетаскивание стыка: как и раньше, сваривает соседей
+            editor.одинКрай = false;
+            beginDrag({ kind: 'word-edge', row: 0, k: 2 }, было[2].s);
+            applyDrag(было[2].s + 0.4);
+            endDrag();
+            const послеСтыка = слова();
+            const сваркаЖива = Math.abs(послеСтыка[1].e - послеСтыка[2].s) < 1e-9
+              && Math.abs(послеСтыка[2].s - (было[2].s + 0.4)) < 1e-6;
+
+            // С модификатором: влево уезжает конец левого слова, правое стоит
+            editor.одинКрай = true;
+            const доРазвода = слова();
+            beginDrag({ kind: 'word-edge', row: 0, k: 2 }, доРазвода[2].s);
+            applyDrag(доРазвода[2].s - 0.6);
+            endDrag();
+            editor.одинКрай = false;
+            const сПаузой = слова();
+            const пауза = +(сПаузой[2].s - сПаузой[1].e).toFixed(3);
+            const правоеНеТронули = Math.abs(сПаузой[2].s - доРазвода[2].s) < 1e-9;
+
+            // Разведённые края ловятся по отдельности — иначе паузу не поправить
+            const L = timelineLanes();
+            const y = L.words.y + Math.round(L.words.h / 2);
+            const хит = (t) => {
+              const h = timelineHit(tToX(t), y);
+              return h ? h.kind + ':' + h.k : null;
+            };
+            const ручки = { конец: хит(сПаузой[1].e), начало: хит(сПаузой[2].s) };
+
+            // Заливка караоке: в паузе прежнее слово уже спето, следующее ещё нет
+            const sp = spanOfRow(0);
+            const ws = lineWords(sp.line, sp);
+            const вПаузе = wordProgress(ws, (ws[1].end + ws[2].start) / 2);
+            const заливкаСтоит = вПаузе[1] === 1 && вПаузе[2] === 0;
+
+            // Расширенный LRC: лишняя метка на конце слова — это и есть пауза
+            const метки = ws.map((w, k) => {
+              const след = ws[k + 1];
+              return след && след.start - w.end > СТЫК ? 1 : 0;
+            }).reduce((a, b) => a + b, 0);
+
+            // Отмена возвращает сваренный стык
+            undoEdit();
+            const послеОтмены = слова();
+            const отменаВернула = Math.abs(послеОтмены[1].e - послеОтмены[2].s) < 1e-9;
+
+            return {
+              стыкБыл, сваркаЖива, пауза, правоеНеТронули, ручки,
+              заливкаСтоит, метокПаузы: метки, отменаВернула,
+              вНорме: стыкБыл && сваркаЖива
+                && Math.abs(пауза - 0.6) < 1e-6 && правоеНеТронули
+                && ручки.конец === 'word-end:1' && ручки.начало === 'word-start:2'
+                && заливкаСтоит && метки === 1 && отменаВернула,
+            };
+          } finally {
+            state.lines = былиСтроки;
+            state.originalBuffer = былБуфер;
+            audio.duration = былаДлина;
+            editor.snap = былSnap;
+            editor.одинКрай = былКрай;
+            editor.peaks = null;
+            editor.sel = -1;
+            editor.wordSel = -1;
+            editor.spansKey = '';
+            clearHistory();
+            if (!былаАктивна) панель.classList.remove('active');
+          }
+        })(),
         /* Уровни дорожек в наушниках: ползунок у оригинала и у минусовки.
            Своей дорожки у голоса нет, он берётся вычитанием, поэтому
            «оригинал O, минусовка M» — это песня с усилением O и минусовка
