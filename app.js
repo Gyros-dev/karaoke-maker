@@ -242,6 +242,12 @@ function defaultStyle() {
     dim: 45,            // прозрачность неактивных строк, % (размер не меняется)
     blur: 0,            // лёгкое размытие неактивных строк, px
     scrim: 100,         // подложка-градиент под текстом поверх картинки, %
+    /* Высота подложки: 100% — ровно столько, сколько занимают обе строки
+       со своим кеглем плюс небольшой запас. Ниже — узкая полоса, выше —
+       широкая. Ключ новый, прежнего умолчания у него не было, поэтому
+       в старые проекты он приезжает сам (styleFromSaved подкладывает
+       умолчания под сохранённое) и переноса поколением не требует. */
+    scrimSize: 100,     // высота подложки, % от «ровно под строками»
     countdown: true,    // отсчёт из трёх точек перед вступлением строки
   };
 }
@@ -2978,34 +2984,144 @@ function countdownState(pos, ph) {
   };
 }
 
-/* Подложка под текстом: вместо затемнения всего кадра — мягкая полоса
-   там, где стоят строки. Одни и те же остановки идут и в CSS, и в видео. */
-function scrimStops(s) {
+/* ---------- Где стоят точки отсчёта ----------
+   Беда, которую это лечит: место точек считалось ОТНОСИТЕЛЬНО одной
+   строки — «на месте нот проигрыша, а если нот нет, чуть выше той,
+   что вот-вот зазвучит». Стоит развести ползунки «Место первой»
+   и «Место второй», и это «чуть выше» приходилось ровно на строку,
+   которую сейчас поют: точки ложились на слова.
+
+   Теперь место ищется по прямоугольникам ВСЕХ видимых строк: между
+   ними собираются щели, и точки встают в ту щель, которая и вмещает
+   их целиком, и ближе всего к желаемому месту. Если текст занял
+   поверхность целиком и свободной щели нет вовсе, точки не рисуются
+   совсем — лучше без подсказки, чем поверх текста.
+
+   Арифметика одна на все поверхности: живая сцена подаёт сюда коробки
+   из DOM, кадр видео — свою раскладку. */
+const COUNT_BAND = 0.9;   // сколько кеглей в высоту занимает ряд точек
+
+function свободноеМесто(H, коробки, нужно, желаемое) {
+  const занято = (коробки || [])
+    .filter((b) => b && b.низ > b.верх)
+    .sort((a, b) => a.верх - b.верх);
+  const щели = [];
+  let y = 0;
+  for (const b of занято) {
+    if (b.верх > y) щели.push({ от: y, до: b.верх });
+    y = Math.max(y, b.низ);
+  }
+  щели.push({ от: y, до: H });
+
+  let лучшая = null;
+  let ближе = Infinity;
+  for (const щ of щели) {
+    if (щ.до - щ.от < нужно) continue;
+    const c = Math.min(Math.max(желаемое, щ.от + нужно / 2), щ.до - нужно / 2);
+    const d = Math.abs(c - желаемое);
+    if (d < ближе) { ближе = d; лучшая = { y: c, щель: щ.до - щ.от, тесно: false }; }
+  }
+  if (лучшая) return лучшая;
+  const самая = щели.reduce((a, b) => ((b.до - b.от) > (a.до - a.от) ? b : a), { от: 0, до: 0 });
+  return { y: (самая.от + самая.до) / 2, щель: самая.до - самая.от, тесно: true };
+}
+
+/* ---------- Подложка под текстом ----------
+   Вместо затемнения всего кадра — мягкая полоса там, где стоят строки.
+   Одни и те же остановки идут и в CSS живой сцены, и в кадр видео.
+
+   Беда, которую это лечит: высота полосы была постоянной (`+14`
+   процентов вокруг середины между местами строк), а места строк ездят
+   ползунками «Место первой» и «Место второй». Разведи их на 46 и 67 —
+   и вторая строка повисала на голой картинке. И кегль полоса не
+   учитывала вовсе: строка занимает ВЫСОТУ, а не линию.
+
+   Теперь её считает `scrimGeom` по настоящим местам строк (тем же
+   `slotPositions`, что расставляет строки) и по настоящей высоте
+   строки. Плато во всю силу накрывает обе строки целиком, дальше идёт
+   спад. Высоту всей полосы человек множит ползунком «Высота подложки»
+   (`scrimSize`). */
+
+/* Места и высота строк в процентах высоты поверхности. Считается по
+   готовой подгонке (`fit`) и высоте поверхности, поэтому и сцена,
+   и кадр видео дают одно и то же: обе — 16:9, а кегль в обеих равен
+   одной и той же доле ширины. */
+function scrimGeom(fit, H) {
+  if (!fit || !H) return null;
+  const s = state.style;
+  const p = slotPositions(fit, H);
+  const полустрока = (p.half / H) * 100;
+  if (s.swapLines) return { полустрока };
+  return { полустрока, a: (p.a / H) * 100, b: (p.b / H) * 100 };
+}
+
+/* Запас по краям полосы: доля высоты сцены сверх самого текста.
+   Он же прикрывает разницу в доли процента между расчётом и настоящей
+   коробкой строки — `top: …%` округляется до сотых, а высота строки
+   зависит от округления межстрочного. */
+const SCRIM_MARGIN = 1.5;
+
+function scrimStops(s, geom) {
   const k = (s.scrim || 0) / 100;
   if (k <= 0) return null;
+  /* Запасная полустрока — на случай, когда подгонки ещё нет (сцена
+     скрыта, строк нет). Примерно столько занимает строка среднего
+     кегля: подложка выйдет чуть шире нужного, а не уже. */
+  const пол = geom && geom.полустрока != null ? geom.полустрока : 12;
   let mid;
-  let half;
+  let край;   // докуда достаёт сам текст, в процентах от середины
   if (!s.swapLines) {
-    const a = Math.min(s.posCurrent, s.posNext);
-    const b = Math.max(s.posCurrent, s.posNext);
+    const a = geom && geom.a != null ? geom.a : Math.min(s.posCurrent, s.posNext);
+    const b = geom && geom.b != null ? geom.b : Math.max(s.posCurrent, s.posNext);
     mid = (a + b) / 2;
-    half = (b - a) / 2 + 14;
-  } else if (s.valign === 'flex-start') { mid = 26; half = 30; }
-  else if (s.valign === 'flex-end') { mid = 74; half = 30; }
-  else { mid = 50; half = 32; }
+    край = Math.abs(b - a) / 2 + пол + SCRIM_MARGIN;
+  } else {
+    /* Строки едут столбиком: середина столбца задана выравниванием.
+       Столбец бывает во весь кадр (до девяти строк), и накрывать его
+       целиком полной силой означало бы затемнить всю картинку — ради
+       отказа от чего подложка и заведена. Поэтому полной силой берётся
+       середина, где идут текущая и следующая строки, а до края столбца
+       достаёт спад: там подложка слабее, но она есть. */
+    if (s.valign === 'flex-start') mid = 26;
+    else if (s.valign === 'flex-end') mid = 74;
+    else mid = 50;
+    край = Math.max(26, пол * 2.4) + SCRIM_MARGIN;
+  }
+
+  const рост = Math.max(0.2, Math.min(3, (+s.scrimSize || 100) / 100));
+  const плато = край * рост;            // во всю силу — под самими строками
+  const спад = плато + 10 * рост;       // здесь сила уже вполовину
+  const конец = спад + 16 * рост;       // здесь подложки нет вовсе
 
   const clamp = (v) => Math.max(0, Math.min(100, v)) / 100;
   return [
-    [mid - half - 16, 0], [mid - half, 0.42], [mid - half * 0.45, 0.86],
-    [mid + half * 0.45, 0.86], [mid + half, 0.42], [mid + half + 16, 0],
+    [mid - конец, 0], [mid - спад, 0.42], [mid - плато, 0.86],
+    [mid + плато, 0.86], [mid + спад, 0.42], [mid + конец, 0],
   ].map(([at, a]) => ({ at: clamp(at), alpha: +(a * k).toFixed(3) }));
 }
 
-function scrimCss(s) {
-  const stops = scrimStops(s);
+function scrimCss(s, geom) {
+  const stops = scrimStops(s, geom);
   if (!stops) return 'none';
   const parts = stops.map((p) => `rgba(8, 8, 12, ${p.alpha}) ${(p.at * 100).toFixed(1)}%`);
   return `linear-gradient(to bottom, ${parts.join(', ')})`;
+}
+
+/* Границы подложки в процентах высоты — для самопроверки и для тех,
+   кто сравнивает её с прямоугольниками строк числами, а не на глаз.
+   Считается по тем же остановкам, что и рисуется. */
+function scrimBand(s, geom) {
+  const stops = scrimStops(s, geom);
+  if (!stops) return null;
+  // Остановок всегда шесть и в известном порядке: край, спад, плато ×2, спад, край
+  return {
+    // Полной силой — ровно под текстом
+    плато: { верх: stops[2].at * 100, низ: stops[3].at * 100 },
+    // Вполсилы — сюда достаёт спад, подложка ещё работает
+    спад: { верх: stops[1].at * 100, низ: stops[4].at * 100 },
+    // Полностью, вместе с сошедшими на нет краями
+    полоса: { верх: stops[0].at * 100, низ: stops[5].at * 100 },
+  };
 }
 
 /* Системная настройка «меньше движения» — гасит все анимации студии */
@@ -3119,10 +3235,41 @@ function applyWordFill(el, line, span, pos) {
   }
 }
 
-const BREAK_TEXT = '♪ ♪ ♪';
+/* Значок инструментального проигрыша. Нот пять, а не три: три читались
+   как «многоточие», а не как «здесь играет музыка», — и на длинном
+   проигрыше закраска по нотам шла слишком крупными шагами.
+
+   В подгонку кегля (stageFit) ноты НАМЕРЕННО не входят: кегль считается
+   по строкам песни, а ноты — не строка песни, и подстраивать под них
+   размер всего текста незачем. Помещаются они с большим запасом: пять
+   нот с разрядкой занимают около 4,2 кегля, а самый крупный кегль
+   ограничен FIT_MAX_UNITS = 3,2 доли ширины поверхности, то есть
+   ноты не шире 0,42 её ширины. Числами это стережёт самопроверка
+   (раздел `подложкаИОтсчёт`, признак `нотыВлезают`). */
+const BREAK_TEXT = '♪ ♪ ♪ ♪ ♪';
 /* В кадре видео нет разрядки из CSS, поэтому там ноты разводим пробелами —
    чтобы выглядели так же, как на экране */
-const BREAK_TEXT_FRAME = '♪   ♪   ♪';
+const BREAK_TEXT_FRAME = '♪   ♪   ♪   ♪   ♪';
+const BREAK_LS = 0.35;   // разрядка нот в долях кегля — та же, что в CSS
+
+/* Кегль нот проигрыша. Обычно он общий, песенный, но если при нём ноты
+   в отведённую ширину не влезают (короткая песня задирает общий кегль
+   до потолка FIT_MAX_UNITS, а ползунок «Размер» умеет ещё удвоить его),
+   ноты — и только они — ужимаются. Переносить их нельзя: перенесённые
+   ноты читаются как две строки текста. */
+function breakSizeDOM(size, avail) {
+  const s = state.style;
+  const g = fitCanvasCtx();
+  const family = (FONTS[s.font] || FONTS.system).css;
+  const былШрифт = g.font;
+  g.font = `italic ${s.weight} ${size}px ${family}`;
+  if ('letterSpacing' in g) g.letterSpacing = `${(BREAK_LS * size).toFixed(2)}px`;
+  const w = g.measureText(BREAK_TEXT).width + (+s.letter || 0) * BREAK_TEXT.length;
+  if ('letterSpacing' in g) g.letterSpacing = '0px';
+  g.font = былШрифт;
+  const room = Math.max(1, avail) * FIT_SAFE;
+  return w > room ? Math.max(1, size * (room / w)) : size;
+}
 
 /* ---------- Сборка сцены с переиспользованием строк ----------
    Раньше сцена собиралась заново на каждой строке, поэтому смена строк
@@ -3197,26 +3344,53 @@ function ensureCountdownEl(stage) {
   return el;
 }
 
+/* Место точек на живой сцене: щель между настоящими коробками строк.
+   Ноты проигрыша в счёт не идут — на время отсчёта они прячутся
+   (`.counting .break-line`), и точки занимают ровно их место. */
 function placeCountdown(stage) {
   const el = stage.querySelector('.stage-count');
   if (!el) return;
-  // Отсчёт стоит там, где ноты проигрыша, а если их нет — над строкой,
-  // которая вот-вот зазвучит
-  const anchor = stage.querySelector('.break-line') || stage.querySelector('.stage-line.near');
-  if (!anchor) { el.style.top = '50%'; return; }
   const sr = stage.getBoundingClientRect();
-  const r = anchor.getBoundingClientRect();
-  if (!sr.height || !r.height) { el.style.top = '50%'; return; }
-  const y = anchor.classList.contains('break-line')
-    ? r.top - sr.top + r.height / 2
-    : r.top - sr.top - Math.max(12, r.height * 0.35);
-  el.style.top = `${((y / sr.height) * 100).toFixed(2)}%`;
+  const H = stage.clientHeight;
+  if (!sr.height || !H) { el.style.top = '50%'; el.classList.remove('no-room'); return; }
+  /* Считаем от ВНУТРЕННЕЙ границы сцены: `top: …%` у точек и строк
+     отсчитывается от неё же, а getBoundingClientRect отдаёт внешнюю.
+     Разница — рамка в пиксель, но именно из-за таких пикселей три
+     поверхности и расходятся. */
+  const верх0 = sr.top + (parseFloat(getComputedStyle(stage).borderTopWidth) || 0);
+  const ноты = stage.querySelector('.break-line');
+  const коробки = [];
+  stage.querySelectorAll('.stage-line').forEach((line) => {
+    if (line === ноты) return;
+    const r = line.getBoundingClientRect();
+    if (r.height <= 0) return;
+    коробки.push({ верх: r.top - верх0, низ: r.bottom - верх0 });
+  });
+
+  const кегль = parseFloat(getComputedStyle(el).fontSize) || 16;
+  const нужно = кегль * COUNT_BAND;
+  let желаемое = H / 2;
+  if (ноты) {
+    const r = ноты.getBoundingClientRect();
+    if (r.height > 0) желаемое = r.top - верх0 + r.height / 2;
+  } else {
+    const near = stage.querySelector('.stage-line.near');
+    if (near) {
+      const r = near.getBoundingClientRect();
+      if (r.height > 0) желаемое = r.top - верх0 - нужно / 2;
+    }
+  }
+  const м = свободноеМесто(H, коробки, нужно, желаемое);
+  el.style.top = `${((м.y / H) * 100).toFixed(2)}%`;
+  /* Свободного места не нашлось — точки не показываем вовсе, а ноты
+     проигрыша, наоборот, остаются на виду (класс `counting` их прячет) */
+  el.classList.toggle('no-room', !!м.тесно);
 }
 
 function updateCountdown(stage, cd) {
   const el = stage.querySelector('.stage-count');
   if (!el) return;
-  stage.classList.toggle('counting', !!cd);
+  stage.classList.toggle('counting', !!cd && !el.classList.contains('no-room'));
   if (!cd) return;
   const dots = el.children;
   for (let i = 0; i < dots.length; i++) {
@@ -3424,12 +3598,21 @@ function fitStageLines(container) {
      em у сцены считается от её собственного шрифта, а не от кегля строк. */
   const gap = Math.max(0, (межстрочный - 1) * fit.size);
   container.style.setProperty('--st-gap', `${gap.toFixed(1)}px`);
+  // Ноты проигрыша: тот же кегль, но не крупнее, чем влезает в ширину
+  container.style.setProperty('--st-fs-break',
+    `${breakSizeDOM(fit.size, avail).toFixed(2)}px`);
   container.querySelectorAll('.stage-line').forEach((el) => {
     el.style.fontSize = '';  // размер задаёт --st-fs, а не отдельная строка
     const text = el.dataset.text != null ? el.dataset.text : el.textContent;
     el.classList.toggle('wrap', fit.wrap.has(text));
   });
   placeSlotLines(container, fit);
+  /* Подложку задаём здесь, а не в applyStyle: её высота считается от
+     настоящих мест строк и настоящего кегля, а кегль известен только
+     после замера ширины поверхности. Кадр видео считает её тем же
+     scrimGeom по своим W и H — поэтому экран и запись совпадают. */
+  container.style.setProperty('--st-scrim',
+    scrimCss(state.style, scrimGeom(fit, container.clientHeight)));
   return fit;
 }
 
@@ -3760,6 +3943,8 @@ function updateStyleUI() {
   $('st-blur-val').textContent = s.blur;
   $('st-scrim').value = s.scrim;
   $('st-scrim-val').textContent = `${s.scrim}%`;
+  $('st-scrim-h').value = s.scrimSize;
+  $('st-scrim-h-val').textContent = `${s.scrimSize}%`;
   $('st-countdown').checked = s.countdown;
   [['st-effect', s.effect], ['st-bg-mode', s.bgMode], ['st-anim', s.anim], ['st-valign', s.valign]]
     .forEach(([id, val]) => {
@@ -3797,7 +3982,8 @@ $('st-font').addEventListener('change', () => setStyle('font', $('st-font').valu
 [['st-size', 'size'], ['st-weight', 'weight'], ['st-outline', 'outline'],
  ['st-letter', 'letter'], ['st-line', 'line'], ['st-lines', 'lines'], ['st-pad', 'pad'],
  ['st-pos-cur', 'posCurrent'], ['st-pos-next', 'posNext'],
- ['st-dim', 'dim'], ['st-blur', 'blur'], ['st-scrim', 'scrim']]
+ ['st-dim', 'dim'], ['st-blur', 'blur'], ['st-scrim', 'scrim'],
+ ['st-scrim-h', 'scrimSize']]
   .forEach(([id, key]) => {
     $(id).addEventListener('input', () => setStyle(key, +$(id).value));
   });
@@ -4160,7 +4346,11 @@ const editor = {
   loop: false,   // играть выбранную строку (или слово) по кругу
   loopScope: 'line', // что именно крутит кольцо: 'line' или 'word'
   snap: true,     // магнит: притягивать границы к осмысленным точкам
-  слышнаяПеремотка: true, // играть звук под указателем, пока его тащат (см. скраб)
+  /* Слышимая перемотка и скиммирование ВЫКЛЮЧЕНЫ по умолчанию: звук
+     под курсором помогает не всем, а появляется он сам собой, стоит
+     провести мышью над дорожкой. Включается кнопкой (`tl-scrub`),
+     ровно как магнит. */
+  слышнаяПеремотка: false, // играть звук под указателем (см. скраб)
   безМагнита: false, // зажат Alt — магнит отключён на время
   одинКрай: false,   // зажат Cmd/Ctrl — тянем один край стыка, а не оба
   snapped: null,  // { t, вид } — куда притянулось, для направляющей
@@ -8183,6 +8373,22 @@ function измеритьЗнак(g2d, кегль) {
 function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   const st = state.style;
 
+  // Поля по краям берём из настроек: на нуле текст занимает всю ширину
+  const maxWidth = W * (1 - (st.pad / 100) * 2);
+
+  /* Кегль — единый на всю песню и тот же, что на экране: stageFit
+     считает его от ширины поверхности, а поверхность здесь — кадр.
+     Поэтому при любом качестве записи текст занимает одну и ту же
+     долю картинки, и та же доля выходит на сцене караоке и в
+     предпросмотре редактора.
+
+     Считается ДО фона: от кегля зависит высота подложки, а подложка
+     ложится поверх картинки, то есть раньше строк. */
+  const fit = stageFit(W / FIT_FRAME_COLS, maxWidth);
+  const size = Math.max(10, fit.size);
+  const lineGap = st.line / 10;
+  const rowH = size * lineGap;
+
   // Фон
   if (st.bgMode === 'color') {
     g2d.fillStyle = st.bgColor;
@@ -8191,8 +8397,10 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     const scale = Math.max(W / bgImg.width, H / bgImg.height);
     const w = bgImg.width * scale, h = bgImg.height * scale;
     g2d.drawImage(bgImg, (W - w) / 2, (H - h) / 2, w, h);
-    // Та же подложка, что на экране: полоса под текстом, а не общее затемнение
-    const stops = scrimStops(st);
+    /* Та же подложка, что на экране: полоса под текстом, а не общее
+       затемнение. Геометрию считает тот же scrimGeom по тем же
+       slotPositions — поэтому кадр и сцена совпадают. */
+    const stops = scrimStops(st, scrimGeom(fit, H));
     if (stops) {
       const scrim = g2d.createLinearGradient(0, 0, 0, H);
       stops.forEach((p) => scrim.addColorStop(p.at, `rgba(8, 8, 12, ${p.alpha})`));
@@ -8211,27 +8419,18 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   const ph = stagePhase(pos);
   const cur = ph.cur;
 
-  // Поля по краям берём из настроек: на нуле текст занимает всю ширину
-  const maxWidth = W * (1 - (st.pad / 100) * 2);
   g2d.textAlign = 'center';
   g2d.textBaseline = 'middle';
 
   const family = (FONTS[st.font] || FONTS.system).css;
-  const font = (size) => `${st.weight} ${size}px ${family}`;
-
-  /* Кегль — единый на всю песню и тот же, что на экране: stageFit
-     считает его от ширины поверхности, а поверхность здесь — кадр.
-     Поэтому при любом качестве записи текст занимает одну и ту же
-     долю картинки, и та же доля выходит на сцене караоке и в
-     предпросмотре редактора. */
-  const fit = stageFit(W / FIT_FRAME_COLS, maxWidth);
-  const size = Math.max(10, fit.size);
-  const lineGap = st.line / 10;
-  const rowH = size * lineGap;
+  const font = (size2) => `${st.weight} ${size2}px ${family}`;
 
   // Последний нарисованный кадр — для самопроверки (единый кегль,
   // отсутствие наложений). Данные те же, по которым идёт отрисовка.
   const layout = { size, unit: W / FIT_FRAME_COLS, m: fit.m, rowH, items: [] };
+  /* Границы подложки числами — той же геометрией, какой она нарисована.
+     По ним самопроверка сравнивает подложку с коробками строк. */
+  layout.подложка = scrimBand(st, scrimGeom(fit, H));
   drawVideoFrame.последнийКадр = layout;
 
   /* Строка разбирается на куски: слово со своей долей закраски (p)
@@ -8319,23 +8518,29 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       g2d.fill();
     }
     clearDim();
+    // Для самопроверки: где именно встал ряд точек и какого он размера
+    layout.отсчёт = { y: cy, r, верх: cy - r, низ: cy + r };
   };
 
   /* Одна строка кадра: куски рисуются по очереди, каждый своим цветом
      и со своей долей закраски. Длинная строка занимает несколько рядов,
      они расходятся вверх и вниз от середины строки. Возвращает высоту,
      которую строка заняла, — по ней считается раскладка. */
-  const drawLineAt = (text, cy, kind, line) => {
-    g2d.font = font(size);
+  const drawLineAt = (text, cy, kind, line, кегль) => {
+    const fs = кегль || size;
+    g2d.font = font(fs);
     g2d.letterSpacing = `${st.letter}px`;
     const chunks = chunksFor(text, kind, line);
     const rows = rowsOf(text, chunks);
-    layout.items.push({ text, cy, kind, rows: rows.length, size, height: rows.length * rowH });
+    layout.items.push({ text, cy, kind, rows: rows.length, size: fs, height: rows.length * rowH });
+    const пункт = layout.items[layout.items.length - 1];
+    пункт.ширина = 0;
     setDim(kind);
     g2d.textAlign = 'left';
     rows.forEach((row, r) => {
       const widths = row.map((c) => g2d.measureText(c.text).width);
       const rowW = widths.reduce((a, b) => a + b, 0);
+      if (rowW > пункт.ширина) пункт.ширина = rowW;
       const y = cy + (r - (rows.length - 1) / 2) * rowH;
       let x = (W - rowW) / 2;
       row.forEach((c, i) => {
@@ -8349,7 +8554,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
           if (c.p > 0) {
             g2d.save();
             g2d.beginPath();
-            g2d.rect(x, y - size, widths[i] * c.p, size * 2);
+            g2d.rect(x, y - fs, widths[i] * c.p, fs * 2);
             g2d.clip();
             g2d.fillStyle = st.accent;
             g2d.fillText(c.text, x, y);
@@ -8371,6 +8576,24 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
      до отрисовки. Считается теми же кусками, что и сама отрисовка. */
   const heightOf = (text, kind, line) =>
     rowsOf(text, chunksFor(text, kind, line)).length * rowH;
+
+  /* Кегль нот проигрыша: песенный, но не крупнее того, при котором пять
+     нот ещё влезают в ширину кадра. То же правило, что на экране
+     (breakSizeDOM): ноты не переносятся и за края не выходят. */
+  const кегльНот = () => {
+    g2d.font = font(size);
+    g2d.letterSpacing = `${st.letter}px`;
+    const w = g2d.measureText(BREAK_TEXT_FRAME).width;
+    const room = Math.max(1, maxWidth) * FIT_SAFE;
+    return w > room ? Math.max(1, size * (room / w)) : size;
+  };
+
+  /* Коробки уже нарисованных строк — по ним точки отсчёта ищут себе
+     свободное место (см. свободноеМесто). Ноты проигрыша сюда не
+     попадают: пока идёт отсчёт, их не рисуют вовсе. */
+  const коробкиКадра = () => layout.items.map((it) => ({
+    верх: it.cy - it.height / 2, низ: it.cy + it.height / 2,
+  }));
 
   /* Закреплённые места: две строки рисуются каждая на своей высоте
      и не съезжают. Активна та, чья очередь петь. */
@@ -8401,15 +8624,24 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       drawLineAt(lines[index].text, место(top), kind, kind === 'cur' ? lines[index] : null);
     }
     const breakTop = breakSlot === 0 ? st.posCurrent : st.posNext;
-    // Пока идёт отсчёт, точки занимают место нот проигрыша
-    if (ph.mode === 'break' && !cd) {
-      drawLineAt(BREAK_TEXT_FRAME, место(breakTop), 'cur', null);
-    }
+    /* Точки отсчёта: щель между настоящими коробками строк, а не
+       «чуть выше первого места». Раньше место считалось от места.a
+       и при разведённых ползунках попадало ровно на текст. */
+    let точки = null;
     if (cd) {
-      drawCountdown(ph.mode === 'break'
+      const нужно = size * COUNT_BAND;
+      const nextTop = nextSlot === 0 ? st.posCurrent : st.posNext;
+      const желаемое = ph.mode === 'break'
         ? место(breakTop)
-        : места.a - места.half - size * 0.35);
+        : место(nextTop) - места.half - нужно / 2;
+      const м = свободноеМесто(H, коробкиКадра(), нужно, желаемое);
+      if (!м.тесно) точки = м.y;
     }
+    // Пока идут точки, ноты проигрыша уступают им место
+    if (ph.mode === 'break' && точки == null) {
+      drawLineAt(BREAK_TEXT_FRAME, место(breakTop), 'cur', null, кегльНот());
+    }
+    if (точки != null) drawCountdown(точки);
     g2d.letterSpacing = '0px';
     рисоватьЗнак(g2d, W, H, watermark);
     return;
@@ -8447,20 +8679,32 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
     : st.valign === 'flex-end' ? H - pad - totalH
     : H / 2 - totalH / 2;
 
-  let countCy = null;
+  /* Места блоков считаем ЗАРАНЕЕ, до отрисовки: точкам отсчёта нужны
+     готовые коробки строк, чтобы выбрать свободную щель, а нотам
+     проигрыша — знать, уступают они место точкам или нет. */
   for (const b of blocks) {
-    const cy = y + b.height / 2;
-    const isBreak = b.kind === 'cur' && !b.line && ph.mode === 'break';
-    // Отсчёт встаёт на место нот проигрыша, а до первого куплета — над строкой
-    if (cd && (isBreak || (countCy == null && b.kind === 'near'))) {
-      countCy = isBreak ? cy : y - rowH * 0.35;
-    }
-    // Пока идёт отсчёт, ноты скрыты — вместо них точки
-    if (!(isBreak && cd)) drawLineAt(b.text, cy, b.kind, b.line);
+    b.cy = y + b.height / 2;
     y += b.height + blockGap;
   }
+  const ноты = blocks.find((b) => b.kind === 'cur' && !b.line && ph.mode === 'break');
+  let точки = null;
+  if (cd) {
+    const нужно = size * COUNT_BAND;
+    const near = blocks.find((b) => b.kind === 'near');
+    const желаемое = ноты ? ноты.cy
+      : near ? near.cy - near.height / 2 - нужно / 2 : H / 2;
+    const коробки = blocks.filter((b) => b !== ноты)
+      .map((b) => ({ верх: b.cy - b.height / 2, низ: b.cy + b.height / 2 }));
+    const м = свободноеМесто(H, коробки, нужно, желаемое);
+    if (!м.тесно) точки = м.y;
+  }
+  for (const b of blocks) {
+    // Пока идут точки, ноты скрыты — вместо них отсчёт
+    if (b === ноты && точки != null) continue;
+    drawLineAt(b.text, b.cy, b.kind, b.line, b === ноты ? кегльНот() : null);
+  }
   g2d.letterSpacing = '0px';
-  if (cd) drawCountdown(countCy != null ? countCy : H / 2);
+  if (точки != null) drawCountdown(точки);
 
   // Знак студии в правом нижнем углу: логотип и имя над ним
   рисоватьЗнак(g2d, W, H, watermark);

@@ -478,6 +478,24 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .first-run summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
 .first-run p { color: var(--text-dim); font-size: 0.9rem; margin-top: 0.7rem; }
+/* Шаги первого запуска: нумерованный список, а не сплошной абзац —
+   человек идёт по ним с окном системы перед глазами и должен видеть,
+   на каком он сейчас */
+.first-run-steps {
+  margin: 0.6rem 0 0;
+  padding-left: 1.3rem;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.first-run-steps li { margin-top: 0.5rem; line-height: 1.5; }
+.first-run-steps b { color: var(--text); }
+.first-run-steps code {
+  font-size: 0.85em;
+  padding: 0.05em 0.3em;
+  border-radius: 5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
 .first-run pre {
   margin-top: 0.6rem;
   padding: 0.7rem 0.9rem;
@@ -2354,10 +2372,15 @@ body.stage-full .site-header { z-index: 1; }
 }
 .inst-status { color: #34d399; font-size: 0.85rem; font-weight: 600; }
 
-/* --- Строка-проигрыш --- */
+/* --- Строка-проигрыш ---
+   Кегль свой: обычно он равен песенному (--st-fs), но если пять нот
+   с разрядкой в него по ширине не влезают, fitStageLines кладёт
+   в --st-fs-break кегль поменьше. Переносить ноты нельзя — перенесённые
+   читаются как две строки текста. */
 .stage-line.break-line {
   font-style: italic;
   letter-spacing: 0.35em;
+  font-size: var(--st-fs-break, var(--st-fs, 1.15rem));
 }
 
 /* ============ FAQ ============ */
