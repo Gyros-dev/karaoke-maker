@@ -577,6 +577,36 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 /* Заголовок в рабочем месте — подпись, а не витрина: каждый лишний
    десяток пикселей здесь отнимается у сцены */
 .studio h2 { font-size: 1.4rem; margin-bottom: 0.7rem; }
+/* Своя подсказка кнопок студии (см. ПОДСКАЗКА в app.js). Лежит внутри
+   .studio, а не в body: переменные темы живут на самой студии, и в
+   нейтральной теме подсказка из body осталась бы фирменной. Место
+   выставляет код, поэтому здесь только вид. */
+.tip {
+  position: fixed;
+  z-index: 300;
+  /* Ширина по содержимому, а не по остатку места справа: у элемента
+     с position: fixed она иначе зависит от left, и подсказка, которую
+     код только что измерил у левого края, после переноса к правому
+     становилась уже — и вылезала за край ровно на эту разницу. */
+  width: max-content;
+  max-width: 280px;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  font-weight: 400;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: normal;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  /* Подсказка не должна мешать щелчку и не должна ловить указатель:
+     иначе она сама себя закрывала бы, встав под курсором */
+  pointer-events: none;
+}
 .steps-nav { position: relative; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
 /* Ссылка на руководство: вынесена из потока, поэтому ряд шагов остаётся
    ровно посередине, а высоты рабочее место не теряет ни пикселя. */
@@ -949,7 +979,10 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   padding: var(--ed-pad);
 }
 .ed-viewer .edit-stage-wrap { margin: 0; padding: 0.5rem; }
-/* Справка редактора свёрнута: развернул — прочитал — свернул обратно */
+/* Справка редактора свёрнута: развернул — прочитал — свернул обратно.
+   Стоит она под дорожкой и легендой, перед кнопками шага: пока
+   свёрнута — это одна строка, и рабочее место от неё ничего не
+   теряет; а разворачивают её, уже глядя на дорожку. */
 .editor-hint > summary {
   cursor: pointer;
   font-size: 0.85rem;
@@ -958,6 +991,31 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 .editor-hint p { margin-top: 0.5rem; text-align: left; }
 .editor-hint .timeline-keys { margin-top: 0.4rem; }
+/* Развёрнутая справка обязана помещаться в подложку студии. Раньше она
+   просто росла, и редактор вместе с кнопками «← Текст» / «Караоке →»
+   уезжал за нижний край. Поэтому у открытой своя прокрутка, а высота
+   задана долей рабочего места, а не числом пикселей: на 1280×800 её
+   остаётся заметно меньше, чем на 1440×900. Заголовок при прокрутке
+   остаётся на виду — иначе свернуть справку нечем, пока не открутишь
+   обратно наверх. */
+#step-3 .editor-hint[open] {
+  flex: 0 1 auto;
+  min-height: 2.4rem;
+  max-height: 34%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.4rem;
+}
+#step-3 .editor-hint[open] > summary {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 0.2rem;
+  background: var(--bg-soft);
+}
+/* Пока справка открыта, рабочим окнам разрешено сжаться сильнее
+   обычного: на 1280×800 сумма прежних минимумов в окно не влезала */
+#step-3:has(> .editor-hint[open]) .editor-grid { min-height: 90px; }
 /* Три окна рабочего места: строки — просмотр — инспектор.
    Кегль в просмотре пропорционален его ширине (см. fitStageLines),
    поэтому окну просмотра отдана заметная доля. */
@@ -1443,12 +1501,19 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
 }
 /* Ползунок уровня дорожки в наушниках. Тонкий и тихий: это не главный
    орган управления, а подстройка на слух во время разметки. Полоска
-   красится акцентом темы, ползунок — маленький кружок. */
-.tl-gain {
+   красится акцентом темы, ползунок — маленький кружок.
+
+   Селектор нарочно с тегом и атрибутом: «.tl-gain» весит (0,1,0), а
+   общее правило ползунков «input[type="range"]» — (0,1,1), потому что
+   квадратные скобки считаются наравне с классом. Общее было сильнее, и
+   ВЕСЬ этот блок до сих пор не применялся вовсе: точка оставалась
+   ручкой в 16 px со свечением в 10 px — от неё и был перегружен ряд
+   заголовка полосы высотой 14–38 px. */
+input[type="range"].tl-gain {
   flex: 1;
   min-width: 24px;
   max-width: 48px;
-  height: 10px;
+  height: 8px;
   margin: 0;
   padding: 0;
   appearance: none;
@@ -1456,34 +1521,39 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
   background: transparent;
   cursor: pointer;
 }
-.tl-gain::-webkit-slider-runnable-track {
+input[type="range"].tl-gain::-webkit-slider-runnable-track {
   height: 3px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.16);
 }
-.tl-gain::-moz-range-track {
+input[type="range"].tl-gain::-moz-range-track {
   height: 3px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.16);
 }
-.tl-gain::-webkit-slider-thumb {
+/* Точка чуть толще полоски — ровно настолько, чтобы её было куда
+   взять. Свечение снимаем отдельно и явно: оно приходит от общего
+   правила ползунков, где ручка 16 px и ореол в 10 px ей впору, а
+   на точке в 7 px оно читалось кляксой вдвое шире самой точки. */
+input[type="range"].tl-gain::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 8px;
-  height: 8px;
-  margin-top: -2.5px;
+  width: 7px;
+  height: 7px;
+  margin-top: -2px;
+  border: none;
+  border-radius: 50%;
+  background: var(--sel-ring);
+  box-shadow: none;
+}
+input[type="range"].tl-gain::-moz-range-thumb {
+  width: 7px;
+  height: 7px;
   border: none;
   border-radius: 50%;
   background: var(--sel-ring);
 }
-.tl-gain::-moz-range-thumb {
-  width: 8px;
-  height: 8px;
-  border: none;
-  border-radius: 50%;
-  background: var(--sel-ring);
-}
-.tl-gain:disabled { opacity: 0.25; cursor: not-allowed; }
-.tl-gain:focus-visible { outline: 1px solid var(--sel-ring); outline-offset: 2px; }
+input[type="range"].tl-gain:disabled { opacity: 0.25; cursor: not-allowed; }
+input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); outline-offset: 2px; }
 
 /* «Слушать только это»: буква S, как в монтажных программах. Включённая
    горит акцентом темы — тем же, которым обведён выбранный блок. */
@@ -2040,10 +2110,21 @@ input[type="range"]::-moz-range-thumb {
   min-height: 0;
   margin: 0;
 }
+/* Значок «на весь экран» стоит в углу САМОЙ сцены, а не обёртки.
+   Обёртка занимает весь остаток окна, а сцена держит кадр 16:9 и
+   вписывается в него — по краям остаются поля. Кнопка считала угол
+   от обёртки и висела в этих полях: сбоку от сцены на широком окне
+   и над её рамкой на узком, а на «во весь экран» уезжала в угол
+   монитора. Поля считаем той же формулой, что задаёт ширину сцены
+   (см. .stage-wrap .lyrics-stage), в единицах контейнера: 100cqw и
+   100cqh — это ширина и высота обёртки, и они не путаются между
+   собой, как «100%» в top и right. */
 .stage-full-btn {
+  --st-w: min(100cqw, 100cqh * 16 / 9);
+  --st-h: max(240px, calc(var(--st-w) * 9 / 16));
   position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
+  top: max(0.6rem, calc((100cqh - var(--st-h)) / 2 + 0.6rem));
+  right: max(0.6rem, calc((100cqw - var(--st-w)) / 2 + 0.6rem));
   z-index: 3;
   width: 34px;
   height: 34px;
@@ -2330,6 +2411,9 @@ body.is-desktop .only-web { display: none; }
      возвращается к обычной ширине во всё окно */
   .stage-wrap { container-type: normal; display: block; }
   .stage-wrap .lyrics-stage { width: 100%; }
+  /* Контейнера не стало — считать cq-единицы не от чего, а полей по
+     краям здесь и нет: сцена во всю ширину обёртки */
+  .stage-full-btn { top: 0.6rem; right: 0.6rem; }
   /* Окна редактора на узком экране идут друг за другом своей высотой.
      Через #step-3 — иначе правило низкого окна (там три колонки)
      оказывается сильнее по весу. */

@@ -50,7 +50,9 @@ const AI_BLOCK = `      <div class="bg-upload hidden" id="ai-block">
           <b data-i18n="ии.заголовок">🧠 Убрать вокал нейросетью</b>
           <span data-i18n="ии.текст">Локальная модель UVR-MDX-NET-Inst_HQ_3 — та же, которой считает UVR5. Всё посчитается прямо на компьютере</span>
         </div>
-        <button class="btn btn-primary btn-small" id="btn-ai-run" data-i18n="ии.кнопка">Убрать вокал</button>
+        <button class="btn btn-primary btn-small" id="btn-ai-run" data-i18n="ии.кнопка"
+          data-i18n-title="ии.кнопка.подсказка"
+          title="Посчитать минусовку нейросетью прямо на этом компьютере. Песня никуда не отправляется">Убрать вокал</button>
         <p class="ai-eta" id="ai-eta"></p>
         <details class="ai-more">
           <summary data-i18n="ии.ещё">Ещё варианты</summary>

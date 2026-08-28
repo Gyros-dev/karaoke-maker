@@ -485,10 +485,10 @@
     <!-- Переключателя языка здесь нет: он стоит в шапке, а шапка липкая
          и видна с любого шага студии. Два переключателя на одном экране
          сразу выглядели нелепо. -->
-    <button class="step-tab active" data-step="1" data-i18n-html="студия.шаг1"><span>1</span> Песня</button>
-    <button class="step-tab" data-step="2" disabled data-i18n-html="студия.шаг2"><span>2</span> Текст</button>
-    <button class="step-tab" data-step="3" disabled data-i18n-html="студия.шаг3"><span>3</span> Редактор</button>
-    <button class="step-tab" data-step="4" disabled data-i18n-html="студия.шаг4"><span>4</span> Караоке</button>
+    <button class="step-tab active" data-step="1" data-i18n-title="студия.шаг1.подсказка" title="Шаг 1: загрузить песню, свою минусовку и картинку для фона" data-i18n-html="студия.шаг1"><span>1</span> Песня</button>
+    <button class="step-tab" data-step="2" data-i18n-title="студия.шаг2.подсказка" title="Шаг 2: вставить текст песни — строка текста станет строкой караоке" disabled data-i18n-html="студия.шаг2"><span>2</span> Текст</button>
+    <button class="step-tab" data-step="3" data-i18n-title="студия.шаг3.подсказка" title="Шаг 3: разметить время строк и слов на дорожке" disabled data-i18n-html="студия.шаг3"><span>3</span> Редактор</button>
+    <button class="step-tab" data-step="4" data-i18n-title="студия.шаг4.подсказка" title="Шаг 4: оформление текста, предпросмотр и экспорт" disabled data-i18n-html="студия.шаг4"><span>4</span> Караоке</button>
     <!-- Что сейчас в памяти студии — и черновик файлом. Стоит в ряду
          шагов намеренно: чип виден с любого шага, высоты у рабочего
          места не отнимает (как и ссылка на руководство, он вынесен из
@@ -546,8 +546,8 @@
           <b data-i18n="шаг1.фон.заголовок">Фон для караоке</b>
           <span data-i18n="шаг1.фон.текст">Необязательно: картинка будет под текстом во время пения</span>
         </div>
-        <button class="btn btn-ghost btn-small" id="btn-bg-add" data-i18n="минусовка.выбрать">Выбрать</button>
-        <button class="btn btn-ghost btn-small hidden" id="btn-bg-remove" data-i18n="шаг1.убрать">Убрать</button>
+        <button class="btn btn-ghost btn-small" id="btn-bg-add" data-i18n-title="шаг1.фон.выбрать.подсказка" title="Выбрать картинку: она встанет под текстом на сцене караоке и попадёт в видео" data-i18n="минусовка.выбрать">Выбрать</button>
+        <button class="btn btn-ghost btn-small hidden" id="btn-bg-remove" data-i18n-title="шаг1.фон.убрать.подсказка" title="Убрать картинку — сцена вернётся к обычному фону" data-i18n="шаг1.убрать">Убрать</button>
         <input type="file" id="bg-input" accept="image/*" hidden>
       </div>
       <div class="bg-upload">
@@ -556,8 +556,8 @@
           <span data-i18n="шаг1.минусовка.текст">Необязательно: готовый файл без вокала (например, из UVR5) — звучит заметно лучше встроенного приглушения</span>
         </div>
         <span class="inst-status hidden" id="inst-status" data-i18n="шаг1.минусовка.готова">✓ загружена</span>
-        <button class="btn btn-ghost btn-small" id="btn-inst-add" data-i18n="минусовка.выбрать">Выбрать</button>
-        <button class="btn btn-ghost btn-small hidden" id="btn-inst-remove" data-i18n="шаг1.убрать">Убрать</button>
+        <button class="btn btn-ghost btn-small" id="btn-inst-add" data-i18n-title="шаг1.минусовка.выбрать.подсказка" title="Выбрать готовый файл без вокала: он будет звучать вместо встроенного приглушения" data-i18n="минусовка.выбрать">Выбрать</button>
+        <button class="btn btn-ghost btn-small hidden" id="btn-inst-remove" data-i18n-title="шаг1.минусовка.убрать.подсказка" title="Убрать свою минусовку и вернуться к встроенному приглушению вокала" data-i18n="шаг1.убрать">Убрать</button>
         <input type="file" id="inst-input" accept="audio/*" hidden>
       </div>
       <div class="bg-upload hidden" id="ai-block">
@@ -565,7 +565,9 @@
           <b data-i18n="ии.заголовок">🧠 Убрать вокал нейросетью</b>
           <span data-i18n="ии.текст">Локальная модель UVR-MDX-NET-Inst_HQ_3 — та же, которой считает UVR5. Всё посчитается прямо на компьютере</span>
         </div>
-        <button class="btn btn-primary btn-small" id="btn-ai-run" data-i18n="ии.кнопка">Убрать вокал</button>
+        <button class="btn btn-primary btn-small" id="btn-ai-run" data-i18n="ии.кнопка"
+          data-i18n-title="ии.кнопка.подсказка"
+          title="Посчитать минусовку нейросетью прямо на этом компьютере. Песня никуда не отправляется">Убрать вокал</button>
         <p class="ai-eta" id="ai-eta"></p>
         <details class="ai-more">
           <summary data-i18n="ии.ещё">Ещё варианты</summary>
@@ -586,8 +588,8 @@
         </details>
       </div>
       <div class="panel-actions">
-        <button class="btn btn-ghost" id="btn-change-track" data-i18n="шаг1.другойФайл">Другой файл</button>
-        <button class="btn btn-primary" id="btn-to-lyrics" data-i18n="шаг1.дальше">К тексту →</button>
+        <button class="btn btn-ghost" id="btn-change-track" data-i18n-title="шаг1.другойФайл.подсказка" title="Загрузить другую песню. Текст, разметка и оформление останутся" data-i18n="шаг1.другойФайл">Другой файл</button>
+        <button class="btn btn-primary" id="btn-to-lyrics" data-i18n-title="шаг1.дальше.подсказка" title="Перейти к шагу 2: вставить текст песни" data-i18n="шаг1.дальше">К тексту →</button>
       </div>
     </div>
   </div>
@@ -652,8 +654,8 @@
     </div>
     <textarea id="lyrics-input" data-i18n-placeholder="шаг2.поле" placeholder="Вставь сюда текст песни…&#10;&#10;Каждая строка —&#10;отдельная строка караоке"></textarea>
     <div class="panel-actions">
-      <button class="btn btn-ghost" id="btn-back-1" data-i18n="шаг2.назад">← Назад</button>
-      <button class="btn btn-primary" id="btn-to-editor" data-i18n="шаг2.дальше">К редактору →</button>
+      <button class="btn btn-ghost" id="btn-back-1" data-i18n-title="шаг2.назад.подсказка" title="Вернуться к шагу 1: песня, минусовка и фон" data-i18n="шаг2.назад">← Назад</button>
+      <button class="btn btn-primary" id="btn-to-editor" data-i18n-title="шаг2.дальше.подсказка" title="Разбить текст на строки и перейти к разметке времени" data-i18n="шаг2.дальше">К редактору →</button>
     </div>
   </div>
 
@@ -670,13 +672,13 @@
       <aside class="karaoke-side">
         <div class="side-head">
           <b><svg class="icon" aria-hidden="true"><use href="#i-palette"></use></svg><span data-i18n="караоке.оформление">Оформление</span></b>
-          <button class="nudge-btn" id="st-reset" data-i18n="караоке.сбросить">Сбросить</button>
+          <button class="nudge-btn" id="st-reset" data-i18n-title="караоке.сбросить.подсказка" title="Вернуть всё оформление текста к настройкам по умолчанию" data-i18n="караоке.сбросить">Сбросить</button>
         </div>
         <div class="side-tabs" id="side-tabs" role="tablist">
-          <button data-g="text" class="active" role="tab" data-i18n="караоке.вкл.текст">Текст</button>
-          <button data-g="color" role="tab" data-i18n="караоке.вкл.цвет">Цвет</button>
-          <button data-g="stage" role="tab" data-i18n="караоке.вкл.сцена">Сцена</button>
-          <button data-g="sound" role="tab" data-i18n="караоке.вкл.звук">Звук</button>
+          <button data-g="text" class="active" role="tab" data-i18n-title="караоке.вкл.текст.подсказка" title="Чем набраны строки и какого они размера" data-i18n="караоке.вкл.текст">Текст</button>
+          <button data-g="color" role="tab" data-i18n-title="караоке.вкл.цвет.подсказка" title="Цвета строк, эффект пения, обводка и фон сцены" data-i18n="караоке.вкл.цвет">Цвет</button>
+          <button data-g="stage" role="tab" data-i18n-title="караоке.вкл.сцена.подсказка" title="Сколько строк видно, где они стоят и как появляются" data-i18n="караоке.вкл.сцена">Сцена</button>
+          <button data-g="sound" role="tab" data-i18n-title="караоке.вкл.звук.подсказка" title="Эквалайзер: он слышен в плеере и попадает в видео" data-i18n="караоке.вкл.звук">Звук</button>
         </div>
         <div class="side-body">
 
@@ -719,9 +721,9 @@
             <div class="style-row">
               <span class="style-label" data-i18n="караоке.эффект">Эффект</span>
               <span class="seg row-wide" id="st-effect">
-                <button data-v="fill" class="active" data-i18n="караоке.эффект.заливка">Заливка</button>
-                <button data-v="highlight" data-i18n="караоке.эффект.подсветка">Подсветка</button>
-                <button data-v="none" data-i18n="караоке.эффект.нет">Нет</button>
+                <button data-v="fill" class="active" data-i18n-title="караоке.эффект.заливка.подсказка" title="Строка заливается цветом слева направо по мере пения" data-i18n="караоке.эффект.заливка">Заливка</button>
+                <button data-v="highlight" data-i18n-title="караоке.эффект.подсветка.подсказка" title="Спетое слово подсвечивается целиком, без заливки по буквам" data-i18n="караоке.эффект.подсветка">Подсветка</button>
+                <button data-v="none" data-i18n="караоке.эффект.нет" data-i18n-title="караоке.эффект.нет.подсказка" title="Без эффекта: строка просто становится яркой, когда до неё дошла очередь">Нет</button>
               </span>
             </div>
             <div class="style-row">
@@ -754,8 +756,8 @@
               <span class="row-wide row-colors">
                 <input type="color" id="st-col-bg" value="#16161f">
                 <span class="seg" id="st-bg-mode">
-                  <button data-v="default" class="active" data-i18n="караоке.фон.какбыло">Как было</button>
-                  <button data-v="color" data-i18n="караоке.фон.цветом">Цветом</button>
+                  <button data-v="default" class="active" data-i18n-title="караоке.фон.какбыло.подсказка" title="Фон сцены как был: твоя картинка или обычный тёмный грунт" data-i18n="караоке.фон.какбыло">Как было</button>
+                  <button data-v="color" data-i18n-title="караоке.фон.цветом.подсказка" title="Залить сцену выбранным цветом вместо картинки" data-i18n="караоке.фон.цветом">Цветом</button>
                 </span>
               </span>
             </div>
@@ -803,17 +805,17 @@
             <div class="style-row">
               <span class="style-label" data-i18n="караоке.появление">Появление</span>
               <span class="seg row-wide" id="st-anim">
-                <button data-v="fade" class="active" data-i18n="караоке.появление.плавно">Плавно</button>
-                <button data-v="slide" data-i18n="караоке.появление.сдвиг">Сдвиг</button>
-                <button data-v="none" data-i18n="караоке.появление.нет">Нет</button>
+                <button data-v="fade" class="active" data-i18n-title="караоке.появление.плавно.подсказка" title="Новая строка проявляется плавно" data-i18n="караоке.появление.плавно">Плавно</button>
+                <button data-v="slide" data-i18n-title="караоке.появление.сдвиг.подсказка" title="Новая строка выезжает снизу" data-i18n="караоке.появление.сдвиг">Сдвиг</button>
+                <button data-v="none" data-i18n="караоке.появление.нет" data-i18n-title="караоке.появление.нет.подсказка" title="Новая строка появляется сразу, без движения">Нет</button>
               </span>
             </div>
             <div class="style-row">
               <span class="style-label" data-i18n="караоке.выравнивание">Выравнивание</span>
               <span class="seg row-wide" id="st-valign">
-                <button data-v="flex-start" data-i18n="караоке.выравнивание.верх">Верх</button>
-                <button data-v="center" class="active" data-i18n="караоке.выравнивание.центр">Центр</button>
-                <button data-v="flex-end" data-i18n="караоке.выравнивание.низ">Низ</button>
+                <button data-v="flex-start" data-i18n-title="караоке.выравнивание.верх.подсказка" title="Прижать строки к верху кадра" data-i18n="караоке.выравнивание.верх">Верх</button>
+                <button data-v="center" class="active" data-i18n-title="караоке.выравнивание.центр.подсказка" title="Держать строки посередине кадра" data-i18n="караоке.выравнивание.центр">Центр</button>
+                <button data-v="flex-end" data-i18n-title="караоке.выравнивание.низ.подсказка" title="Прижать строки к низу кадра" data-i18n="караоке.выравнивание.низ">Низ</button>
               </span>
             </div>
             <div class="style-row">
@@ -842,7 +844,7 @@
               <span class="eq-val" id="eq-high-val">0 дБ</span>
             </div>
             <div class="eq-actions">
-              <button class="nudge-btn" id="eq-reset" data-i18n="караоке.эквалайзер.сбросить">Сбросить</button>
+              <button class="nudge-btn" id="eq-reset" data-i18n-title="караоке.эквалайзер.сбросить.подсказка" title="Вернуть все три полосы эквалайзера в ноль" data-i18n="караоке.эквалайзер.сбросить">Сбросить</button>
               <span class="eq-hint" data-i18n="караоке.эквалайзер.подсказка">Работает в плеере и попадает в видео</span>
             </div>
             <p class="side-note" data-i18n="караоке.заметка.вокал">Громкость вокала — под предпросмотром: там её слышно сразу.</p>
@@ -863,7 +865,7 @@
              каждый лишний ряд отнимает высоту у самой сцены -->
         <div class="transport">
           <div class="player-bar">
-            <button class="play-btn" id="btn-play"><svg class="icon i-play" aria-hidden="true"><use href="#i-play"></use></svg><svg class="icon i-pause" aria-hidden="true"><use href="#i-pause"></use></svg></button>
+            <button class="play-btn" id="btn-play" data-i18n-title="караоке.играть.подсказка" title="Играть и остановить (пробел)"><svg class="icon i-play" aria-hidden="true"><use href="#i-play"></use></svg><svg class="icon i-pause" aria-hidden="true"><use href="#i-pause"></use></svg></button>
             <span class="time" id="time-current">0:00</span>
             <input type="range" id="seek" min="0" max="1000" value="0">
             <span class="time" id="time-total">0:00</span>
@@ -880,9 +882,9 @@
     </div>
 
     <div class="export-row">
-      <button class="btn btn-ghost" id="btn-back-3" data-i18n="экспорт.назад">← Редактор</button>
-      <button class="btn btn-ghost" id="btn-sound-check"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg><span data-i18n="экспорт.звук">Проверить звук</span></button>
-      <button class="btn btn-ghost" id="btn-export-lrc"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.lrc">Текст .lrc</span></button>
+      <button class="btn btn-ghost" id="btn-back-3" data-i18n-title="экспорт.назад.подсказка" title="Вернуться в редактор и поправить разметку" data-i18n="экспорт.назад">← Редактор</button>
+      <button class="btn btn-ghost" id="btn-sound-check" data-i18n-title="экспорт.звук.подсказка" title="Короткий гудок: проверить, что звук идёт туда, куда нужно, и слышен"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg><span data-i18n="экспорт.звук">Проверить звук</span></button>
+      <button class="btn btn-ghost" id="btn-export-lrc" data-i18n-title="экспорт.lrc.подсказка" title="Сохранить текст со временем строк (.lrc) — его понимают почти все караоке-плееры"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.lrc">Текст .lrc</span></button>
       <button class="btn btn-ghost hidden" id="btn-export-lrc-words"
         data-i18n-title="экспорт.lrcСлова.подсказка"
         title="Расширенный LRC: время каждого слова внутри строки"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.lrcСлова">.lrc со словами</span></button>
@@ -896,7 +898,7 @@
           <option value="1440">2K · 2560×1440</option>
         </select>
       </label>
-      <button class="btn btn-primary" id="btn-export-video"><svg class="icon" aria-hidden="true"><use href="#i-video"></use></svg><span data-i18n="экспорт.видео">Видео для YouTube</span></button>
+      <button class="btn btn-primary" id="btn-export-video" data-i18n-title="экспорт.видео.подсказка" title="Записать видео со сценой и звуком — готовый файл для YouTube"><svg class="icon" aria-hidden="true"><use href="#i-video"></use></svg><span data-i18n="экспорт.видео">Видео для YouTube</span></button>
     </div>
 
     <div class="export-overlay hidden" id="export-overlay">
@@ -904,7 +906,7 @@
         <p id="export-status" data-i18n="экспорт.идёт">Записываем видео…</p>
         <div class="export-bar"><div id="export-fill"></div></div>
         <p class="export-hint" data-i18n="экспорт.подсказка">Запись идёт в реальном времени. Её можно свернуть: экспорт продолжится в фоне. Не закрывай страницу до окончания.</p>
-        <button class="btn btn-ghost" id="btn-export-cancel" data-i18n="экспорт.отменить">Отменить</button>
+        <button class="btn btn-ghost" id="btn-export-cancel" data-i18n-title="экспорт.отменить.подсказка" title="Прервать запись видео. Уже записанное не сохранится" data-i18n="экспорт.отменить">Отменить</button>
       </div>
     </div>
   </div>
@@ -913,63 +915,16 @@
        Рабочее место собрано по образцу монтажных программ: сверху одна
        панель управления с транспортом и инструментами, посередине три
        окна — список строк, просмотр и инспектор выбранной строки, —
-       внизу дорожка во всю ширину. Взято только то, что нужно караоке:
-       ни слоёв, ни эффектов, ни библиотеки материалов. -->
+       внизу дорожка во всю ширину, под ней легенда и свёрнутая справка.
+       Взято только то, что нужно караоке: ни слоёв, ни эффектов,
+       ни библиотеки материалов. -->
   <div class="step-panel" id="step-3">
-    <!-- Справка свёрнута: в редакторе каждый пиксель высоты уходит
-         сетке строк и дорожке, а прочитанную один раз подсказку держать
-         на виду незачем. Клавиши переехали сюда же — из-под дорожки. -->
-    <details class="panel-hint editor-hint" id="editor-hint">
-      <summary data-i18n="ред.справка.заголовок">Как править разметку</summary>
-      <p data-i18n="ред.справка.первый">
-        Слева текст — правь прямо в списке, двойной клик перематывает на строку.
-        Посередине просмотр, справа инспектор: сверху выбранное слово, под ним
-        строка, которой оно принадлежит. Время в инспекторе стоит в том же виде,
-        что и на дорожке, — минуты и секунды. Внизу дорожка: тяни за края блока —
-        сдвинется граница, за середину — вся строка; на нижней полосе так же
-        тянутся границы слов, а щелчок по слову выбирает его — числа появляются
-        в инспекторе. Стык двух слов тянется как один: конец левого и начало
-        правого едут вместе. Потяни его с зажатым Cmd — края разойдутся, и между
-        словами встанет пауза; свести обратно можно любым из двух краёв.
-        Кнопка «S» у названия дорожки оставляет в наушниках только её, ползунок
-        рядом делает её тише или громче. Начала строк простукиваются пробелом:
-        кнопка «простучать заново».
-      </p>
-      <p data-i18n-html="ред.справка.оригинал">
-        <b>Верхняя полоса — оригинал.</b> Протяни по ней мышью — на этом куске вместо
-        минусовки зазвучат настоящие слова из записи: удобно для вступления, которое
-        петь не хочется. Тяни за края, чтобы поправить границы; крестик, двойной щелчок
-        или <kbd>Delete</kbd> убирают отрезок. Внутри отрезка оригинал слышен целиком,
-        как бы ни стоял ползунок «Вокал» в караоке, — и точно так же он попадёт
-        в минусовку&nbsp;.wav и в записанное видео.
-        В самом редакторе разница на слух не заметна: здесь оригинал звучит всюду,
-        иначе размечать было бы нечего. Чтобы услышать отрезки, сними галку
-        «слышу оригинал» справа или перейди к караоке.
-      </p>
-      <p data-i18n-html="ред.справка.магнит">
-        <b><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg> Магнит.</b> При перетаскивании границы прилипают к краям соседних строк,
-        к границам соседних слов, к указателю воспроизведения, к границам отрезков
-        оригинала, к вступлениям и концам пения (когда огибающая голоса есть) и
-        к краям песни. В месте прилипания встаёт цветная направляющая — цвет говорит,
-        за что зацепилось. Порог одинаков на любом масштабе. Зажатый <kbd>Alt</kbd>
-        отключает магнит на время, клавиша <kbd>S</kbd> — совсем.
-      </p>
-      <p class="timeline-keys" data-i18n-html="ред.клавиши">
-        <kbd>пробел</kbd> играть · <kbd>↑</kbd><kbd>↓</kbd> строка · <kbd>←</kbd><kbd>→</kbd> начало
-        · <kbd>[</kbd><kbd>]</kbd> конец · <kbd>Shift</kbd> точнее, <kbd>Alt</kbd> грубее
-        · <kbd>Enter</kbd> прослушать · <kbd>L</kbd> по кругу · <kbd>S</kbd> магнит
-        · <kbd>Delete</kbd> убрать отрезок · <kbd><span class="mod-key">Cmd</span>+Z</kbd> отменить
-        · <kbd><span class="mod-key">Cmd</span></kbd> + тянуть стык слов — развести края
-        · колесо — прокрутка, с <kbd><span class="mod-key">Cmd</span></kbd> — масштаб
-      </p>
-    </details>
-
     <!-- Режим простукивания: пока он включён, рабочие окна и панель
          управления убраны с глаз (см. .step-panel.tapping в style.css).
          На экране остаётся только то, что нужно, чтобы попадать в строки:
          сама строка, следующая, счётчик, время, дорожка и две кнопки. -->
     <div class="tap-mode hidden" id="tap-mode">
-      <button class="tap-hit" id="tap-hit">
+      <button class="tap-hit" id="tap-hit" data-i18n-title="ред.простук.поле.подсказка" title="Жми пробел (или сюда) в начале каждой строки — время встанет само">
         <span class="tap-now" id="tap-now"></span>
         <span class="tap-next" id="tap-next"></span>
         <span class="tap-key" data-i18n-html="ред.простук.клавиша">жми <kbd>пробел</kbd> в начале строки — или сюда</span>
@@ -979,8 +934,8 @@
         <span class="time" id="tap-time">0:00</span>
       </div>
       <div class="tap-actions">
-        <button class="btn btn-ghost" id="btn-tap-undo" disabled><svg class="icon" aria-hidden="true"><use href="#i-undo"></use></svg><span data-i18n="ред.простук.отменить">отменить последнюю</span></button>
-        <button class="btn btn-primary" id="btn-tap-done" data-i18n="ред.простук.готово">Готово</button>
+        <button class="btn btn-ghost" id="btn-tap-undo" data-i18n-title="ред.простук.отменить.подсказка" title="Убрать последнюю отмеченную строку и простучать её заново" disabled><svg class="icon" aria-hidden="true"><use href="#i-undo"></use></svg><span data-i18n="ред.простук.отменить">отменить последнюю</span></button>
+        <button class="btn btn-primary" id="btn-tap-done" data-i18n-title="ред.простук.готово.подсказка" title="Закончить простукивание и вернуться в редактор" data-i18n="ред.простук.готово">Готово</button>
       </div>
     </div>
 
@@ -988,7 +943,7 @@
          в середине, масштаб дорожки справа — как в монтажной программе -->
     <div class="ed-bar" id="ed-bar">
       <span class="ed-group">
-        <button class="play-btn small" id="btn-edit-play"><svg class="icon i-play" aria-hidden="true"><use href="#i-play"></use></svg><svg class="icon i-pause" aria-hidden="true"><use href="#i-pause"></use></svg></button>
+        <button class="play-btn small" id="btn-edit-play" data-i18n-title="ред.играть.подсказка" title="Играть и остановить (пробел)"><svg class="icon i-play" aria-hidden="true"><use href="#i-play"></use></svg><svg class="icon i-pause" aria-hidden="true"><use href="#i-pause"></use></svg></button>
         <!-- Часы монтажной: текущее время крупно, длина песни следом
              через косую. Сотые доли — те же, что в сетке строк. -->
         <span class="ed-clock">
@@ -1177,7 +1132,7 @@
                    своего текста (align.js). Видна только там, где он загружен,
                    то есть в приложении, см. updateSelInfo -->
               <button class="nudge-btn hidden" id="btn-sel-words-spread" data-i18n-title="ред.распределить.подсказка"
-                title="Разложить слова строки поровну по числу слогов"><svg class="icon" aria-hidden="true"><use href="#i-spread"></use></svg><span data-i18n="ред.распределить">распределить</span></button>
+                title="Расставит слова строки по времени соразмерно числу слогов: длинное слово поётся дольше короткого. Это замена простукиванию слов руками — годится, пока слова руками не размечены"><svg class="icon" aria-hidden="true"><use href="#i-spread"></use></svg><span data-i18n="ред.распределить">распределить</span></button>
               <button class="nudge-btn" id="btn-sel-tap" data-i18n-title="ред.простучать.подсказка"
                 title="Простучать эту строку и следующие заново (пробелом)"><svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg><span data-i18n="ред.простучать">простучать заново</span></button>
               <button class="nudge-btn" id="btn-sel-del" data-i18n-title="ред.удалить.подсказка"
@@ -1201,8 +1156,8 @@
       <div class="word-tap-line" id="word-tap-line"></div>
       <div class="word-tap-actions">
         <span class="word-tap-count" id="word-tap-count"></span>
-        <button class="btn btn-primary btn-small" id="btn-word-done" data-i18n="ред.слова.сохранить">Сохранить</button>
-        <button class="btn btn-ghost btn-small" id="btn-word-cancel" data-i18n="ред.слова.отменить">Отменить</button>
+        <button class="btn btn-primary btn-small" id="btn-word-done" data-i18n-title="ред.слова.сохранить.подсказка" title="Сохранить простуканные слова этой строки" data-i18n="ред.слова.сохранить">Сохранить</button>
+        <button class="btn btn-ghost btn-small" id="btn-word-cancel" data-i18n-title="ред.слова.отменить.подсказка" title="Выйти из разметки слов, ничего не меняя" data-i18n="ред.слова.отменить">Отменить</button>
       </div>
     </div>
 
@@ -1226,9 +1181,59 @@
       <span class="tl-key"><i class="sw sw-own"></i> <span data-i18n="ред.легенда.своё">своё время, если строку подтянуло к голосу</span></span>
     </div>
 
+    <!-- Справка свёрнута и стоит ПОД дорожкой: в редакторе каждый пиксель
+         высоты уходит сетке строк и дорожке, а прочитанную один раз
+         подсказку держать над рабочим местом незачем. Развёрнутая
+         прокручивается внутри себя (см. .editor-hint[open] в style.css),
+         чтобы не выталкивать редактор за край подложки студии. -->
+    <details class="panel-hint editor-hint" id="editor-hint">
+      <summary data-i18n="ред.справка.заголовок">Как править разметку</summary>
+      <p data-i18n="ред.справка.первый">
+        Слева текст — правь прямо в списке, двойной клик перематывает на строку.
+        Посередине просмотр, справа инспектор: сверху выбранное слово, под ним
+        строка, которой оно принадлежит. Время в инспекторе стоит в том же виде,
+        что и на дорожке, — минуты и секунды. Внизу дорожка: тяни за края блока —
+        сдвинется граница, за середину — вся строка; на нижней полосе так же
+        тянутся границы слов, а щелчок по слову выбирает его — числа появляются
+        в инспекторе. Стык двух слов тянется как один: конец левого и начало
+        правого едут вместе. Потяни его с зажатым Cmd — края разойдутся, и между
+        словами встанет пауза; свести обратно можно любым из двух краёв.
+        Кнопка «S» у названия дорожки оставляет в наушниках только её, ползунок
+        рядом делает её тише или громче. Начала строк простукиваются пробелом:
+        кнопка «простучать заново».
+      </p>
+      <p data-i18n-html="ред.справка.оригинал">
+        <b>Верхняя полоса — оригинал.</b> Протяни по ней мышью — на этом куске вместо
+        минусовки зазвучат настоящие слова из записи: удобно для вступления, которое
+        петь не хочется. Тяни за края, чтобы поправить границы; крестик, двойной щелчок
+        или <kbd>Delete</kbd> убирают отрезок. Внутри отрезка оригинал слышен целиком,
+        как бы ни стоял ползунок «Вокал» в караоке, — и точно так же он попадёт
+        в минусовку&nbsp;.wav и в записанное видео.
+        В самом редакторе разница на слух не заметна: здесь оригинал звучит всюду,
+        иначе размечать было бы нечего. Чтобы услышать отрезки, сними галку
+        «слышу оригинал» справа или перейди к караоке.
+      </p>
+      <p data-i18n-html="ред.справка.магнит">
+        <b><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg> Магнит.</b> При перетаскивании границы прилипают к краям соседних строк,
+        к границам соседних слов, к указателю воспроизведения, к границам отрезков
+        оригинала, к вступлениям и концам пения (когда огибающая голоса есть) и
+        к краям песни. В месте прилипания встаёт цветная направляющая — цвет говорит,
+        за что зацепилось. Порог одинаков на любом масштабе. Зажатый <kbd>Alt</kbd>
+        отключает магнит на время, клавиша <kbd>S</kbd> — совсем.
+      </p>
+      <p class="timeline-keys" data-i18n-html="ред.клавиши">
+        <kbd>пробел</kbd> играть · <kbd>↑</kbd><kbd>↓</kbd> строка · <kbd>←</kbd><kbd>→</kbd> начало
+        · <kbd>[</kbd><kbd>]</kbd> конец · <kbd>Shift</kbd> точнее, <kbd>Alt</kbd> грубее
+        · <kbd>Enter</kbd> прослушать · <kbd>L</kbd> по кругу · <kbd>S</kbd> магнит
+        · <kbd>Delete</kbd> убрать отрезок · <kbd><span class="mod-key">Cmd</span>+Z</kbd> отменить
+        · <kbd><span class="mod-key">Cmd</span></kbd> + тянуть стык слов — развести края
+        · колесо — прокрутка, с <kbd><span class="mod-key">Cmd</span></kbd> — масштаб
+      </p>
+    </details>
+
     <div class="panel-actions">
-      <button class="btn btn-ghost" id="btn-back-2" data-i18n="ред.назад">← Текст</button>
-      <button class="btn btn-primary" id="btn-editor-next" data-i18n="ред.дальше">Караоке →</button>
+      <button class="btn btn-ghost" id="btn-back-2" data-i18n-title="ред.назад.подсказка" title="Вернуться к шагу 2: текст песни" data-i18n="ред.назад">← Текст</button>
+      <button class="btn btn-primary" id="btn-editor-next" data-i18n-title="ред.дальше.подсказка" title="Перейти к шагу 4: оформление, предпросмотр и экспорт" data-i18n="ред.дальше">Караоке →</button>
     </div>
   </div>
 </section>

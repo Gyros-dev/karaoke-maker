@@ -48,6 +48,134 @@ function расставитьМодификаторы(корень = document) {
   });
 }
 
+/* ---------- Своя подсказка вместо системной ----------
+   Системная подсказка всплывает через секунду, набрана чужим шрифтом
+   и встаёт не там, где её ждут: на кнопках студии её просто не
+   замечали («навёл на „сохранить черновик“ — подсказки нет»). Своя
+   берётся из того же title, что уже стоит в разметке, — значит,
+   переводится сама (data-i18n-title) и не требует второго списка
+   надписей.
+
+   Пока указатель на элементе, title с него СНЯТ (лежит в data-tip):
+   иначе поверх своей подсказки через секунду вылезла бы системная.
+   Ушёл указатель — атрибут возвращается на место, но только если за
+   это время его не переписал код: соло, «развернуть», кнопки сдвига
+   и другие меняют свою подсказку прямо по щелчку.
+
+   Работает только внутри студии: витрина сайта — обычная страница,
+   там системная подсказка на месте. */
+const ПОДСКАЗКА = (() => {
+  const ЗАДЕРЖКА = 180;   // мс: заметно быстрее системной, но не мельтешит
+  const ОТСТУП = 8;       // от элемента до подсказки
+  const КРАЙ = 6;         // ближе этого к краю окна не подходим
+  const ЧТО = '#studio [title], #studio [data-tip]';
+  let узел = null, цель = null, таймер = 0;
+
+  function создать() {
+    if (узел && узел.isConnected) return узел;
+    узел = document.createElement('div');
+    узел.className = 'tip hidden';
+    узел.setAttribute('role', 'tooltip');
+    /* Кладём внутрь студии, а не в body: переменные темы живут на
+       .studio, и в нейтральной теме подсказка в body осталась бы
+       фирменного цвета. */
+    (document.getElementById('studio') || document.body).appendChild(узел);
+    return узел;
+  }
+
+  // Забрать title себе, чтобы поверх не всплыла системная подсказка
+  function снять(el) {
+    if (!el.hasAttribute('title')) return (el.dataset.tip || '').trim();
+    const текст = el.getAttribute('title');
+    if (!текст.trim()) return '';
+    el.dataset.tip = текст;
+    el.removeAttribute('title');
+    return текст.trim();
+  }
+
+  function вернуть() {
+    if (!цель) return;
+    if (!цель.hasAttribute('title') && цель.dataset.tip) {
+      цель.setAttribute('title', цель.dataset.tip);
+    }
+    delete цель.dataset.tip;
+    цель = null;
+  }
+
+  function скрыть() {
+    clearTimeout(таймер);
+    таймер = 0;
+    if (узел) узел.classList.add('hidden');
+    вернуть();
+  }
+
+  /* Ставим под элементом, а не помещается — над ним; в обе стороны
+     держим внутри окна, иначе подсказка у правой кнопки уезжала бы
+     за край. */
+  function поставить(el) {
+    const у = создать();
+    const к = el.getBoundingClientRect();
+    const п = у.getBoundingClientRect();
+    let x = к.left + к.width / 2 - п.width / 2;
+    let y = к.bottom + ОТСТУП;
+    if (y + п.height > innerHeight - КРАЙ) y = к.top - п.height - ОТСТУП;
+    y = Math.max(КРАЙ, Math.min(y, innerHeight - п.height - КРАЙ));
+    x = Math.max(КРАЙ, Math.min(x, innerWidth - п.width - КРАЙ));
+    у.style.left = Math.round(x) + 'px';
+    у.style.top = Math.round(y) + 'px';
+  }
+
+  function навести(el) {
+    if (el === цель) return;
+    скрыть();
+    const текст = снять(el);
+    if (!текст) return;
+    цель = el;
+    таймер = setTimeout(() => {
+      const у = создать();
+      у.textContent = текст;   // только textContent: это пользовательский текст
+      у.classList.remove('hidden');
+      поставить(el);
+    }, ЗАДЕРЖКА);
+  }
+
+  function найти(цельСобытия) {
+    return цельСобытия && цельСобытия.closest ? цельСобытия.closest(ЧТО) : null;
+  }
+
+  document.addEventListener('pointerover', (e) => {
+    const el = найти(e.target);
+    if (!el) { скрыть(); return; }
+    навести(el);
+  });
+  document.addEventListener('pointerout', (e) => {
+    if (цель && (!e.relatedTarget || !цель.contains(e.relatedTarget))) скрыть();
+  });
+  /* Щелчок гасит подсказку ДО обработчиков кнопки: многие из них тут
+     же ставят элементу новую подсказку, и возвращать поверх неё
+     старую было бы враньём. */
+  document.addEventListener('pointerdown', скрыть, true);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') скрыть(); });
+  /* Прокрутка не гасит подсказку, а ведёт её за кнопкой. Гасить нельзя:
+     в редакторе что-нибудь прокручивается едва ли не каждый кадр (сетка
+     строк сама всплывает к текущей строке), и подсказка не доживала бы
+     до своих 180 мс — на кнопках дорожки её не было бы видно вовсе. */
+  addEventListener('scroll', () => {
+    if (цель && узел && !узел.classList.contains('hidden')) поставить(цель);
+  }, true);
+  addEventListener('blur', скрыть);
+  // Смена языка переписывает все подсказки — висящая устарела
+  document.addEventListener('i18n', скрыть);
+  // Клавиатура: показываем только при обходе с клавиш, не после щелчка
+  document.addEventListener('focusin', (e) => {
+    const el = найти(e.target);
+    if (el && el.matches(':focus-visible')) навести(el);
+  });
+  document.addEventListener('focusout', скрыть);
+
+  return { скрыть, текст: () => (узел && !узел.classList.contains('hidden') ? узел.textContent : null) };
+})();
+
 /* ---------- Состояние ---------- */
 const state = {
   fileName: null,
@@ -8673,6 +8801,11 @@ document.addEventListener('i18n', () => {
   собратьПереключателиЯзыка();
   собратьПереключателиТемы();
   обновитьЦветаТемы();
+  /* Подсказки кнопок сдвига собираются кодом (число в них пишется
+     по-разному на двух языках). Раньше они появлялись только при
+     открытии редактора — до тех пор кнопки стояли вовсе без
+     подсказки, и ревизия кнопок студии на это натыкалась. */
+  обновитьПодписиРедактора();
   const saved = loadProject();
   if (saved && saved.lyrics) $('lyrics-input').value = saved.lyrics;
   if (saved && saved.style) state.style = styleFromSaved(saved);

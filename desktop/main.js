@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, shell, protocol, net } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell, protocol, net, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -281,9 +281,20 @@ function собратьМеню() {
 }
 
 function createWindow() {
+  /* Окно открывается развёрнутым во весь рабочий стол. Студия — рабочее
+     место: все четыре шага делят между собой высоту окна, и на окне
+     в 1180×900 редактор жил в тесноте, хотя монитор стоял пустой.
+     Это ОБЫЧНОЕ развёрнутое окно, а не полноэкранный режим macOS:
+     тот прячет системную строку и уводит приложение на свой рабочий
+     стол, а выходить из него надо руками.
+
+     Размер всё равно задаём — по рабочей области экрана: maximize()
+     на Windows отрабатывает не всегда (например, пока окно скрыто),
+     и тогда окно останется этого размера, а не крошечного. */
+  const рабочая = screen.getPrimaryDisplay().workAreaSize;
   win = new BrowserWindow({
-    width: 1180,
-    height: 900,
+    width: Math.max(900, рабочая.width),
+    height: Math.max(640, рабочая.height),
     minWidth: 900,
     minHeight: 640,
     backgroundColor: '#0a0a0f',
@@ -310,6 +321,13 @@ function createWindow() {
      рабочими, а показать полосу нечем: одиночный Alt её не открывает.
      На macOS меню в системной строке, прятать нечего. */
   if (process.platform !== 'darwin') win.setMenuBarVisibility(false);
+  /* Разворачиваем ПОСЛЕ создания: на Windows maximize() у ещё не
+     показанного окна иногда не срабатывает, поэтому зовём его и здесь,
+     и один раз при показе — повторный вызов у уже развёрнутого окна
+     ничего не делает. На macOS maximize() растягивает окно по рабочей
+     области, не уводя его в полноэкранный режим. */
+  win.maximize();
+  win.once('ready-to-show', () => { if (!win.isMaximized()) win.maximize(); });
   следитьЗаОшибками(win.webContents);
   win.loadURL('app://bundle/index.html');
 
@@ -1559,6 +1577,112 @@ function createWindow() {
           };
         })()
       }))()`);
+      /* Подсказки кнопок студии. Разом три вещи, которые ломались порознь.
+
+         Первое: у КАЖДОЙ кнопки внутри #studio есть подсказка, и на
+         обоих языках. Кнопок там семь десятков, половина — только со
+         значком, и по разметке на глаз их не пересчитаешь: раздел
+         обходит живую страницу и требует непустую подсказку у всех.
+         Заодно требует, чтобы русская и английская РАЗЛИЧАЛИСЬ — забытый
+         ключ в словаре виден только так: подсказка есть, но русская.
+
+         Второе: подсказка своя, а не системная. Пока указатель на
+         кнопке, title с неё СНЯТ (лежит в data-tip) — иначе поверх
+         нашей через секунду вылезала бы системная; после щелчка
+         атрибут обязан вернуться на место, иначе кнопка навсегда
+         останется без подсказки для тех, кто читает её с экрана.
+
+         Третье: место справки. Она стоит под дорожкой, перед кнопками
+         шага, и развёрнутая НЕ выталкивает редактор за низ подложки
+         студии — раньше выталкивала, и кнопки «← Текст» / «Караоке →»
+         уезжали за край окна.
+
+         Язык, открытость справки и активный шаг возвращаются в finally. */
+      report.подсказки = await win.webContents.executeJavaScript(`(async () => {
+        const былЯзык = I18N.язык();
+        const панели = [...document.querySelectorAll('.step-panel')];
+        const былиАктивны = панели.map((п) => п.classList.contains('active'));
+        const справка = document.getElementById('editor-hint');
+        const былаОткрыта = справка.open;
+        try {
+          /* Своя подсказка вместо системной. Проверяем ПЕРВЫМ делом и
+             дав странице отстояться: смена языка уходит в главный
+             процесс пересобирать меню приложения, а пересборка меню
+             роняет фокус окна — подсказка честно прячется, и проверка
+             ловила бы не подсказку, а этот побочный эффект. */
+          await new Promise((r) => setTimeout(r, 200));
+          const кнопка = document.getElementById('tl-snap');
+          кнопка.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+          const снялСразу = !кнопка.hasAttribute('title') && !!кнопка.dataset.tip;
+          await new Promise((r) => setTimeout(r, 300));
+          const всплывашка = document.querySelector('.tip');
+          const видна = !!всплывашка && !всплывашка.classList.contains('hidden');
+          const текст = видна ? всплывашка.textContent.trim() : '';
+          const титулСнят = !кнопка.hasAttribute('title');
+          const совпалСКнопкой = !!текст && текст === (кнопка.dataset.tip || '').trim();
+          document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+          await new Promise((r) => setTimeout(r, 40));
+          const титулВернулся = кнопка.getAttribute('title') === текст;
+
+          const собрать = () => {
+            const м = {};
+            document.querySelectorAll('#studio button').forEach((b, i) => {
+              // Пока подсказка висит, title лежит в data-tip — берём оба
+              м[b.id || ('кнопка' + i)] =
+                (b.getAttribute('title') || b.dataset.tip || '').trim();
+            });
+            return м;
+          };
+          I18N.установить('ru');
+          const ru = собрать();
+          I18N.установить('en');
+          const en = собрать();
+          const имена = Object.keys(ru);
+          const безПодсказки = имена.filter((k) => !ru[k] || !en[k]);
+          const неПеревелись = имена.filter((k) => ru[k] && ru[k] === en[k]);
+          I18N.установить('ru');
+
+          /* Справка после дорожки и легенды, перед кнопками шага */
+          const шаг = document.getElementById('step-3');
+          const дети = [...шаг.children];
+          const где = (s) => дети.indexOf(шаг.querySelector(':scope > ' + s));
+          const поПорядку = где('.timeline-wrap') < дети.indexOf(справка)
+            && где('.timeline-legend') < дети.indexOf(справка)
+            && дети.indexOf(справка) < где('.panel-actions');
+
+          /* Развёрнутая справка не выходит за низ подложки студии */
+          панели.forEach((п) => п.classList.remove('active'));
+          шаг.classList.add('active');
+          справка.open = true;
+          await new Promise((r) => setTimeout(r, 80));
+          const низСтудии = document.querySelector('.studio').getBoundingClientRect().bottom;
+          const низКнопок = шаг.querySelector(':scope > .panel-actions')
+            .getBoundingClientRect().bottom;
+          const выступ = Math.round(низКнопок - низСтудии);
+          const своя = getComputedStyle(справка).overflowY === 'auto';
+          const вШаге = Math.round(справка.getBoundingClientRect().height)
+            <= Math.round(шаг.getBoundingClientRect().height);
+          справка.open = false;
+          await new Promise((r) => setTimeout(r, 80));
+          const свёрнутая = Math.round(справка.getBoundingClientRect().height);
+
+          return {
+            кнопок: имена.length,
+            безПодсказки, неПеревелись,
+            снялСразу,
+            видна, текст: текст.slice(0, 40), титулСнят, совпалСКнопкой, титулВернулся,
+            поПорядку, выступ, своя, вШаге, свёрнутая,
+            вНорме: имена.length > 40
+              && безПодсказки.length === 0 && неПеревелись.length === 0
+              && видна && титулСнят && совпалСКнопкой && титулВернулся
+              && поПорядку && выступ <= 0 && своя && вШаге && свёрнутая < 48,
+          };
+        } finally {
+          I18N.установить(былЯзык);
+          справка.open = былаОткрыта;
+          панели.forEach((п, i) => п.classList.toggle('active', былиАктивны[i]));
+        }
+      })()`);
       /* Ошибки считаем снаружи: страница их нигде не копит, а window.__errors,
          который тут читался раньше, в проекте не создаётся вовсе — признак
          всегда показывал ноль, что бы на странице ни падало. */

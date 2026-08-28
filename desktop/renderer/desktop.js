@@ -875,6 +875,8 @@
   function updateAsrMode() {
     const есть = !!$('lyrics-input').value.trim();
     $('btn-asr-run').textContent = t(есть ? 'asr.кнопка.подогнать' : 'asr.кнопка.распознать');
+    // Подсказка идёт за подписью: у кнопки два разных дела
+    $('btn-asr-run').title = t(есть ? 'asr.кнопка.подогнать.подсказка' : 'asr.кнопка.распознать.подсказка');
     $('btn-asr-fresh').classList.toggle('hidden', !есть);
     $('asr-about-fit').classList.toggle('hidden', !есть);
     $('asr-about-fresh').classList.toggle('hidden', есть);
