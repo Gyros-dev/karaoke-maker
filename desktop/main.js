@@ -1916,6 +1916,338 @@ function createWindow() {
         }
       })()`);
 
+      /* Витрина сайта в приложении. Беда, которую это лечит:
+         приложение показывало всю рекламную часть сайта — шапочное
+         меню, кнопку «Открыть студию», геройский экран, карточки
+         возможностей, вопросы и подвал. Человек прочитал это один раз,
+         когда скачивал программу, а получал при каждом запуске, и до
+         рабочего места приходилось прокручивать страницу.
+
+         Проверяем три вещи разом. Первое: витрины не видно, заголовок
+         «Студия» снят, а сама студия занимает окно целиком и страница
+         не прокручивается. Второе: «Что нового» из подвала не пропала —
+         она переехала в шапку (иначе список изменений стал бы
+         недостижим). Третье, самое важное: ссылка «Как пользоваться»
+         ведёт на раздел #how, который теперь спрятан, — значит, она
+         обязана ОТКРЫВАТЬ его окном поверх студии, а Esc — закрывать.
+
+         Окно в самопроверке не показано, поэтому меряем не пиксели
+         экрана, а вычисленные стили и высоту студии относительно окна.
+         Открытое руководство закрываем в finally. */
+      report.витрина = await win.webContents.executeJavaScript(`(async () => {
+        const былоОткрыто = document.body.classList.contains('guide-open');
+        try {
+          const вид = (сел) => {
+            const el = document.querySelector(сел);
+            return el ? getComputedStyle(el).display : 'нет';
+          };
+          const спрятаны = ['.hero', '.features', '.faq', '.site-footer', '.site-nav', '.how']
+            .map((с) => [с, вид(с)]);
+          const заголовокСнят = вид('.studio > h2') === 'none';
+          const студия = document.querySelector('.studio').getBoundingClientRect();
+          const шапка = document.querySelector('.site-header').getBoundingClientRect();
+          // Студия занимает всё, что осталось от окна под шапкой
+          const воВсёОкно = Math.abs(студия.height - (window.innerHeight - шапка.height)) <= 2;
+          const прокрутка = document.documentElement.scrollHeight - window.innerHeight;
+          // «Что нового» переехала из подвала в шапку — иначе была бы недостижима
+          const новости = document.getElementById('btn-whatsnew');
+          const новостиВШапке = !!(новости && новости.closest('.site-header'));
+          const новостиВидны = !!новости && getComputedStyle(новости).display !== 'none';
+
+          /* «Как пользоваться»: раздел спрятан, значит ссылка обязана
+             открывать его окном, а не вести в никуда */
+          document.querySelector('.steps-help').click();
+          await new Promise((r) => setTimeout(r, 60));
+          const руководствоОткрылось = document.body.classList.contains('guide-open')
+            && вид('.how') !== 'none';
+          const крестикВиден = вид('#how-close') !== 'none';
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          await new Promise((r) => setTimeout(r, 60));
+          const руководствоЗакрылось = !document.body.classList.contains('guide-open')
+            && вид('.how') === 'none';
+
+          return {
+            спрятаны, заголовокСнят, воВсёОкно, прокрутка,
+            высотаСтудии: Math.round(студия.height),
+            высотаОкна: window.innerHeight,
+            новостиВШапке, новостиВидны,
+            руководствоОткрылось, крестикВиден, руководствоЗакрылось,
+            вНорме: спрятаны.every(([, d]) => d === 'none')
+              && заголовокСнят && воВсёОкно && прокрутка <= 0
+              && новостиВШапке && новостиВидны
+              && руководствоОткрылось && крестикВиден && руководствоЗакрылось,
+          };
+        } finally {
+          document.body.classList.toggle('guide-open', былоОткрыто);
+        }
+      })()`);
+
+      /* Поиск по строкам. Беда: в песне сорок-шестьдесят строк, и нужную
+         ищут глазами долго. Опасность у фильтра ровно одна и известна
+         заранее: он не должен ПЕРЕНУМЕРОВАТЬ песню и не должен сломать
+         всё, что живёт по номерам строк, — выбор, клавиши, прокрутку за
+         воспроизведением и правку текста. Поэтому проверяем не «поле
+         есть», а именно это: номера у оставшихся рядов настоящие,
+         editor.sel по-прежнему указывает на ту же строку, поле текста
+         правится, а Esc и пустое поле возвращают весь список.
+
+         Строки подставляем свои, в finally возвращаем прежние. */
+      report.поискСтрок = await win.webContents.executeJavaScript(`(async () => {
+        const былиСтроки = state.lines;
+        const былВыбор = editor.sel;
+        const былПоиск = editor.поиск;
+        const былПроект = localStorage.getItem('karaoke-project');
+        const панель = document.getElementById('step-3');
+        const былаАктивна = панель.classList.contains('active');
+        try {
+          панель.classList.add('active');
+          state.lines = [
+            { text: 'Ёлка в лесу', time: 1, end: 2 },
+            { text: 'Синее море', time: 3, end: 4 },
+            { text: 'ЕЛКА большая', time: 5, end: 6 },
+            { text: 'Белый снег', time: 7, end: 8 },
+            { text: 'Ёлки-палки', time: 9, end: 10 },
+          ];
+          editor.sel = 2;
+          // Список строим заново: строки мы только что подменили
+          поставитьПоиск('');
+          renderEditList();
+          const всегоДо = document.querySelectorAll('.edit-row').length;
+
+          // Регистр и «ё» не важны: набрано «елк», найтись обязаны три
+          поставитьПоиск('елк');
+          const ряды = [...document.querySelectorAll('.edit-row')];
+          const номера = ряды.map((r) => r.querySelector('.num').textContent);
+          const строки = ряды.map((r) => +r.dataset.row);
+          // Номера настоящие: у третьей строки песни в списке стоит «3»
+          const номераНастоящие = номера.join(',') === '1,3,5'
+            && строки.join(',') === '0,2,4';
+          // Выбор не сбился, и выбранная строка помечена в отфильтрованном списке
+          const выборЦел = editor.sel === 2;
+          const выбраннаяВидна = !!document.querySelector('.edit-row.selected-row[data-row="2"]');
+          // Текст правится: поле осталось редактируемым
+          const текстПравится = ряды.every((r) => r.querySelector('.edit-text').isContentEditable);
+          // Прокрутка за воспроизведением не спотыкается о спрятанный ряд
+          let прокруткаЖива = true;
+          try { scrollEditListTo(1); scrollEditListTo(2); } catch (e) { прокруткаЖива = false; }
+          // Клавиши работают: ↓ переводит выбор на следующую строку песни
+          moveSelection(1);
+          const клавишиРаботают = editor.sel === 3;
+          editor.sel = 2;
+
+          // Ничего не нашлось — вместо пустоты надпись
+          поставитьПоиск('щщщ');
+          const пустоНайдено = document.querySelectorAll('.edit-row').length;
+          const надписьВидна = !document.getElementById('line-search-none')
+            .classList.contains('hidden');
+
+          // Esc очищает поле и возвращает все строки
+          document.getElementById('line-search').value = 'елк';
+          поставитьПоиск('елк');
+          document.getElementById('line-search').dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          await new Promise((r) => setTimeout(r, 40));
+          const послеEsc = document.querySelectorAll('.edit-row').length;
+          const полеПусто = document.getElementById('line-search').value === '';
+
+          return {
+            всегоДо, номера, строки, номераНастоящие, выборЦел, выбраннаяВидна,
+            текстПравится, прокруткаЖива, клавишиРаботают,
+            пустоНайдено, надписьВидна, послеEsc, полеПусто,
+            вНорме: всегоДо === 5 && ряды.length === 3 && номераНастоящие
+              && выборЦел && выбраннаяВидна && текстПравится && прокруткаЖива
+              && клавишиРаботают && пустоНайдено === 0 && надписьВидна
+              && послеEsc === 5 && полеПусто,
+          };
+        } finally {
+          поставитьПоиск('');
+          document.getElementById('line-search').value = былПоиск;
+          state.lines = былиСтроки;
+          editor.sel = былВыбор;
+          renderEditList();
+          if (былПроект != null) localStorage.setItem('karaoke-project', былПроект);
+          else localStorage.removeItem('karaoke-project');
+          if (!былаАктивна) панель.classList.remove('active');
+        }
+      })()`);
+
+      /* Скиммирование: звук под курсором при ПРОСТОМ НАВЕДЕНИИ, без
+         нажатия, — так место в записи ищут в монтажных программах.
+         Движок тот же, что у слышимой перемотки, и выключатель тот же.
+
+         Опасность известна заранее: наведение сыплет событиями заметно
+         чаще перетаскивания. Поэтому проверка считает: сотня движений
+         подряд обязана дать РОВНО ОДИН кусочек (защёлка по часам плюс
+         порог самого скраба), указатель воспроизведения при этом не
+         должен сдвинуться ни на йоту, во время обычного воспроизведения
+         скиммирование обязано молчать, выключенная слышимая перемотка —
+         выключать и его, а контекста, которого ещё нет, наведение не
+         должно поднимать вовсе.
+
+         Контекст подменяем на OfflineAudioContext, всё подменённое
+         возвращаем в finally. */
+      report.скиммирование = await win.webContents.executeJavaScript(`(async () => {
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былКонтекст = audio.ctx;
+        const былаИграет = audio.playing;
+        const былоСмещение = audio.offset;
+        const былВыключатель = editor.слышнаяПеремотка;
+        const былиПики = editor.peaks;
+        const былоСоло = editor.solo;
+        const панель = document.getElementById('step-3');
+        const былаАктивна = панель.classList.contains('active');
+        try {
+          const SR = 44100;
+          const синус = (ctx, сек) => {
+            const b = ctx.createBuffer(1, Math.round(SR * сек), SR);
+            const d = b.getChannelData(0);
+            for (let i = 0; i < d.length; i++) d[i] = 0.8 * Math.sin(2 * Math.PI * 220 * i / SR);
+            return b;
+          };
+          панель.classList.add('active');
+          editor.peaks = null;
+          editor.solo = null;
+          editor.слышнаяПеремотка = true;
+          audio.playing = false;
+          audio.offset = 7.25;
+
+          /* Контекста ещё нет — наведение его не поднимает: звук должен
+             начинаться с действия человека, а не с проезда мышью */
+          audio.ctx = null;
+          скраб.куски.clear();
+          скраб.конец = 0;
+          const безКонтекста = скиммировать(1.2);
+
+          const офф = new OfflineAudioContext(1, Math.round(SR * 0.5), SR);
+          state.originalBuffer = синус(офф, 3);
+          state.instrumentalBuffer = null;
+          audio.ctx = офф;
+          скраб.куски.clear();
+          скраб.конец = 0;
+
+          // Сотня движений мыши подряд — кусочек обязан пойти один
+          let запущено = 0;
+          for (let i = 0; i < 100; i++) if (скиммировать(1 + i * 0.005)) запущено++;
+          const живых = скраб.живые;
+          const указательНеПоехал = audio.offset === 7.25;
+
+          // Играет обычным ходом — скиммирование молчит: и так слышно
+          скраб.куски.clear();
+          скраб.конец = 0;
+          audio.playing = true;
+          const воВремяИгры = скиммировать(2.2);
+          audio.playing = false;
+
+          /* Выключатель у скиммирования и слышимой перемотки один:
+             плодить второй орган управления об одном и том же нельзя */
+          const кнопка = document.getElementById('tl-scrub');
+          кнопка.click();
+          скраб.конец = 0;
+          const послеВыключения = скиммировать(2.3);
+          кнопка.click();
+          скраб.конец = 0;
+          await new Promise((r) => setTimeout(r, 60));
+          const послеВключения = скиммировать(2.4);
+
+          скраб.куски.clear();
+          скраб.конец = 0;
+          return {
+            безКонтекста: безКонтекста === null,
+            движений: 100, запущено, живых,
+            указательНеПоехал,
+            паузаМс: СКИММ_ПАУЗА,
+            воВремяИгры: воВремяИгры === null,
+            послеВыключения: послеВыключения === null,
+            послеВключения: послеВключения !== null,
+            вНорме: безКонтекста === null && запущено === 1 && живых <= СКРАБ_МАКС
+              && указательНеПоехал && воВремяИгры === null
+              && послеВыключения === null && послеВключения !== null,
+          };
+        } finally {
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          audio.ctx = былКонтекст;
+          audio.playing = былаИграет;
+          audio.offset = былоСмещение;
+          editor.peaks = былиПики;
+          editor.solo = былоСоло;
+          setScrub(былВыключатель);
+          скраб.куски.clear();
+          скраб.конец = 0;
+          if (!былаАктивна) панель.classList.remove('active');
+        }
+      })()`);
+
+      /* Сворачивание разделов инспектора. Беда: столбец в 210 px на
+         ноутбуке не помещался в окно целиком и прокручивался, а числа
+         в нём сверяют глазами. Смысл сворачивания — та же информация
+         вдвое меньшей высотой, поэтому проверяем именно ВЫСОТУ: она
+         обязана заметно упасть. И проверяем память: что свёрнуто,
+         должно пережить перезагрузку — то есть лежать в localStorage
+         и восстанавливаться ИНСПЕКТОР.применить(), а не только жить
+         в открытом окне.
+
+         Раскрытость разделов и ключ хранилища возвращаем в finally. */
+      report.инспектор = await win.webContents.executeJavaScript(`(async () => {
+        const слово = document.getElementById('insp-word');
+        const строка = document.getElementById('insp-line');
+        const былоСлово = слово.open;
+        const былаСтрока = строка.open;
+        const былоХранилище = localStorage.getItem('karaoke-inspector');
+        const панель = document.getElementById('step-3');
+        const былаАктивна = панель.classList.contains('active');
+        try {
+          панель.classList.add('active');
+          слово.open = true;
+          строка.open = true;
+          await new Promise((r) => setTimeout(r, 60));
+          const высотаОткрытых = Math.round(
+            document.querySelector('#sel-panel .ed-pane-body').scrollHeight);
+
+          // Сворачиваем «Слово» — и оно обязано записаться в хранилище
+          слово.open = false;
+          await new Promise((r) => setTimeout(r, 60));
+          const высотаБезСлова = Math.round(
+            document.querySelector('#sel-panel .ed-pane-body').scrollHeight);
+          const записалось = (() => {
+            try { return JSON.parse(localStorage.getItem('karaoke-inspector'))['insp-word'] === false; }
+            catch (e) { return false; }
+          })();
+
+          /* Перезагрузку изображаем честно: ставим оба раздела как при
+             первом открытии страницы и просим ИНСПЕКТОР применить
+             сохранённое — ровно это он делает при запуске */
+          слово.open = true;
+          строка.open = true;
+          ИНСПЕКТОР.применить();
+          const пережило = слово.open === false && строка.open === true;
+
+          // Треугольник у заголовка есть, и он поворачивается
+          const до = getComputedStyle(строка.querySelector('summary'), '::before').transform;
+          строка.open = false;
+          await new Promise((r) => setTimeout(r, 220));
+          const после = getComputedStyle(строка.querySelector('summary'), '::before').transform;
+          const высотаБезОбоих = Math.round(
+            document.querySelector('#sel-panel .ed-pane-body').scrollHeight);
+
+          return {
+            высотаОткрытых, высотаБезСлова, высотаБезОбоих,
+            записалось, пережило, треугольникДо: до, треугольникПосле: после,
+            вНорме: высотаОткрытых > 0
+              && высотаБезСлова < высотаОткрытых
+              && высотаБезОбоих * 2 <= высотаОткрытых   // вдвое меньшей высотой
+              && записалось && пережило && до !== после,
+          };
+        } finally {
+          if (былоХранилище != null) localStorage.setItem('karaoke-inspector', былоХранилище);
+          else localStorage.removeItem('karaoke-inspector');
+          слово.open = былоСлово;
+          строка.open = былаСтрока;
+          if (!былаАктивна) панель.classList.remove('active');
+        }
+      })()`);
+
       /* Сетка долей: оценка темпа и притягивание к долям.
 
          Опасность здесь названа заранее автором задачи: НЕВЕРНО

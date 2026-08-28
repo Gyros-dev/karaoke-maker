@@ -1032,6 +1032,48 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   min-height: 0;
   overflow-y: auto;
 }
+/* Поиск по строкам. Строка занята целиком полем: в песне сорок-шестьдесят
+   строк, и это единственный способ добраться до нужной, не читая все. */
+.ed-search {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: none;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.ed-search > .icon { flex: none; width: 0.85em; height: 0.85em; }
+.ed-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.15rem 0.2rem;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--ed-font);
+  outline: none;
+}
+.ed-search input::placeholder { color: var(--text-dim); opacity: 0.8; }
+.ed-search-clear {
+  flex: none;
+  display: inline-flex;
+  padding: 0.1rem;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.ed-search-clear:hover { color: var(--text); }
+.ed-search-clear .icon { width: 0.8em; height: 0.8em; }
+.ed-search-none {
+  flex: none;
+  padding: 0.6rem 0.7rem;
+  color: var(--text-dim);
+  font-size: var(--ed-font);
+  text-align: center;
+}
 /* Строка сетки: только чтение и правка текста. Кнопок подстройки здесь
    нет — они живут в панели выбранной строки и на дорожке. */
 .edit-row {
@@ -1066,15 +1108,16 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   background: var(--sel-ring-bg);
   box-shadow: inset 2px 0 0 var(--sel-ring), inset -3px 0 0 rgba(167, 139, 250, 0.85);
 }
-.edit-row .ts, .edit-row .end-ts, .edit-row .dur-ts, .edit-row .num {
+.edit-row .ts, .edit-row .dur-ts, .edit-row .num {
   font-family: var(--ed-num);
   font-variant-numeric: tabular-nums;
 }
-/* Начало и конец — «1:22,40», сотые доли: та же запись, что на линейке
-   дорожки и в часах, только короче тысячных из полей инспектора.
-   Ширина под неё одинаковая у обоих столбцов, иначе колонка дёргается */
+/* Начало — «1:22,40», сотые доли: та же запись, что на линейке дорожки
+   и в часах, только короче тысячных из полей инспектора. Столбца конца
+   здесь больше нет: он выводится из начала и длины, а длину сравнивают
+   глазами — конец же и так виден на дорожке и стоит в инспекторе.
+   Освободившаяся ширина ушла тексту строки. */
 .edit-row .ts { min-width: 3.7rem; flex-shrink: 0; }
-.edit-row .end-ts { min-width: 3.7rem; color: var(--text-dim); }
 .edit-row .dur-ts {
   min-width: 2.6rem;
   color: var(--text-dim);
@@ -1088,9 +1131,18 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   font-size: 0.9em;
   text-align: right;
 }
-/* Тихая пометка: слова этой строки размечены вручную */
+/* Тихая пометка: слова этой строки размечены вручную.
+   Когда размечено большинство строк, пометка переворачивается (см.
+   renderEditList): помечаются, наоборот, строки БЕЗ ручной разметки —
+   и тогда она приглушённая и с пунктирной обводкой, чтобы «нет» нельзя
+   было спутать с «да». */
 .word-mark { color: #84cc16; flex-shrink: 0; display: inline-flex; }
 .word-mark .icon { width: 0.85em; height: 0.85em; }
+.word-mark-off {
+  color: var(--text-dim);
+  opacity: 0.75;
+  border-bottom: 1px dashed currentColor;
+}
 .edit-text {
   flex: 1;
   min-width: 90px;
@@ -1185,6 +1237,43 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   border-top: 1px solid var(--border);
 }
 .sel-word.empty { opacity: 0.75; }
+
+/* --- Сворачиваемые разделы инспектора ---
+   Как в инспекторе Final Cut: «Слово» и «Строка» открываются и
+   закрываются треугольником. Беда, которую это лечит: столбец в 210 px
+   на ноутбуке не помещался в окно целиком и прокручивался — а числа
+   в нём сверяют глазами, прокрутка тут дороже, чем кажется. Что
+   свёрнуто, помнится между сеансами (ИНСПЕКТОР в app.js).
+
+   Черта над «Строкой» теперь рисуется у самого раздела, а не у .sel-line:
+   иначе у свёрнутого раздела она уезжала бы под заголовок. */
+.insp-sec + .insp-sec { margin-top: 0.15rem; padding-top: 0.4rem; border-top: 1px solid var(--border); }
+.insp-sec + .insp-sec > .sel-line { margin-top: 0; padding-top: 0.35rem; border-top: none; }
+.insp-sec > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.insp-sec > summary::-webkit-details-marker { display: none; }
+.insp-sec > summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 0.12s ease;
+}
+.insp-sec[open] > summary::before { transform: rotate(90deg); }
+.insp-sec > summary:hover { color: var(--text); }
 /* .nudge-btn.on уже красит включённое кольцо строки акцентом темы —
    у слова тот же класс, та же покраска, ничего своего добавлять не надо */
 
@@ -1474,7 +1563,11 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
    и канвас разъедутся по высоте. */
 .tl-heads {
   flex: none;
-  width: 132px;
+  /* 150 px, а не прежние 132: рядом с ползунком уровня встало число
+     процентов (как «0.0 dB» у Volume в Final Cut), и без этих
+     восемнадцати пикселей оно выдавливало подпись полосы. У канваса
+     дорожки они не отнимают ничего заметного. */
+  width: 150px;
   border-right: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.025);
   overflow: hidden;
@@ -1509,6 +1602,19 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
    ВЕСЬ этот блок до сих пор не применялся вовсе: точка оставалась
    ручкой в 16 px со свечением в 10 px — от неё и был перегружен ряд
    заголовка полосы высотой 14–38 px. */
+/* Число процентов рядом с ползунком: по положению кружка уровень
+   не прочитать, а сверять его глазами приходится постоянно. Моноширинное
+   и с табличными цифрами — иначе «100 %» и «45 %» дёргали бы ряд. */
+.tl-gain-val {
+  flex: none;
+  min-width: 2.5em;
+  color: var(--text-dim);
+  font-family: var(--ed-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 9px;
+  text-align: right;
+}
+.tl-gain-val.off { opacity: 0.35; }
 input[type="range"].tl-gain {
   flex: 1;
   min-width: 24px;
@@ -1612,10 +1718,15 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   touch-action: none;
 }
 /* Что каким цветом нарисовано на дорожке. Стоит прямо под дорожкой,
-   а не в свёрнутой справке: цвета нужны, когда смотришь на дорожку. */
+   а не в свёрнутой справке: цвета нужны, когда смотришь на дорожку.
+
+   Сами шесть подписей спрятаны за значком «?»: читают их один раз,
+   а строку под дорожкой они занимали всегда. Развёрнутая легенда
+   встаёт в тот же ряд, что и кнопка, — ничего не прыгает. */
 .timeline-legend {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.2rem 1rem;
   margin-top: 0.35rem;
   padding: 0 0.2rem;
@@ -1623,6 +1734,27 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   color: var(--text-dim);
   font-size: 0.72rem;
   line-height: 1.4;
+}
+.tl-legend-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--ed-radius-ctl);
+  background: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.tl-legend-btn:hover { color: var(--text); border-color: var(--border); }
+.tl-legend-btn[aria-expanded="true"] { color: var(--text); border-color: var(--border); }
+.tl-legend-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 1rem;
 }
 .tl-key { display: flex; align-items: center; gap: 0.35rem; }
 .tl-key b { color: var(--text-dim); font-weight: 400; opacity: 0.75; }
@@ -2270,6 +2402,83 @@ body.stage-full .site-header { z-index: 1; }
 .only-desktop { display: none; }
 body.is-desktop .only-desktop { display: revert; }
 body.is-desktop .only-web { display: none; }
+
+/* ============ Витрина: только на сайте ============
+
+   БЕДА. Приложение показывало всю рекламную часть сайта — шапочное
+   меню, кнопку «Открыть студию», геройский экран «Преврати любую песню
+   в караоке», карточки возможностей, вопросы и подвал. Человек прочитал
+   это ровно один раз, когда скачивал программу; при каждом следующем
+   запуске он получал страницу, которую надо прокрутить, чтобы добраться
+   до рабочего места. В приложении окно и так подписано — витрина в нём
+   не продаёт ничего, а только отнимает высоту.
+
+   Поэтому в приложении витрины нет вовсе, а студия занимает окно
+   целиком: без полей, без скруглений и без прокрутки страницы. В шапке
+   остаются логотип, переключатели языка и темы и «Что нового» (её
+   переносит туда desktop.js — в подвале ей больше не жить).
+
+   На сайте всё остаётся как было: там витрина и продаёт продукт. */
+body.is-desktop { overflow: hidden; }
+body.is-desktop .hero,
+body.is-desktop .features,
+body.is-desktop .faq,
+body.is-desktop .site-footer,
+body.is-desktop .site-nav,
+body.is-desktop .site-header > .btn { display: none; }
+/* Заголовок «Студия» над рядом шагов: окно приложения и так подписано */
+body.is-desktop .studio > h2 { display: none; }
+body.is-desktop .studio {
+  width: 100%;
+  max-width: none;
+  height: calc(100vh - var(--header-h, 69px));
+  min-height: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  padding: 0.9rem 1.2rem 0.8rem;
+}
+
+/* Руководство в приложении — окно поверх студии, а не раздел страницы:
+   раздел спрятан вместе с витриной, и ссылка «Как пользоваться» вела бы
+   в никуда. Открывает и закрывает его открытьРуководство в app.js. */
+body.is-desktop .how { display: none; }
+body.is-desktop.guide-open .how {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  max-width: none;
+  margin: 0;
+  padding: 2rem 1.5rem 3rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg);
+}
+body.is-desktop.guide-open .how > * { max-width: 1100px; margin-inline: auto; }
+/* Крестик виден только в приложении, где раздел открыт окном. Прячем
+   его своим правилом, а не классом only-desktop: у того та же сила
+   селектора, и кто кого перебьёт, решал бы порядок строк в файле. */
+.guide-close { display: none; }
+body.is-desktop .guide-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-card);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+body.is-desktop .guide-close:hover { color: var(--text); border-color: var(--text-dim); }
+/* «Что нового» переехала из подвала в шапку приложения: подвала там нет,
+   а узнать, что изменилось в версии, по-прежнему нужно */
+body.is-desktop .site-header .footer-link { font-size: 0.85rem; white-space: nowrap; }
 
 .whatsnew {
   position: fixed;

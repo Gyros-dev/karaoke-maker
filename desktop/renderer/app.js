@@ -183,6 +183,11 @@ const state = {
   instrumentalBuffer: null, // AudioBuffer с приглушённым вокалом (null для моно)
   lines: [],                // [{ text, time|null, end:number|null }]
   origSpans: [],            // отрезки, где вместо минусовки звучит оригинал
+  /* Человек уже делал отрезок оригинала хотя бы раз. По этому признаку
+     гаснет навсегда приглашение «протяни мышью» внутри пустой полосы
+     (см. drawOrigLane): один раз оно объясняет, дальше просто занимает
+     рабочую область. Живёт в проекте, а не в сессии. */
+  отрезокБыл: false,
   vocalMix: 0,              // 0..1 — громкость вокала в караоке
   bgImage: null,            // dataURL картинки-фона для караоке
   eq: { low: 0, mid: 0, high: 0 }, // эквалайзер, дБ (−12…+12)
@@ -850,6 +855,38 @@ function скрабнуть(t) {
   // Кусочек убирает себя сам, иначе узлы копились бы на каждое движение
   к.источники[0].onended = прибрать;
   return к;
+}
+
+/* ---------- Скиммирование: звук под курсором при наведении ----------
+
+   В монтажных программах место в записи ищут не перетаскиванием
+   указателя, а простым движением мыши над дорожкой: звук идёт под
+   курсором, а указатель воспроизведения стоит там, где стоял. Это
+   быстрее — не надо ни нажимать, ни возвращать указатель обратно.
+
+   Движок тот же самый, что у слышимой перемотки, и выключатель тот же
+   (кнопка «слышная перемотка»): плодить второй орган управления об
+   одном и том же было бы хуже, чем не иметь скиммирования вовсе.
+
+   Отличие от перетаскивания одно, зато важное: наведение сыплет
+   событиями заметно чаще. Порог у скрабнуть на это и рассчитан (пока
+   предыдущий кусочек звучит, новый не запускается), но своя защёлка
+   по часам всё равно нужна — иначе каждое из сотни движений в секунду
+   поднимало бы звуковой контекст и считало усиления впустую. И ещё:
+   контекста, которого ещё нет, наведением не заводим — звук должен
+   начинаться с действия человека, а не с проезда мышью. */
+const СКИММ_ПАУЗА = 45;   // мс между попытками — чаще кусочки всё равно не пойдут
+let скиммПоследний = 0;
+
+function скиммировать(t) {
+  if (!editor.слышнаяПеремотка) return null;
+  if (audio.playing) return null;          // играет обычным ходом — и так слышно
+  if (!audio.ctx) return null;             // контекст наведением не поднимаем
+  const сейчас = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (сейчас - скиммПоследний < СКИММ_ПАУЗА) return null;
+  скиммПоследний = сейчас;
+  // Указатель воспроизведения НЕ двигаем: звучит только то, что под курсором
+  return скрабнуть(t);
 }
 
 /* ---------- Приглушение вокала ----------
@@ -1812,6 +1849,11 @@ function собратьПроект() {
        обязано сохраниться, а не подмениться прежними. */
     origSpans: state.lines.length ? отрезкиОригинала().map((s) => ({ ...s }))
       : (keepPrev && prev.origSpans) || [],
+    /* Человек уже делал отрезок — приглашение внутри пустой полосы
+       больше не показываем. Запоминаем и то, что видно прямо сейчас:
+       проект мог прийти из версии, которая про признак не знала. */
+    origHintDone: !!(state.отрезокБыл || отрезкиОригинала().length
+      || (keepPrev && prev.origHintDone)),
     bg: state.bgImage,
     // Огибающая голоса: по ней сцена знает конец строки и проигрыши
     voice: voice.level ? voiceToText(voice.level) : ((keepPrev && prev.voice) || null),
@@ -1957,6 +1999,7 @@ function применитьЧерновик(проект) {
   $('lyrics-input').value = проект.lyrics || '';
   state.lines = linesFromProject(проект);
   state.origSpans = нормОтрезки(проект.origSpans, длит);
+  state.отрезокБыл = !!(проект.origHintDone || state.origSpans.length);
   state.eq = {
     low: +(проект.eq && проект.eq.low) || 0,
     mid: +(проект.eq && проект.eq.mid) || 0,
@@ -2087,6 +2130,9 @@ function measureHeader() {
 }
 measureHeader();
 window.addEventListener('resize', measureHeader);
+/* Смена языка меняет длину надписей, а с ними и высоту шапки на узком
+   окне: без пересчёта студия считалась бы от прежней высоты. */
+document.addEventListener('i18n', measureHeader);
 
 /* Студия высотой в окно: если страница стоит не на ней, работы не видно */
 function scrollStudioIntoView() {
@@ -2146,6 +2192,7 @@ async function handleFile(file) {
     // Времена прежней песни новой не годятся: строки стоят не на своих местах
     state.lines = [];
     state.origSpans = [];   // и отрезки оригинала — они тоже про прежнюю песню
+    state.отрезокБыл = false;   // другая песня — другой проект, приглашение снова к месту
     editor.sel = -1;
     editor.peaks = null;
     clearHistory();
@@ -2194,6 +2241,7 @@ async function handleFile(file) {
       if (saved.bg) setBgImage(saved.bg);
       // Отрезки оригинала: длину знаем только сейчас — по ней и обрезаем
       state.origSpans = нормОтрезки(saved.origSpans, buffer.duration);
+      state.отрезокБыл = !!(saved.origHintDone || state.origSpans.length);
       // Огибающая голоса от прошлого разделения этой же песни
       if (saved.voice) restoreVoiceTrack(saved.voice, buffer.duration);
       if (saved.eq) {
@@ -2732,13 +2780,6 @@ function refreshTimes() {
   document.querySelectorAll('#edit-list .ts[data-ts-i]').forEach((el) => {
     const line = state.lines[+el.dataset.tsI];
     if (line) el.textContent = line.time == null ? '–:––' : fmtTimeCs(line.time);
-  });
-  document.querySelectorAll('#edit-list .end-ts[data-end-ts-i]').forEach((el) => {
-    const line = state.lines[+el.dataset.endTsI];
-    if (!line) return;
-    el.classList.toggle('empty', !line.ручнойКонец);
-    el.textContent = line.time == null
-      ? '–:––' : fmtTimeCs(lineEnd(synced, synced.indexOf(line)));
   });
   document.querySelectorAll('#edit-list .dur-ts[data-dur-i]').forEach((el) => {
     const line = state.lines[+el.dataset.durI];
@@ -4100,6 +4141,10 @@ const editor = {
   sel: -1,       // выбранная строка (номер в state.lines), -1 — ничего
   wordSel: -1,   // выбранное слово внутри неё (номер в массиве слов), -1 — ничего
   origSel: -1,   // выбранный отрезок оригинала (номер в state.origSpans)
+  /* Поиск по строкам: уже приведённая подстрока (нижний регистр, «ё» → «е»).
+     Прячет ряды в сетке и больше ничего не трогает — номера, выбор и
+     клавиши остаются о настоящих строках. */
+  поиск: '',
   /* Выделенный кусок разметки: { from, to } — номера строк в state.lines,
      включительно. Порядок концов не важен: from — якорь (с него начали),
      to — край, который расширяют; читаются через строкиДиапазона. */
@@ -4900,16 +4945,57 @@ function openEditor() {
 /* --- Сетка строк ---
 
    В строке только то, что помогает её найти и прочитать: номер, начало,
-   конец, длительность, текст и тихие пометки (≈ — время на глазок,
-   ♪ — слова размечены руками). Кнопок подстройки в строке нет: их было
-   по восемь на строку, и они дублировали дорожку, клавиши и панель
-   выбранной строки. Из-за них список было не прочитать. */
+   длительность, текст и тихие пометки (≈ — время на глазок, ♪ — про
+   ручную разметку слов). Кнопок подстройки в строке нет: их было по
+   восемь на строку, и они дублировали дорожку, клавиши и панель
+   выбранной строки. Из-за них список было не прочитать.
+
+   Столбцов времени два, а не три. Конец выводится из начала и длины,
+   то есть третьим числом ничего нового не сообщал, а место занимал;
+   из пары «начало/конец» и «начало/длина» полезнее вторая — длину
+   сравнивают глазами сверху вниз и сразу видят строку, которой не
+   хватило места. Сам конец никуда не делся: он в инспекторе и на
+   дорожке. Освободившаяся ширина ушла тексту.
+
+   ПОМЕТКА ♪ ПЕРЕВОРАЧИВАЕТСЯ. Когда слова размечены во всей песне,
+   значок стоит у каждой строки и не сообщает ничего: пометка должна
+   выделять редкое. Поэтому, если ручная разметка есть у большинства
+   размеченных строк, помечаются, наоборот, те, у кого её НЕТ, — другим
+   цветом и с другой подсказкой. Порог 60 % взят как «заметно больше
+   половины»: до него редкость — сама разметка, после — её отсутствие.
+   Ниже четырёх размеченных строк не переворачиваем вовсе: на двух-трёх
+   строках «большинство» — это случайность, а не свойство песни. */
+const ДОЛЯ_СЛОВ = 0.6;      // с какой доли размеченных пометка переворачивается
+const МИН_СТРОК_СЛОВ = 4;   // а ниже стольких строк не переворачивается вовсе
+
+/* Строка подходит под поиск. Регистр не важен, «ё» и «е» — одна буква:
+   в песнях её пишут и так и так, а ищущий набирает как придётся. */
+function нормДляПоиска(s) {
+  return String(s || '').toLowerCase().split('ё').join('е');
+}
+
+function подходитПоиску(line) {
+  if (!editor.поиск) return true;
+  return нормДляПоиска(line.text).includes(editor.поиск);
+}
+
 function renderEditList() {
   const ul = $('edit-list');
   const synced = syncedLines();
   const вДиапазоне = new Set(строкиДиапазона());
+  /* Считаем долю строк с ручной разметкой слов — от неё зависит,
+     что помечать значком: редкую разметку или редкое её отсутствие */
+  const размеченные = state.lines.filter((l) => l.time != null);
+  const сСловами = размеченные.filter(hasWords).length;
+  const наоборот = размеченные.length >= МИН_СТРОК_СЛОВ
+    && сСловами >= размеченные.length * ДОЛЯ_СЛОВ;
+  let показано = 0;
   ul.innerHTML = '';
   state.lines.forEach((line, i) => {
+    /* Поиск прячет ряды, а не перенумеровывает песню: номер по-прежнему
+       i + 1, выбор и клавиши работают по тем же самым номерам */
+    if (!подходитПоиску(line)) return;
+    показано++;
     const li = document.createElement('li');
     li.className = 'edit-row';
     if (i === editor.sel) li.classList.add('selected-row');
@@ -4928,11 +5014,6 @@ function renderEditList() {
     ts.className = 'ts' + (line.time == null ? ' empty' : '');
     ts.dataset.tsI = i;
     ts.textContent = line.time == null ? '–:––' : fmtTimeCs(line.time);
-
-    const end = document.createElement('span');
-    end.className = 'ts end-ts' + (line.ручнойКонец ? '' : ' empty');
-    end.dataset.endTsI = i;
-    end.textContent = line.time == null ? '–:––' : fmtTimeCs(lineEnd(synced, j));
 
     // Длительность: по ней сразу видно строку, которой не хватило места
     const dur = document.createElement('span');
@@ -4958,22 +5039,61 @@ function renderEditList() {
     text.textContent = line.text;
     text.dataset.textI = i;
 
-    // Строка размечена по словам — тоже тихой пометкой, а не кнопкой
+    /* Тихая пометка про ручную разметку слов. Что именно помечено,
+       решает доля: пока разметка редка — помечаем её саму, а когда
+       она стала правилом — помечаем строки без неё. */
     let mark = null;
-    if (hasWords(line)) {
+    const свои = hasWords(line);
+    if (line.time != null && (наоборот ? !свои : свои)) {
       mark = document.createElement('span');
-      mark.className = 'word-mark';
+      mark.className = наоборот ? 'word-mark word-mark-off' : 'word-mark';
       mark.appendChild(значокSVG('note'));
-      mark.title = t('ред.слова.помечены');
+      mark.title = t(наоборот ? 'ред.слова.неРазмечены' : 'ред.слова.помечены');
     }
 
-    li.append(num, ts, end, dur);
+    li.append(num, ts, dur);
     if (guess) li.appendChild(guess);
     li.appendChild(text);
     if (mark) li.appendChild(mark);
     ul.appendChild(li);
   });
+  /* Поиск не нашёл ничего — пустой список выглядел бы поломкой */
+  const пусто = $('line-search-none');
+  if (пусто) пусто.classList.toggle('hidden', !(editor.поиск && показано === 0));
 }
+
+/* ---------- Поиск по строкам ----------
+   В песне сорок-шестьдесят строк, и нужную ищут глазами долго. Поле над
+   списком показывает только подходящие; всё остальное — выбор строки,
+   правка текста, прокрутка за воспроизведением, клавиши — работает как
+   работало: фильтр трогает только то, какие ряды нарисованы, а номера,
+   времена и editor.sel остаются настоящими. */
+function поставитьПоиск(текст) {
+  const было = editor.поиск;
+  editor.поиск = нормДляПоиска(текст).trim();
+  const поле = $('line-search');
+  if (поле && поле.value !== текст) поле.value = текст;
+  const крест = $('line-search-clear');
+  if (крест) крест.classList.toggle('hidden', !editor.поиск);
+  if (было === editor.поиск) return;
+  renderEditList();
+  // Выбранная строка могла снова появиться в списке — вернём её на вид
+  if (editor.sel >= 0) scrollEditListTo(editor.sel);
+}
+
+$('line-search').addEventListener('input', (e) => поставитьПоиск(e.target.value));
+$('line-search').addEventListener('keydown', (e) => {
+  // Esc очищает поиск, а не только снимает фокус
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    поставитьПоиск('');
+  }
+});
+$('line-search-clear').addEventListener('click', () => {
+  поставитьПоиск('');
+  $('line-search').focus();
+});
 
 /* Shift+щелчок — выделить диапазон от выбранной строки до этой.
    Ловим на mousedown и гасим событие: иначе Shift+щелчок растянул бы
@@ -5816,10 +5936,23 @@ function renderTimelineHeads(L) {
         { 'имя': t(TL_HEAD_LABEL[key]), 'v': Math.round(editor.mix[гейн] * 100) });
       уровень.title = подпись();
       уровень.setAttribute('aria-label', уровень.title);
+      /* Число процентов рядом с ползунком — как «0.0 dB» у Volume
+         в Final Cut: по одному положению кружка уровень не прочитать,
+         а сверять его приходится постоянно. Ради этих цифр колонка
+         заголовков и стала шире на восемнадцать пикселей. */
+      const число = document.createElement('span');
+      число.className = 'tl-gain-val';
+      число.dataset.gainVal = гейн;
+      const показать = () => {
+        число.textContent = Math.round(editor.mix[гейн] * 100) + '%';
+        число.classList.toggle('off', уровень.disabled);
+      };
+      показать();
       уровень.addEventListener('input', () => {
         поставитьУровень(гейн, +уровень.value);
         уровень.title = подпись();
         уровень.setAttribute('aria-label', уровень.title);
+        показать();
       });
       // Двойной щелчок — обратно к умолчанию, как у фейдера в монтажной
       уровень.addEventListener('dblclick', () => {
@@ -5827,6 +5960,7 @@ function renderTimelineHeads(L) {
         renderTimelineHeads(timelineLanes());
       });
       row.appendChild(уровень);
+      row.appendChild(число);
     }
     const код = TL_HEAD_SOLO[key];
     if (код) {
@@ -5916,7 +6050,14 @@ function drawOrigLane(g, lane, W) {
   g.fillStyle = 'rgba(30, 16, 22, 0.85)';
   g.fillRect(0, lane.y, W, lane.h);
 
+  /* Приглашение «протяни мышью» висело в рабочей области всё время,
+     пока полоса пуста, — то есть и у того, кто отрезки делать уже
+     научился и просто их все убрал. Гаснет оно навсегда, как только
+     человек сделал первый отрезок; признак живёт в проекте
+     (origHintDone), а не в сессии, — иначе возвращался бы после
+     каждой перезагрузки. */
   if (!spans.length) {
+    if (state.отрезокБыл) return;
     g.fillStyle = 'rgba(251, 113, 133, 0.55)';
     g.font = '10px sans-serif';
     g.textAlign = 'left';
@@ -7009,6 +7150,8 @@ function endOrigDrag() {
     return;
   }
   state.origSpans = нормОтрезки(state.origSpans, audio.duration);
+  // Отрезок сделан — приглашение внутри пустой полосы больше не нужно
+  state.отрезокБыл = true;
   // После слияния номер мог сдвинуться — ищем отрезок по времени
   editor.origSel = state.origSpans.findIndex((x) => s && x.start <= s.start && x.end >= s.end);
   if (!dropEmptyHistory()) saveProject();
@@ -7357,6 +7500,9 @@ tl.addEventListener('pointermove', (e) => {
     скрабнуть(editor.dragTip);
     return;
   }
+  /* Скиммирование: просто ведут мышь над дорожкой — под курсором
+     звучит песня, а указатель воспроизведения стоит на месте. */
+  скиммировать(xToT(x));
   const hit = timelineHit(x, y);
   tl.style.cursor = !hit ? 'pointer'
     : hit.kind === 'orig-del' ? 'pointer'
@@ -7398,6 +7544,13 @@ function endDrag() {
 
 tl.addEventListener('pointerup', endDrag);
 tl.addEventListener('pointercancel', endDrag);
+
+/* Ушли с дорожки — скиммирование замолкает. Гасим затуханием (скраб.стоп),
+   а не обрывом: обрыв кусочка — это ровно тот щелчок, ради которого
+   в кусочках вообще есть конверт. */
+tl.addEventListener('pointerleave', () => {
+  if (!editor.drag) скраб.стоп();
+});
 
 /* Двойной щелчок по отрезку оригинала убирает его — как и крестик
    у правого края блока. Крестик виден, двойной щелчок привычен. */
@@ -7464,6 +7617,68 @@ function setSnap(on) {
   editor.snapped = null;
   drawTimeline();
 }
+
+/* ---------- Сворачиваемые разделы инспектора ----------
+   Как в инспекторе Final Cut: «Слово» и «Строка» открываются и
+   закрываются треугольником. Беда, которую это лечит: столбец
+   инспектора в 210 px на ноутбуке не помещался в окно целиком —
+   а числа в нём сверяют глазами, и прокрутка тут дороже, чем кажется.
+   Свернул ненужное — та же информация вдвое меньшей высотой.
+
+   Что свёрнуто, помнится между сеансами: это привычка человека, а не
+   свойство песни, поэтому лежит в localStorage, а не в проекте. */
+const ИНСПЕКТОР = (() => {
+  const КЛЮЧ = 'karaoke-inspector';
+  const РАЗДЕЛЫ = ['insp-word', 'insp-line'];
+
+  function прочитать() {
+    try {
+      const o = JSON.parse(localStorage.getItem(КЛЮЧ));
+      return o && typeof o === 'object' ? o : {};
+    } catch (e) { return {}; }
+  }
+
+  function записать(o) {
+    try { localStorage.setItem(КЛЮЧ, JSON.stringify(o)); } catch (e) { /* некуда писать */ }
+  }
+
+  function применить() {
+    const о = прочитать();
+    РАЗДЕЛЫ.forEach((id) => {
+      const el = $(id);
+      // Умолчание — открыто: пришедший впервые обязан видеть всё
+      if (el && id in о) el.open = !!о[id];
+    });
+  }
+
+  РАЗДЕЛЫ.forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('toggle', () => {
+      const о = прочитать();
+      о[id] = el.open;
+      записать(о);
+    });
+  });
+
+  применить();
+  return { применить, прочитать };
+})();
+
+/* Легенда цветов дорожки за значком «?». Шесть подписей читают один
+   раз, а строку под дорожкой они занимали всегда: теперь открываются
+   по кнопке и тут же сворачиваются обратно. Ничего не запоминаем —
+   это справка на один взгляд, а не настройка. */
+function показатьЛегенду(да) {
+  const ключи = $('tl-legend-keys');
+  const кнопка = $('tl-legend');
+  if (!ключи || !кнопка) return;
+  ключи.classList.toggle('hidden', !да);
+  кнопка.setAttribute('aria-expanded', да ? 'true' : 'false');
+}
+$('tl-legend').addEventListener('click', () => {
+  показатьЛегенду($('tl-legend-keys').classList.contains('hidden'));
+});
 
 /* Выключатель слышимой перемотки. Кому-то звук под курсором мешает —
    значит, его обязано быть чем выключить; выключенный гасит и то,
@@ -8592,6 +8807,55 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ============================================================
+   Руководство поверх студии (только в приложении)
+
+   В приложении витрины нет вовсе: человек прочитал её один раз, когда
+   скачивал программу, и при каждом запуске должен видеть студию сразу
+   и во всю высоту окна (см. body.is-desktop в style.css). Но ссылка
+   «Как пользоваться» в ряду шагов ведёт на раздел #how — спрятанный
+   раздел означал бы кнопку, которая никуда не ведёт.
+
+   Поэтому в приложении она открывает тот же самый раздел окном поверх
+   студии — ровно как окно «Что нового». Раздел один и тот же, второй
+   копии текста не заводится. На сайте всё по-прежнему: обычная ссылка
+   на якорь, страница прокручивается к разделу.
+
+   Проверяется в приложении, а не при загрузке: класс is-desktop ставит
+   desktop.js, а он подключается ПОСЛЕ app.js.
+   ============================================================ */
+function вПриложении() {
+  return document.body.classList.contains('is-desktop');
+}
+
+function руководствоОткрыто() {
+  return document.body.classList.contains('guide-open');
+}
+
+function открытьРуководство(да) {
+  document.body.classList.toggle('guide-open', да);
+  if (да) {
+    // Открываем всегда сверху: раздел длинный и прокручивается внутри себя
+    const раздел = $('how');
+    if (раздел) раздел.scrollTop = 0;
+    const закрыть = $('how-close');
+    if (закрыть) закрыть.focus({ preventScroll: true });
+  }
+}
+
+document.querySelector('.steps-help').addEventListener('click', (e) => {
+  if (!вПриложении()) return;   // на сайте это обычная ссылка на якорь
+  e.preventDefault();
+  открытьРуководство(true);
+});
+$('how-close').addEventListener('click', () => открытьРуководство(false));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && руководствоОткрыто()) {
+    e.preventDefault();
+    открытьРуководство(false);
+  }
+});
+
+/* ============================================================
    Переключение темы
 
    Две темы монтажной оболочки студии (см. .studio в style.css):
@@ -8811,6 +9075,9 @@ document.addEventListener('i18n', () => {
   if (saved && saved.style) state.style = styleFromSaved(saved);
   // Отрезки оригинала: длины песни ещё не знаем, обрежем её при загрузке файла
   if (saved && saved.origSpans) state.origSpans = нормОтрезки(saved.origSpans, 0);
+  // Приглашение внутри пустой полосы оригинала — только тому, кто отрезков
+  // ещё не делал (см. drawOrigLane)
+  state.отрезокБыл = !!(saved && (saved.origHintDone || (saved.origSpans || []).length));
   if (saved && saved.eq) {
     state.eq = {
       low: +saved.eq.low || 0, mid: +saved.eq.mid || 0, high: +saved.eq.high || 0,

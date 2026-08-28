@@ -46,6 +46,7 @@
     <symbol id="i-video" viewBox="0 0 16 16"><path d="M2 6.4l.85-3.2h9l-.85 3.2M2 6.4h11V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/><path d="M4.7 3.2l1 3.2M7.7 3.2l1 3.2" stroke="currentColor" stroke-width="1.05"/></symbol>
     <symbol id="i-expand" viewBox="0 0 16 16"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M6.05 6.15a1.95 1.95 0 1 1 2.75 1.78c-.6.28-.8.6-.8 1.17v.25" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.2" r=".72" fill="currentColor"/></symbol>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
     <symbol id="i-note" viewBox="0 0 16 16"><circle cx="4.4" cy="12.1" r="1.9" fill="currentColor"/><circle cx="10.3" cy="10.6" r="1.9" fill="currentColor"/><path d="M6.3 12.1V3.6L12.2 2v8.6" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></symbol>
     <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.2 14.3 13a.9.9 0 0 1-.78 1.35H2.48A.9.9 0 0 1 1.7 13L8 2.2z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.4v3.2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="8" cy="11.8" r=".8" fill="currentColor"/></symbol>
     <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.4l3.1 3.1L13 4.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -393,6 +394,14 @@
      внутри шагов лежат оба варианта, а показывается нужный —
      only-desktop видно только в приложении, only-web только на сайте. -->
 <section class="how" id="how">
+  <!-- Кнопка закрытия нужна только в приложении: витрины там нет вовсе,
+       и раздел открывается окном поверх студии по ссылке «Как
+       пользоваться» (см. открытьРуководство в app.js). На сайте раздел
+       лежит в потоке страницы, закрывать его нечего — потому only-desktop. -->
+  <button class="guide-close" id="how-close"
+    data-i18n-title="руководство.закрыть" data-i18n-aria="руководство.закрыть"
+    title="Закрыть руководство и вернуться в студию (Esc)"
+    aria-label="Закрыть руководство"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
   <h2 data-i18n="как.заголовок">Как это работает</h2>
   <p class="how-lead" data-i18n="как.лид">Рекомендованный порядок — четыре шага. Ниже, в свёрнутых блоках, — редактор и всё остальное.</p>
   <ol class="how-steps">
@@ -893,7 +902,7 @@
           title="Магнит: границы прилипают к краям соседних строк, к границам соседних слов, к указателю, к отрезкам оригинала и к настоящему вступлению голоса. Клавиша S — выключить совсем, зажатый Alt — отключить на время перетаскивания"><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg></button>
         <button class="nudge-btn icon-btn on" id="tl-scrub" data-i18n-title="ред.скраб.подсказка"
           data-i18n-aria="ред.скраб" aria-label="слышная перемотка"
-          title="Слышная перемотка: пока тащишь указатель или границу, звучит короткий кусочек песни под курсором — место находится на слух. Звучит то же, что выставлено ползунками дорожек. Нажми, чтобы выключить"><svg class="icon" aria-hidden="true"><use href="#i-scrub"></use></svg></button>
+          title="Слышная перемотка и скиммирование: песня звучит под курсором — и пока просто ведёшь мышь над дорожкой (указатель воспроизведения при этом стоит), и пока тащишь его или границу. Место находится на слух. Звучит то же, что выставлено ползунками дорожек. Нажми, чтобы выключить"><svg class="icon" aria-hidden="true"><use href="#i-scrub"></use></svg></button>
       </span>
       <!-- Сетка долей. Выключена по умолчанию: темп определяет автомат,
            а промахнувшийся темп тащил бы границы не туда и портил уже
@@ -945,7 +954,24 @@
     <div class="editor-grid">
       <section class="ed-pane ed-lines">
         <header class="ed-pane-head" data-i18n="ред.окно.строки">Строки</header>
+        <!-- Поиск по строкам: в песне их сорок-шестьдесят, и нужную
+             ищут глазами долго. Показывает только подходящие, номера
+             при этом остаются настоящими — фильтр прячет ряды, а не
+             перенумеровывает песню. -->
+        <div class="ed-search">
+          <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+          <input id="line-search" type="text" autocomplete="off" spellcheck="false"
+            data-i18n-placeholder="ред.поиск.место" data-i18n-title="ред.поиск.подсказка"
+            data-i18n-aria="ред.поиск.aria" aria-label="Поиск по строкам песни"
+            placeholder="поиск по строкам"
+            title="Показывать только строки с этими буквами. Регистр и «ё» не важны, Esc очищает. Номера строк остаются настоящими">
+          <button class="ed-search-clear hidden" id="line-search-clear" type="button"
+            data-i18n-title="ред.поиск.очистить" data-i18n-aria="ред.поиск.очистить"
+            title="Очистить поиск и показать все строки (Esc)"
+            aria-label="Очистить поиск"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
+        </div>
         <ul class="edit-list" id="edit-list"></ul>
+        <p class="ed-search-none hidden" id="line-search-none" data-i18n="ред.поиск.пусто">Ничего не нашлось</p>
       </section>
 
       <section class="ed-pane ed-viewer">
@@ -967,7 +993,14 @@
         <div class="ed-pane-body">
           <!-- Панель выбранного слова. Слово выбирается щелчком по его
                блоку на полосе слов дорожки. Время — в том же виде, что
-               и на дорожке: минуты, секунды и тысячные. -->
+               и на дорожке: минуты, секунды и тысячные.
+
+               Оба раздела инспектора сворачиваются треугольником, как
+               в инспекторе Final Cut: столбец в 210 px на ноутбуке
+               не помещался целиком и прокручивался. Что свёрнуто,
+               помнится между сеансами (см. ИНСПЕКТОР в app.js). -->
+          <details class="insp-sec" id="insp-word" open>
+          <summary data-i18n="ред.словоЗаголовок">Слово</summary>
           <div class="sel-word empty" id="word-panel">
             <div class="insp-row">
               <span class="sel-label" data-i18n="ред.инсп.слово">слово</span>
@@ -1003,6 +1036,7 @@
                 title="Играть это слово по кругу, с небольшим разгоном и хвостом (клавиша L)"><svg class="icon" aria-hidden="true"><use href="#i-loop"></use></svg><span data-i18n="ред.покругу">по кругу</span></button>
             </div>
           </div>
+          </details>
 
           <!-- Панель выбранной строки: всё, что можно с ней сделать,
                собрано в одном столбце и меняется вместе с выбором.
@@ -1013,6 +1047,8 @@
                границ и стрелками с клавиатуры. Длина осталась показом:
                менять её правильнее через границы, иначе непонятно,
                какой край поехал. -->
+          <details class="insp-sec" id="insp-line" open>
+          <summary data-i18n="ред.окно.строка">Строка</summary>
           <div class="sel-line" id="line-panel">
             <div class="insp-row">
               <span class="sel-label" data-i18n="ред.инсп.строка">строка</span>
@@ -1066,6 +1102,7 @@
               <span data-i18n="ред.слышу">слышу оригинал</span>
             </label>
           </div>
+          </details>
         </div>
       </aside>
     </div>
@@ -1094,13 +1131,26 @@
         <div class="tl-tip hidden" id="tl-tip"></div>
       </div>
     </div>
+    <!-- Легенда цветов. Читается один раз, а строку под дорожкой
+         занимала всегда, — поэтому лежит за значком «?»: нажал, глянул,
+         свернул. Сам блок остаётся прямым потомком шага и стоит там же,
+         где стоял: цвета нужны, когда смотришь на дорожку. -->
     <div class="timeline-legend">
+      <button class="tl-legend-btn" id="tl-legend" type="button"
+        aria-expanded="false" aria-controls="tl-legend-keys"
+        data-i18n-title="ред.легенда.подсказка" data-i18n-aria="ред.легенда.aria"
+        aria-label="Что каким цветом на дорожке"
+        title="Что каким цветом нарисовано на дорожке: оригинал, голос, строки, слова"><svg
+        class="icon" aria-hidden="true"><use href="#i-help"></use></svg><span
+        class="tl-legend-label" data-i18n="ред.легенда.цвета">цвета</span></button>
+    <span class="tl-legend-keys hidden" id="tl-legend-keys">
       <span class="tl-key"><i class="sw sw-orig"></i> <span data-i18n="ред.легенда.оригинал">здесь звучит оригинал</span></span>
       <span class="tl-key"><i class="sw sw-voice"></i> <span data-i18n="ред.легенда.голос">голос</span> <b id="tl-voice-note" data-i18n="ред.голос.нет">— только в приложении после удаления вокала</b></span>
       <span class="tl-key"><i class="sw sw-line"></i> <span data-i18n="ред.легенда.строка">строка</span></span>
       <span class="tl-key"><i class="sw sw-guess"></i> <span data-i18n="ред.легенда.глазок">≈ время на глазок</span></span>
       <span class="tl-key"><i class="sw sw-word"></i> <span data-i18n="ред.легенда.слова">слова выбранной строки</span></span>
       <span class="tl-key"><i class="sw sw-own"></i> <span data-i18n="ред.легенда.своё">своё время, если строку подтянуло к голосу</span></span>
+    </span>
     </div>
 
     <!-- Справка свёрнута и стоит ПОД дорожкой: в редакторе каждый пиксель

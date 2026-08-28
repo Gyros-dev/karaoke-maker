@@ -491,6 +491,20 @@ I18N.EN = {
   'ред.легенда.глазок': '≈ rough timing',
   'ред.легенда.слова': 'words of the selected line',
   'ред.легенда.своё': 'own timing, if the line was pulled to the voice',
+  /* Легенда цветов спрятана за значком «?»: читают её один раз, а строку
+     под дорожкой она занимала всегда */
+  'ред.легенда.цвета': 'colours',
+  'ред.легенда.подсказка': 'What each colour on the timeline means: the original, the voice, lines, words',
+  'ред.легенда.aria': 'What each colour on the timeline means',
+  /* Поиск по строкам: в песне их сорок-шестьдесят, и нужную ищут долго */
+  'ред.поиск.место': 'search the lines',
+  'ред.поиск.подсказка': 'Show only the lines containing these letters. Case and “ё” do not matter, Esc clears it. Line numbers stay as they are',
+  'ред.поиск.aria': 'Search the lines of the song',
+  'ред.поиск.очистить': 'Clear the search and show every line (Esc)',
+  'ред.поиск.пусто': 'Nothing found',
+  /* Руководство в приложении открывается окном поверх студии: витрины
+     там нет вовсе, и ссылке «Как пользоваться» некуда было бы вести */
+  'руководство.закрыть': 'Close the guide and go back to the studio (Esc)',
   'ред.справка.магнит': '<b><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg> Snapping.</b> While you drag, edges stick to neighbouring lines, to neighbouring word edges, to the playhead, to the edges of original stretches, to vocal onsets and endings (when the envelope is there) and to the edges of the song. A coloured guide appears where it sticks — the colour says what it caught. The threshold is the same at any zoom. Holding <kbd>Alt</kbd> suspends the snap; the <kbd>S</kbd> key turns it off for good.',
   'ред.клавиши': '<kbd>space</kbd> play · <kbd>↑</kbd><kbd>↓</kbd> line · <kbd>←</kbd><kbd>→</kbd> start · <kbd>[</kbd><kbd>]</kbd> end · <kbd>Shift</kbd> finer, <kbd>Alt</kbd> coarser · <kbd>Enter</kbd> audition · <kbd>L</kbd> loop · <kbd>S</kbd> snap · <kbd>Delete</kbd> remove stretch · <kbd><span class="mod-key">Cmd</span>+Z</kbd> undo · <kbd><span class="mod-key">Cmd</span></kbd> + drag a word joint pulls its edges apart · wheel scrolls, with <kbd><span class="mod-key">Cmd</span></kbd> zooms',
   'ред.простук.клавиша': 'hit <kbd>space</kbd> at the start of a line — or click here',
@@ -515,7 +529,7 @@ I18N.EN = {
   'ред.доли.фаза': 'first beat offset, seconds',
   'ред.доли.фаза.подсказка': 'Offset of the first beat in seconds: where the downbeat falls. Double-click restores the detected value',
   'ред.скраб': 'audible scrub',
-  'ред.скраб.подсказка': 'Audible scrubbing: while you drag the playhead or an edge, a short slice of the song under the cursor plays, so you find the spot by ear. It sounds like whatever the track faders are set to. Click to turn it off',
+  'ред.скраб.подсказка': 'Audible scrubbing and skimming: the song plays under the cursor — both while you simply move the mouse over the timeline (the playhead stays put) and while you drag it or an edge. You find the spot by ear. It sounds like whatever the track faders are set to. Click to turn it off',
   'ред.сдвиг.минус': '−0.1',
   'ред.сдвиг.плюс': '+0.1',
   'ред.отдалить': 'Zoom out (key −)',
@@ -878,6 +892,13 @@ I18N.СТРОКИ = {
   'ред.слова.помечены': {
     ru: 'Слова этой строки размечены вручную',
     en: 'The words of this line are timed by hand',
+  },
+  /* Обратная пометка: слова размечены почти везде, а здесь — нет.
+     Когда разметка стала правилом, редким становится её отсутствие,
+     и значок обязан говорить именно об этом (см. renderEditList). */
+  'ред.слова.неРазмечены': {
+    ru: 'Слова этой строки НЕ размечены вручную — в остальной песне размечены',
+    en: 'The words of this line are NOT timed by hand — in the rest of the song they are',
   },
   'ред.последняяСтрока': {
     ru: 'Это последняя строка — удалять нечего. Текст правится на шаге «Текст».',
