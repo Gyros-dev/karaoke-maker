@@ -461,6 +461,8 @@ I18N.EN = {
   'ред.покругу.подсказка': 'Play the selected line round and round (key L)',
   'ред.магнит': 'snap',
   'ред.магнит.подсказка': 'Snapping: edges stick to neighbouring lines, to neighbouring word edges, to the playhead, to original stretches and to the real vocal onset. The S key turns it off for good, holding Alt suspends it for one drag',
+  'ред.скраб': 'audible scrub',
+  'ред.скраб.подсказка': 'Audible scrubbing: while you drag the playhead or an edge, a short slice of the song under the cursor plays, so you find the spot by ear. It sounds like whatever the track faders are set to. Click to turn it off',
   'ред.сдвиг.минус': '−0.1',
   'ред.сдвиг.плюс': '+0.1',
   'ред.отдалить': 'Zoom out (key −)',
