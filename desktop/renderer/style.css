@@ -1323,6 +1323,48 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
    поэтому и тише обоих */
 .ed-clock-sep { opacity: 0.45; }
 
+/* --- Сетка долей в панели редактора ---
+   Включатель, найденный темп и уверенность стоят одной группой: решение
+   «включать или нет» принимают, глядя ровно на эти числа. Поля узкие
+   нарочно — панель обязана остаться в одну строку, иначе редактор
+   вырастет и четыре шага перестанут помещаться в экран. */
+.ed-beat { gap: 0.25rem; }
+.beat-num {
+  width: 3.2rem;
+  padding: 0.15rem 0.3rem;
+  border: 1px solid transparent;
+  border-radius: var(--ed-radius-ctl);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family: var(--ed-num);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  line-height: 1.3;
+}
+input.beat-num:hover { border-color: var(--border); }
+input.beat-num:focus { outline: none; border-color: var(--sel-ring); background: var(--sel-ring-bg); }
+/* Набрано негодное число — поле краснеет, а набранное остаётся на месте */
+input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12); }
+.beat-unit { color: var(--text-dim); font-size: 0.7rem; }
+/* Уверенность. Цвет — сам по себе ответ на вопрос «можно ли верить»:
+   зелёное включают не глядя, красное лучше проверить или поправить. */
+.beat-conf {
+  min-width: 2.6rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--ed-radius-ctl);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  font-family: var(--ed-num);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.beat-conf[data-уровень="высокая"] { color: #a3e635; }
+.beat-conf[data-уровень="средняя"] { color: #facc15; }
+.beat-conf[data-уровень="низкая"] { color: #fb7185; }
+.beat-conf[data-уровень="руками"] { color: var(--sel-ring); }
+
 .timeline-wrap {
   flex-shrink: 0;
   display: flex;

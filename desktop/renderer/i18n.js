@@ -461,6 +461,12 @@ I18N.EN = {
   'ред.покругу.подсказка': 'Play the selected line round and round (key L)',
   'ред.магнит': 'snap',
   'ред.магнит.подсказка': 'Snapping: edges stick to neighbouring lines, to neighbouring word edges, to the playhead, to original stretches and to the real vocal onset. The S key turns it off for good, holding Alt suspends it for one drag',
+  'ред.доли': 'beat grid',
+  'ред.доли.подсказка': 'Beat grid: beat lines appear on the timeline and edges snap to them (a beat is the weakest snapping target of all). Off by default: the tempo is machine-detected and may be wrong. Key G',
+  'ред.доли.темп': 'tempo, beats per minute',
+  'ред.доли.темп.подсказка': 'Tempo in beats per minute. Detected from the music — type your own number if the estimate missed. Double-click restores the detected value',
+  'ред.доли.фаза': 'first beat offset, seconds',
+  'ред.доли.фаза.подсказка': 'Offset of the first beat in seconds: where the downbeat falls. Double-click restores the detected value',
   'ред.скраб': 'audible scrub',
   'ред.скраб.подсказка': 'Audible scrubbing: while you drag the playhead or an edge, a short slice of the song under the cursor plays, so you find the spot by ear. It sounds like whatever the track faders are set to. Click to turn it off',
   'ред.сдвиг.минус': '−0.1',
@@ -554,6 +560,43 @@ I18N.СТРОКИ = {
   'тема.signature': { ru: 'Фирменная', en: 'Signature' },
   'тема.neutral.полно': { ru: 'Нейтральная тема оформления', en: 'Neutral theme' },
   'тема.signature.полно': { ru: 'Фирменная тема оформления', en: 'Signature theme' },
+
+  /* ---------- Сетка долей ----------
+     Уверенность и подсказки ставит код (обновитьСетку в app.js):
+     число внутри них считается на месте, в разметке его быть не может. */
+  'ред.доли.нетТемпа': {
+    ru: 'Темп ещё не определён: откройте песню и зайдите в редактор',
+    en: 'Tempo not detected yet: open a song and enter the editor',
+  },
+  'ред.доли.руками': { ru: 'своё', en: 'own' },
+  'ред.доли.руками.подсказка': {
+    ru: 'Темп поставлен руками — автомат его больше не перебивает. '
+      + 'Двойной щелчок по полю вернёт найденное автоматом',
+    en: 'Tempo set by hand — the estimator no longer overrides it. '
+      + 'Double-click the field to restore the detected value',
+  },
+  'ред.доли.уверенность.подсказка': {
+    ru: 'Темп {bpm} определён с уверенностью {n} %. Ошибся — набери своё число',
+    en: 'Tempo {bpm} detected with {n}% confidence. Wrong? Type your own number',
+  },
+  'ред.доли.двойственный': {
+    ru: 'Темп {bpm}, уверенность {n} %. Вдвое медленнее или вдвое быстрее '
+      + 'подходит почти так же — если сетка встала не туда, поделите темп '
+      + 'надвое или умножьте на два',
+    en: 'Tempo {bpm}, confidence {n}%. Half or double the tempo fits almost '
+      + 'as well — if the grid looks wrong, halve or double the number',
+  },
+
+  /* ---------- Породы точек магнита ----------
+     Подпись у направляющей рисуется прямо на канвасе, поэтому её
+     нельзя взять из разметки: переводим здесь. */
+  'магнит.указатель': { ru: 'указатель', en: 'playhead' },
+  'магнит.строка': { ru: 'строка', en: 'line' },
+  'магнит.слово': { ru: 'слово', en: 'word' },
+  'магнит.оригинал': { ru: 'оригинал', en: 'original' },
+  'магнит.голос': { ru: 'голос', en: 'voice' },
+  'магнит.край': { ru: 'край', en: 'edge' },
+  'магнит.доля': { ru: 'доля', en: 'beat' },
 
   /* ---------- Шрифты сцены ---------- */
   'шрифт.system': { ru: 'Системный', en: 'System' },
