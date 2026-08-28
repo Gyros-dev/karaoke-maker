@@ -197,6 +197,25 @@ function собратьМикс(ctx) {
   return { vocalGain, instGain, eqChain, output: limiter };
 }
 
+/* ---------- «Слушать только эту дорожку» ----------
+   Кнопка S в заголовке полосы дорожки (см. renderTimelineHeads).
+   Отдельного файла с голосом у студии нет: вокал — это разница песни
+   и минусовки, поэтому в режиме «только голос» минусовка идёт
+   в противофазе (усиление −1) и музыка вычитается сама собой. Ровно
+   тем же вычитанием живёт и приглушение вокала (см. makeInstrumental),
+   так что ничего нового здесь не изобретается.
+
+   Соло живёт только в редакторе и только в живом плеере: ни в минусовку
+   .wav, ни в записанное видео оно не попадает — там смесь считается
+   через усиленияМикса. */
+function усиленияСоло(код, hasInst) {
+  if (код === 'orig') return { вокал: 1, минусовка: 0 };
+  if (!hasInst) return null;   // моно: второй дорожки попросту нет
+  if (код === 'inst') return { вокал: 0, минусовка: 1 };
+  if (код === 'voice') return { вокал: 1, минусовка: -1 };
+  return null;
+}
+
 /* Громкости по положению ползунка. Правило одно на все три места:
    минусовки нет или нужен оригинал — звучит песня целиком; иначе
    крест-накрест, и на нуле от песни не остаётся ничего. */
@@ -457,6 +476,17 @@ const audio = {
      от текущей секунды. */
   applyMix() {
     if (!this.vocalGain) return;
+    /* Соло старше и ползунка, и отрезков оригинала: человек нажал
+       «слушать только это» — значит, слушать надо именно это, без
+       переключений источника посреди песни. */
+    const соло = editor.solo ? усиленияСоло(editor.solo, !!state.instrumentalBuffer) : null;
+    if (соло) {
+      this.vocalGain.gain.cancelScheduledValues(0);
+      this.instGain.gain.cancelScheduledValues(0);
+      this.vocalGain.gain.value = соло.вокал;
+      this.instGain.gain.value = соло.минусовка;
+      return;
+    }
     const база = усиленияМикса(state.vocalMix, !!state.instrumentalBuffer, this.forceVocal);
     if (!this.playing) {
       this.vocalGain.gain.cancelScheduledValues(0);
@@ -1160,12 +1190,42 @@ function fmtLrcTime(sec) {
    части зависит от языка: запятая по-русски, точка по-английски —
    тем же правилом, что и у кнопок сдвига «−0,1»/«−0.1». */
 function fmtTimeMs(sec) {
-  const ms = Math.round(Math.max(0, sec) * 1000);
-  const m = Math.floor(ms / 60000);
-  const s = Math.floor((ms % 60000) / 1000);
-  const f = ms % 1000;
-  const разд = I18N.язык() === 'ru' ? ',' : '.';
-  return `${m}:${String(s).padStart(2, '0')}${разд}${String(f).padStart(3, '0')}`;
+  return fmtTimeДоли(sec, 3);
+}
+
+/* Десятичный разделитель по языку: запятая по-русски, точка
+   по-английски — тем же правилом, что и у кнопок сдвига «−0,1»/«−0.1» */
+function десРазделитель() {
+  return I18N.язык() === 'ru' ? ',' : '.';
+}
+
+/* Время «минуты:секунды,доли» — общий вид для всей студии: так оно
+   стоит на линейке дорожки, в сетке строк, в часах редактора и
+   в полях инспектора. Раньше поля инспектора показывали голые секунды,
+   и одно и то же место песни читалось на дорожке как «3:10», а в поле
+   как «190» — сверить их глазами было нельзя.
+   Доли считаются один раз, без двойного округления (как в fmtLrcTime). */
+function fmtTimeДоли(sec, знаков) {
+  const шаг = 10 ** знаков;
+  const всего = Math.round(Math.max(0, sec) * шаг);
+  const вМинуте = 60 * шаг;
+  const m = Math.floor(всего / вМинуте);
+  const s = Math.floor((всего % вМинуте) / шаг);
+  const f = всего % шаг;
+  return `${m}:${String(s).padStart(2, '0')}${десРазделитель()}${String(f).padStart(знаков, '0')}`;
+}
+
+/* Сотые доли — там, где число смотрят, а не правят: сетка строк
+   и часы редактора. Тысячные там только рябили бы. */
+function fmtTimeCs(sec) {
+  return fmtTimeДоли(sec, 2);
+}
+
+/* Длительность — не время на песне, а её мера, поэтому остаётся
+   в секундах: «0:02,564» вместо «2,564» читается хуже, а сравнивать
+   длины строк надо часто. Разделитель тот же, языковой. */
+function fmtДлит(sec, знаков) {
+  return Math.max(0, sec).toFixed(знаков).replace('.', десРазделитель());
 }
 
 function download(blob, name) {
@@ -1361,7 +1421,7 @@ function voiceOnsetNear(t, lo, hi) {
 }
 
 /* ---------- Сохранение проекта (текст, разметка, фон) ---------- */
-function saveProject() {
+function собратьПроект() {
   /* Пока строки ещё не разобраны (например, сразу после загрузки файла),
      не затираем уже сохранённую разметку этой же песни.
 
@@ -1409,6 +1469,14 @@ function saveProject() {
     // проект ещё не переживал (см. styleFromSaved)
     styleGen: STYLE_GEN,
   };
+  return data;
+}
+
+/* Проект в хранилище браузера. Отдельно от сборки (собратьПроект),
+   потому что тот же самый набор уходит и в черновик-файл, только там
+   картинку с огибающей выбрасывать не приходится: место не кончается. */
+function saveProject() {
+  const data = собратьПроект();
   try {
     localStorage.setItem('karaoke-project', JSON.stringify(data));
   } catch (e) {
@@ -1426,6 +1494,181 @@ function loadProject() {
     return JSON.parse(localStorage.getItem('karaoke-project'));
   } catch (e) { return null; }
 }
+
+/* ============================================================
+   Что сейчас в памяти студии
+
+   Студия помнит одну работу за раз. Раньше об этом узнавали только
+   из вопроса «открыть другую песню?» — то есть уже занеся руку над
+   чужой разметкой. Теперь то же самое написано заранее: чипом в ряду
+   шагов (виден с любого шага) и строкой над зоной загрузки.
+   ============================================================ */
+function сведенияОПамяти() {
+  /* Разбирать проект из хранилища незачем, когда всё уже в памяти:
+     внутри лежит огибающая голоса в base64, и JSON.parse на ней
+     не бесплатен. */
+  const свои = state.fileName && state.lines.length;
+  const saved = свои ? null : loadProject();
+  const имя = state.fileName || (saved && saved.name) || null;
+  const строки = state.lines.length ? state.lines : linesFromProject(saved);
+  const размечено = строки.filter((l) => l.time != null).length;
+  return { имя, всего: строки.length, размечено, есть: !!(имя || строки.length) };
+}
+
+function обновитьПамять() {
+  const п = сведенияОПамяти();
+  const имя = п.имя ? п.имя.replace(/\.[^.]+$/, '') : t('память.безИмени');
+  const чип = $('proj-chip');
+  if (чип) {
+    чип.classList.toggle('hidden', !п.есть);
+    // Имя файла — текст человека, только textContent
+    $('proj-name').textContent = имя;
+    чип.title = п.всего
+      ? t('память.строк', { 'имя': имя, n: п.размечено, 'всего': п.всего })
+      : t('память.чип.подсказка');
+  }
+  /* Строка над зоной загрузки нужна ровно там, где решают, какой файл
+     открыть: песня ещё не загружена, а работа в памяти уже есть.
+     Когда песня открыта, её имя и так написано на карточке трека. */
+  const нота = $('mem-note');
+  if (нота) {
+    const показывать = п.есть && !state.originalBuffer && п.всего > 0;
+    нота.classList.toggle('hidden', !показывать);
+    if (показывать) {
+      нота.textContent = t('память.ждётПесню',
+        { 'имя': имя, 'всего': п.всего, n: п.размечено });
+    }
+  }
+}
+
+/* ============================================================
+   Черновик файлом
+
+   Проект живёт в хранилище браузера, а оно теряется: чистка кэша,
+   другой браузер, переустановка приложения. Черновик — тот же проект,
+   но файлом, который можно положить куда угодно и открыть где угодно.
+
+   Звука в черновике нет. Песня и так есть у человека, а с ней файл
+   вышел бы в десятки мегабайт; вместо звука записано имя песни, и при
+   открытии оно сверяется с тем, что загружено. Номер формата — чтобы
+   черновик, сделанный будущей версией, узнавался и не открывался молча
+   наполовину.
+   ============================================================ */
+const ФОРМАТ_ЧЕРНОВИКА = 'karaoke-punch-черновик';
+const ВЕРСИЯ_ЧЕРНОВИКА = 1;
+
+function сохранитьЧерновик() {
+  const проект = собратьПроект();
+  const естьЧто = String(проект.lyrics || '').trim()
+    || (проект.times || []).some((t) => t != null);
+  if (!естьЧто) { alert(t('черновик.нечего')); return; }
+  const данные = {
+    формат: ФОРМАТ_ЧЕРНОВИКА,
+    версия: ВЕРСИЯ_ЧЕРНОВИКА,
+    студия: APP_VERSION,
+    создан: new Date().toISOString(),
+    песня: {
+      имя: проект.name || null,
+      длительность: +(audio.duration || 0).toFixed(3),
+    },
+    проект,
+  };
+  const имя = (проект.name || t('память.безИмени')).replace(/\.[^.]+$/, '');
+  download(new Blob([JSON.stringify(данные)], { type: 'application/json' }),
+    `${имя}.kpunch`);
+}
+
+/* Разложить черновик по студии. Песню он не приносит, поэтому всё, что
+   считается от её длины (отрезки оригинала, огибающая голоса), берётся
+   с оглядкой на уже открытый файл: длины ещё нет — обрежем при загрузке,
+   ровно как это делает восстановление проекта в handleFile. */
+function применитьЧерновик(проект) {
+  const длит = audio.duration || 0;
+  /* Пишем в хранилище как есть, а не через saveProject: имя песни
+     в проекте важнее того, что сейчас в state.fileName (его может
+     не быть вовсе — песню ещё не открыли). */
+  try {
+    localStorage.setItem('karaoke-project', JSON.stringify(проект));
+  } catch (e) { /* хранилище недоступно — работаем из памяти */ }
+
+  $('lyrics-input').value = проект.lyrics || '';
+  state.lines = linesFromProject(проект);
+  state.origSpans = нормОтрезки(проект.origSpans, длит);
+  state.eq = {
+    low: +(проект.eq && проект.eq.low) || 0,
+    mid: +(проект.eq && проект.eq.mid) || 0,
+    high: +(проект.eq && проект.eq.high) || 0,
+  };
+  state.style = styleFromSaved(проект);
+  setBgImage(проект.bg || null);
+  clearVoiceTrack();
+  if (проект.voice && длит) restoreVoiceTrack(проект.voice, длит);
+
+  editor.sel = -1;
+  editor.wordSel = -1;
+  editor.spansKey = '';
+  clearHistory();
+  editor.histLines = state.lines.length;
+  updateStyleUI();
+  updateEqUI();
+  applyStyle();
+  updateInstUI();
+  updateWordExportBtn();
+  обновитьПамять();
+}
+
+async function открытьЧерновик(file) {
+  let данные = null;
+  try {
+    данные = JSON.parse(await file.text());
+  } catch (e) { данные = null; }
+  if (!данные || данные.формат !== ФОРМАТ_ЧЕРНОВИКА || !данные.проект) {
+    alert(t('черновик.неПрочитался'));
+    return;
+  }
+  if (+данные.версия > ВЕРСИЯ_ЧЕРНОВИКА
+    && !confirm(t('черновик.новее',
+      { v: данные.студия || данные.версия, 'своя': APP_VERSION }))) return;
+
+  const проект = данные.проект;
+  const имяЧерновика = (проект.name || (данные.песня && данные.песня.имя) || '')
+    .replace(/\.[^.]+$/, '') || t('память.безИмени');
+
+  // Поверх чужой работы — только с разрешения: разметку не вернуть
+  const п = сведенияОПамяти();
+  if (п.размечено && !confirm(t('черновик.поверх', {
+    'прежняя': (п.имя || t('память.безИмени')).replace(/\.[^.]+$/, ''),
+    n: п.размечено,
+    'новая': имяЧерновика,
+  }))) return;
+
+  /* Черновик от другой песни: времена встанут не на те места. Спрашиваем,
+     но не запрещаем — бывает, что тот же файл просто переименовали. */
+  const своя = проект.name && state.fileName && проект.name !== state.fileName;
+  if (своя && !confirm(t('черновик.другаяПесня',
+    { 'имя': проект.name, 'текущая': state.fileName }))) return;
+
+  применитьЧерновик(проект);
+  const размечено = state.lines.filter((l) => l.time != null).length;
+  if (state.originalBuffer && размечено) {
+    goToStep(3);
+  } else if (state.originalBuffer) {
+    goToStep(2);
+  } else {
+    goToStep(1);
+  }
+  alert(t('черновик.открыт', { 'всего': state.lines.length, n: размечено }));
+}
+
+$('btn-draft-save').addEventListener('click', сохранитьЧерновик);
+$('btn-draft-open').addEventListener('click', () => $('draft-input').click());
+$('draft-input').addEventListener('change', () => {
+  const file = $('draft-input').files[0];
+  // Значение поля сбрасываем всегда: иначе тот же файл второй раз
+  // не выберется — change не случится
+  $('draft-input').value = '';
+  if (file) открытьЧерновик(file);
+});
 
 /* ---------- Навигация по шагам ----------
    Шагов четыре: песня → текст → редактор → караоке. Простукивание
@@ -1446,6 +1689,10 @@ function goToStep(n) {
   if (wordTap.active) finishWordTap(false);
   // Кольцо живёт только в редакторе: на других шагах оно бы дёргало плеер
   if (n !== 3 && editor.loop) setLoop(false);
+  /* Соло — тоже: кнопки, которой его выключить, за пределами редактора
+     нет, а караоке с одной только минусовкой в наушниках выглядело бы
+     поломкой звука */
+  if (n !== 3 && editor.solo) { editor.solo = null; audio.applyMix(); }
   if (n !== 3 && n !== 4) { audio.pause(); updatePlayerUI(); }
   if (n === 3) openEditor();
   if (n === 4) renderStage();
@@ -1455,6 +1702,7 @@ function goToStep(n) {
   // Громкость вокала считаем заново: в редакторе звучит оригинал,
   // в караоке — то, что выставлено ползунком. Иначе флаг залипал.
   audio.restoreVocal();
+  обновитьПамять();
 }
 
 document.querySelectorAll('.step-tab').forEach((tab) => {
@@ -1560,14 +1808,11 @@ async function handleFile(file) {
     clearVoiceTrack();   // чужая огибающая новой песне не годится
 
     $('track-name').textContent = file.name.replace(/\.[^.]+$/, '');
-    $('track-meta').textContent = [
-      fmtTime(buffer.duration),
-      t(buffer.numberOfChannels === 1 ? 'песня.моно' : 'песня.стерео'),
-      t('песня.кгц', { v: (buffer.sampleRate / 1000).toFixed(1) }),
-    ].join(' · ');
+    обновитьСведенияОТреке();
     $('mono-warning').classList.toggle('hidden', !!instrumental);
     $('processing').classList.add('hidden');
     $('track-info').classList.remove('hidden');
+    обновитьПамять();
 
     // Восстанавливаем сохранённый проект для этой песни
     const saved = loadProject();
@@ -1593,6 +1838,23 @@ async function handleFile(file) {
     dropzone.classList.remove('hidden');
     alert(t('песня.неПрочиталась'));
   }
+}
+
+/* Строка под именем песни: длительность, моно или стерео, частота.
+   Собирается отдельной функцией, а не на месте загрузки файла, потому
+   что «стерео» и «кГц» — переводимые слова: при смене языка строку
+   надо пересобрать (см. обработчик события i18n). Раньше она
+   оставалась на языке, на котором открыли песню. */
+function обновитьСведенияОТреке() {
+  const узел = $('track-meta');
+  const buffer = state.originalBuffer;
+  if (!узел) return;
+  if (!buffer) { узел.textContent = ''; return; }
+  узел.textContent = [
+    fmtTime(buffer.duration),
+    t(buffer.numberOfChannels === 1 ? 'песня.моно' : 'песня.стерео'),
+    t('песня.кгц', { v: (buffer.sampleRate / 1000).toFixed(1) }),
+  ].join(' · ');
 }
 
 /* ---------- Своя минусовка (например, из UVR5) ----------
@@ -1811,6 +2073,80 @@ function linesFromProject(saved) {
   });
 }
 
+/* ---------- Место на дорожке для только что дописанных строк ----------
+
+   Беда, которую это лечит. Человек размечает песню, вспоминает про
+   забытый куплет, дописывает его в текст — и на дорожке дописанных
+   строк нет. Времени у них нет, а всё, что без времени, дорожка
+   не рисует вовсе (см. syncedLines): строку не видно, её не выбрать
+   и не потянуть — поправить нечего.
+
+   Поэтому новой строке сразу отводится место: промежуток между
+   размеченными соседями делится поровну между теми, кто в него попал.
+   Время, конечно, выдуманное, поэтому строки помечаются знаком «≈»
+   («время на глазок») — тем же, которым подгонка помечает свои
+   догадки: пунктирный блок виден сразу, и понятно, что его надо
+   поправить.
+
+   Строки, дописанные в самый конец, ложатся за последней размеченной
+   через привычную для этой песни длину строки (typicalLineDur).
+
+   Трогаем ТОЛЬКО дописанные строки. Строка, которую просто ещё не
+   простучали, времени не получает: простукивать можно с любого места,
+   и метки после него не выдумываются, а ждут своего удара. */
+function расставитьНовыеСтроки(lines, новые) {
+  if (!новые || !новые.size) return;
+  const размеченные = lines.filter((l) => l.time != null);
+  // Разметки нет вовсе — выдумывать не от чего: редактор откроется
+  // простукиванием, и все строки получат настоящее время
+  if (!размеченные.length) return;
+  const шаг = typicalLineDur(размеченные);
+  const предел = audio.duration || 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].time != null || !новые.has(i)) continue;
+    // Подряд идущая пачка дописанных строк: [i, j)
+    let j = i;
+    while (j < lines.length && lines[j].time == null && новые.has(j)) j++;
+    const k = j - i;
+    const до = i > 0 ? lines[i - 1] : null;
+    const после = lines[j] || null;
+    const от = до && до.time != null ? до.time : 0;
+
+    let начало;
+    let слот;
+    if (после && после.time != null && после.time > от) {
+      // Между соседями: делим промежуток поровну на k+1 частей
+      слот = Math.max((после.time - от) / (k + 1), MIN_SPAN);
+      начало = от + слот;
+    } else if (до && до.time != null) {
+      // Хвост песни: сразу за последней размеченной строкой
+      const конец = до.ручнойКонец && до.end != null && до.end > до.time
+        ? до.end : до.time + шаг;
+      слот = шаг;
+      начало = конец;
+      // В песню помещаемся: если до её конца ближе, чем нужно, ужимаемся
+      if (предел > начало + MIN_SPAN) {
+        слот = Math.max(Math.min(шаг, (предел - начало) / k), MIN_SPAN);
+      }
+    } else {
+      // Соседей с временем нет ни с одной стороны — бывает только там,
+      // где разметки нет совсем, а такой случай отсечён выше
+      слот = шаг;
+      начало = от + шаг;
+    }
+
+    for (let m = 0; m < k; m++) {
+      const line = lines[i + m];
+      line.time = начало + m * слот;
+      line.end = null;
+      line.ручнойКонец = false;
+      line.сомнительная = true;   // время выдумано — на дорожке это видно
+    }
+    i = j - 1;
+  }
+}
+
 $('btn-to-editor').addEventListener('click', () => {
   const raw = $('lyrics-input').value;
   const texts = raw.split('\n').map((s) => s.trim()).filter(Boolean);
@@ -1848,6 +2184,9 @@ $('btn-to-editor').addEventListener('click', () => {
        Раньше стек отмены на этом месте очищался, и возвращать было нечего. */
     if (state.lines.length) pushHistory();
 
+    // Кому места в прежней разметке не нашлось — те и есть дописанные
+    const дописанные = new Set();
+    pairs.forEach((k, j) => { if (k < 0) дописанные.add(j); });
     state.lines = texts.map((text, j) => {
       const src = pairs[j] >= 0 ? было[pairs[j]] : null;
       const line = {
@@ -1869,6 +2208,9 @@ $('btn-to-editor').addEventListener('click', () => {
       if (src && src.сомнительная) line.сомнительная = true;
       return line;
     });
+    /* Дописанным строкам сразу отводим место между соседями — иначе
+       на дорожке их попросту нет (см. расставитьНовыеСтроки) */
+    расставитьНовыеСтроки(state.lines, дописанные);
     // Снимок уже лежит в стеке — редактору незачем его выбрасывать
     editor.histLines = state.lines.length;
   }
@@ -1994,21 +2336,21 @@ function refreshTimes() {
   const synced = syncedLines();
   document.querySelectorAll('#edit-list .ts[data-ts-i]').forEach((el) => {
     const line = state.lines[+el.dataset.tsI];
-    if (line) el.textContent = line.time == null ? '–:––' : fmtTime(line.time);
+    if (line) el.textContent = line.time == null ? '–:––' : fmtTimeCs(line.time);
   });
   document.querySelectorAll('#edit-list .end-ts[data-end-ts-i]').forEach((el) => {
     const line = state.lines[+el.dataset.endTsI];
     if (!line) return;
     el.classList.toggle('empty', !line.ручнойКонец);
     el.textContent = line.time == null
-      ? '–:––' : t('ред.до', { t: fmtTime(lineEnd(synced, synced.indexOf(line))) });
+      ? '–:––' : fmtTimeCs(lineEnd(synced, synced.indexOf(line)));
   });
   document.querySelectorAll('#edit-list .dur-ts[data-dur-i]').forEach((el) => {
     const line = state.lines[+el.dataset.durI];
     if (!line) return;
     const i = synced.indexOf(line);
     el.textContent = line.time == null
-      ? '' : t('ред.длина', { v: (lineEnd(synced, i) - lineStart(synced, i)).toFixed(1) });
+      ? '' : fmtДлит(lineEnd(synced, i) - lineStart(synced, i), 2);
   });
   updateSelInfo();
   updateWordInfo();
@@ -2844,7 +3186,7 @@ function tickPlayer() {
 
   // Обновление редактора
   if ($('step-3').classList.contains('active') && editor.peaks) {
-    setText('edit-time', fmtTime(audio.position()));
+    setText('edit-time', fmtTimeCs(audio.position()));
     setPlayIcon('btn-edit-play', audio.playing);
     tickLoop();
     // В режиме простукивания предпросмотр убран с глаз — считать его незачем
@@ -3358,6 +3700,7 @@ const editor = {
   безМагнита: false, // зажат Alt — магнит отключён на время
   snapped: null,  // { t, вид } — куда притянулось, для направляющей
   hearVocal: true, // в редакторе по умолчанию звучит оригинал с вокалом
+  solo: null,      // 'orig' | 'voice' | 'inst' — слушаем только одну дорожку
 
   // Отмена и повтор: снимки времён, см. pushHistory
   history: [],
@@ -3594,6 +3937,9 @@ function computePeaks() {
 
 function openEditor() {
   if (!state.originalBuffer) return;
+  // Минусовки не стало (моно-файл, сброс своей) — слушать «только голос»
+  // или «только минус» больше нечем
+  if (editor.solo && editor.solo !== 'orig' && !state.instrumentalBuffer) editor.solo = null;
   if (!editor.peaks) computePeaks();
   // Разметку пересобрали заново — прежние снимки уже не о тех строках
   if (editor.histLines !== state.lines.length) clearHistory();
@@ -3617,7 +3963,7 @@ function openEditor() {
   пер.disabled = !state.instrumentalBuffer;
   обновитьПодписиРедактора();
   resizeTimeline();
-  $('edit-total').textContent = fmtTime(audio.duration);
+  $('edit-total').textContent = fmtTimeCs(audio.duration);
   drawTimeline();
 
   /* На сайте простукивание — единственный способ разметки: нейросетей
@@ -3655,19 +4001,19 @@ function renderEditList() {
     const ts = document.createElement('span');
     ts.className = 'ts' + (line.time == null ? ' empty' : '');
     ts.dataset.tsI = i;
-    ts.textContent = line.time == null ? '–:––' : fmtTime(line.time);
+    ts.textContent = line.time == null ? '–:––' : fmtTimeCs(line.time);
 
     const end = document.createElement('span');
     end.className = 'ts end-ts' + (line.ручнойКонец ? '' : ' empty');
     end.dataset.endTsI = i;
-    end.textContent = line.time == null ? '–:––' : t('ред.до', { t: fmtTime(lineEnd(synced, j)) });
+    end.textContent = line.time == null ? '–:––' : fmtTimeCs(lineEnd(synced, j));
 
     // Длительность: по ней сразу видно строку, которой не хватило места
     const dur = document.createElement('span');
     dur.className = 'ts dur-ts';
     dur.dataset.durI = i;
     dur.textContent = line.time == null
-      ? '' : t('ред.длина', { v: (lineEnd(synced, j) - lineStart(synced, j)).toFixed(1) });
+      ? '' : fmtДлит(lineEnd(synced, j) - lineStart(synced, j), 2);
 
     /* Тихая пометка: время этой строки нейросеть подобрала на глазок.
        На дорожке такой блок тоже нарисован иначе. */
@@ -3778,10 +4124,20 @@ function selPanelNudge(what, delta) {
    Значение зажимается молча, а поле после правки перезаполняется
    тем, что получилось: человек сразу видит, куда его число улеглось,
    и не гадает, применилось оно или нет. */
-function читатьСекунды(текст) {
-  // Запятая наравне с точкой: на русской раскладке её набирают чаще
-  const t = String(текст).trim().replace(',', '.');
+/* Что набрали в поле времени. Понимает оба вида: «1:27,44» — тот,
+   в котором время показано (минуты:секунды), и просто «87.44» —
+   голые секунды, которыми поля жили раньше и которыми удобно набирать
+   короткие числа. Запятая наравне с точкой: на русской раскладке её
+   набирают чаще. Отрицательное возвращается как есть — отказ от него
+   дело вызывающего (поле краснеет, разметка не трогается). */
+function читатьВремя(текст) {
+  const t = String(текст).trim().replace(/\s+/g, '').replace(',', '.');
   if (!t) return null;
+  const m = /^(-?)(\d+):(\d{1,2}(?:\.\d+)?)$/.exec(t);
+  if (m) {
+    const сек = Number(m[2]) * 60 + Number(m[3]);
+    return Number.isFinite(сек) ? (m[1] ? -сек : сек) : null;
+  }
   const v = Number(t);
   return Number.isFinite(v) ? v : null;
 }
@@ -3791,7 +4147,7 @@ function применитьПолеСтроки(какой) {
   if (!поле) return;
   const sp = spanOfRow(editor.sel);
   if (!sp) { updateSelInfo(); return; }
-  const v = читатьСекунды(поле.value);
+  const v = читатьВремя(поле.value);
   // Не число или отрицательное время — поле краснеет, набранное
   // остаётся на месте, разметка не трогается
   if (v == null || v < 0) { поле.classList.add('bad'); return; }
@@ -3806,7 +4162,7 @@ function применитьПолеСтроки(какой) {
      а следом пришедшее событие change приняло бы его за новую правку
      и сдвинуло строку второй раз. */
   const стало = spanOfRow(editor.sel);
-  if (стало) поле.value = (какой === 'start' ? стало.start : стало.end).toFixed(3);
+  if (стало) поле.value = fmtTimeMs(какой === 'start' ? стало.start : стало.end);
 }
 
 ['sel-start', 'sel-end'].forEach((id) => {
@@ -4412,9 +4768,7 @@ function timelineLanes() {
 /* ---------- Колонка заголовков дорожек ----------
    Живёт рядом с канвасом, вне его: подписи читаются как настоящий
    текст (без ручной отрисовки под каждый масштаб экрана), а левый
-   отступ освобождает канвас под сами полосы. Место под будущую кнопку
-   «слушать только это» зарезервировано пустым блоком — сама кнопка
-   появится отдельным заходом (см. .tl-head-solo-space в style.css). */
+   отступ освобождает канвас под сами полосы. */
 const TL_HEAD_LABEL = {
   ruler: 'дорожка.заголовок.время',
   orig: 'дорожка.оригинал',
@@ -4423,9 +4777,18 @@ const TL_HEAD_LABEL = {
   lines: 'дорожка.заголовок.строки',
   words: 'дорожка.заголовок.слова',
 };
-// Только эти полосы получают кнопку-заглушку: у времени и волны
-// solo-слушать нечего, там и так весь микс
-const TL_HEAD_SOLO = { orig: true, voice: true, lines: true };
+/* Кнопка S — «слушать только это». Стоит у тех полос, у которых есть
+   свой звук: оригинал, голос и минусовка. У времени, строк и слов
+   слушать нечего — это разметка, а не звук. Значение — код соло,
+   его понимает усиленияСоло. */
+const TL_HEAD_SOLO = { orig: 'orig', voice: 'voice', wave: 'inst' };
+
+function переключитьСоло(код) {
+  editor.solo = editor.solo === код ? null : код;
+  audio.applyMix();
+  renderTimelineHeads(timelineLanes());
+}
+
 function renderTimelineHeads(L) {
   const heads = $('tl-heads');
   if (!heads) return;
@@ -4439,10 +4802,24 @@ function renderTimelineHeads(L) {
     const label = document.createElement('span');
     label.textContent = t(TL_HEAD_LABEL[key] || key);
     row.appendChild(label);
-    if (TL_HEAD_SOLO[key]) {
-      const space = document.createElement('span');
-      space.className = 'tl-head-solo-space';
-      row.appendChild(space);
+    const код = TL_HEAD_SOLO[key];
+    if (код) {
+      const кнопка = document.createElement('button');
+      кнопка.type = 'button';
+      кнопка.className = 'tl-solo';
+      кнопка.textContent = 'S';
+      кнопка.dataset.solo = код;
+      /* Голос и минусовка звучат только там, где минусовка вообще есть:
+         у моно-файла второй дорожки нет, вычитать нечего. */
+      кнопка.disabled = код !== 'orig' && !state.instrumentalBuffer;
+      const свой = editor.solo === код;
+      кнопка.classList.toggle('on', свой);
+      кнопка.setAttribute('aria-pressed', свой ? 'true' : 'false');
+      кнопка.title = свой ? t('дорожка.соло.выкл')
+        : t('дорожка.соло', { 'имя': t(TL_HEAD_LABEL[key]) });
+      кнопка.setAttribute('aria-label', кнопка.title);
+      кнопка.addEventListener('click', () => переключитьСоло(код));
+      row.appendChild(кнопка);
     }
     heads.appendChild(row);
   });
@@ -4785,7 +5162,9 @@ function drawTimeline() {
   const step = editor.pxPerSec >= 60 ? 1 : editor.pxPerSec >= 25 ? 2 : editor.pxPerSec >= 12 ? 5 : 10;
   const viewDur = W / editor.pxPerSec;
   g.fillStyle = edTheme.ground;
-  g.fillRect(0, 0, W, L.ruler);
+  // Высота полосы, а не сама полоса: раньше здесь стоял объект L.ruler,
+  // высота выходила NaN — и линейка рисовалась поверх старого кадра
+  g.fillRect(0, 0, W, L.ruler.h);
   g.fillStyle = '#9a9ab0';
   // Моноширинный: время бежит вперёд, и цифры не должны подрагивать
   // от смены ширины символов на каждом кадре (см. пункт про тысячные)
@@ -4821,6 +5200,24 @@ function drawTimeline() {
     g.lineTo(px, 7);
     g.closePath();
     g.fill();
+    /* Часы прямо у указателя: время под курсором смотрят чаще всего,
+       и переводить ради него взгляд на панель — лишнее движение.
+       Подпись держится в пределах канваса, чтобы не обрезалась у краёв. */
+    const подпись = fmtTimeCs(audio.position());
+    g.font = '10px ' + CANVAS_NUM_FONT;
+    const шир = Math.round(g.measureText(подпись).width) + 10;
+    const x0 = Math.min(Math.max(px - шир / 2, 1), Math.max(1, W - шир - 1));
+    const выс = Math.max(12, L.ruler.h - 1);
+    roundRect(g, x0, 0.5, шир, выс, 3);
+    g.fillStyle = edTheme.ground;
+    g.fill();
+    g.strokeStyle = 'rgba(242, 242, 247, 0.35)';
+    g.lineWidth = 1;
+    g.stroke();
+    g.fillStyle = '#f2f2f7';
+    g.textAlign = 'center';
+    g.fillText(подпись, x0 + шир / 2, выс - 3);
+    g.textAlign = 'left';
   }
 }
 
@@ -5034,9 +5431,14 @@ function updateSelInfo() {
   if (!el) return;
   const sp = spanOfRow(editor.sel);
   const line = sp ? sp.line : null;
-  el.textContent = !sp ? t('ред.строкаНеВыбрана')
+  /* В ряду инспектора слева стоит подпись «строка», поэтому значением
+     остаётся только номер: «строка · Строка №26» читалось бы дважды.
+     Полное название и пометка «время на глазок» — в подсказке. */
+  el.textContent = !sp ? t('ред.строкаНет') : t('ред.номер', { n: sp.row + 1 });
+  el.title = !sp ? t('ред.строкаНеВыбрана')
     : t('ред.строкаНомер', { n: sp.row + 1 })
       + (line.сомнительная ? t('ред.строкаГлазок') : '');
+  el.classList.toggle('guess', !!(line && line.сомнительная));
 
   /* Поле, в котором прямо сейчас набирают, не трогаем: панель
      обновляется и по ходу воспроизведения, и затирать набранное
@@ -5049,12 +5451,12 @@ function updateSelInfo() {
     поле.disabled = !sp;
     if (document.activeElement === поле && поле.dataset.набирают) return;
     поле.classList.remove('bad');
-    поле.value = sp ? v.toFixed(3) : '';
+    поле.value = sp ? fmtTimeMs(v) : '';
   };
   заполнить('sel-start', sp ? sp.start : 0);
   заполнить('sel-end', sp ? sp.end : 0);
   const dur = $('sel-dur');
-  if (dur) dur.textContent = sp ? Math.max(0, sp.end - sp.start).toFixed(3) : '—';
+  if (dur) dur.textContent = sp ? fmtДлит(sp.end - sp.start, 3) : '—';
 
   // Пока строка не выбрана, работать не с чем — кнопки гаснут
   const panel = $('sel-panel');
@@ -5109,8 +5511,22 @@ function updateWordInfo() {
   const info = selectedWord();
   // Слово могло исчезнуть (строку сбросили, укоротили текст) — снимаем выбор
   if (editor.wordSel >= 0 && !info) editor.wordSel = -1;
-  head.textContent = !info ? t('ред.словоНеВыбрано')
+  /* Значением ряда стоит само слово, а не его номер: искать глазами
+     «пьянь» проще, чем «Слово №6 из 7». Номер остался в подсказке.
+     Слово — текст человека, поэтому только textContent. */
+  // splitWords оставляет за словом пробел-разделитель — в подписи он лишний
+  head.textContent = !info ? t('ред.словоНет') : info.words[info.k].text.trim();
+  head.title = !info ? t('ред.словоНеВыбрано')
     : t('ред.словоНомер', { n: info.k + 1, всего: info.words.length });
+  /* Заголовок окна идёт за выбором: правят слово — окно про слово.
+     Подписи обоих состояний живут в разметке, поэтому ключ ставим
+     туда же, где его ищет перевод (data-i18n), а не только текстом. */
+  const заголовок = $('sel-pane-head');
+  if (заголовок) {
+    const ключ = info ? 'ред.словоЗаголовок' : 'ред.окно.строка';
+    заголовок.dataset.i18n = ключ;
+    заголовок.textContent = t(ключ);
+  }
 
   const w = info ? info.words[info.k] : null;
   // Своей ручки для перетаскивания нет у самого первого и самого
@@ -5123,12 +5539,12 @@ function updateWordInfo() {
     поле.disabled = !можно;
     if (document.activeElement === поле && поле.dataset.набирают) return;
     поле.classList.remove('bad');
-    поле.value = можно && v != null ? v.toFixed(3) : '';
+    поле.value = можно && v != null ? fmtTimeMs(v) : '';
   };
   заполнить('sel-word-start', w ? w.start : null, можноНачало);
   заполнить('sel-word-end', w ? w.end : null, можноКонец);
   const dur = $('sel-word-dur');
-  if (dur) dur.textContent = w ? Math.max(0, w.end - w.start).toFixed(3) : '—';
+  if (dur) dur.textContent = w ? fmtДлит(w.end - w.start, 3) : '—';
 
   const panel = $('word-panel');
   if (panel) panel.classList.toggle('empty', !info);
@@ -5181,7 +5597,7 @@ function применитьПолеСлова(какой) {
   if (!info) { updateWordInfo(); return; }
   const idx = какой === 'start' ? info.k : info.k + 1;
   const можно = idx >= 1 && idx < info.words.length;
-  const v = читатьСекунды(поле.value);
+  const v = читатьВремя(поле.value);
   if (v == null || v < 0) { поле.classList.add('bad'); return; }
   поле.classList.remove('bad');
   const было = какой === 'start' ? info.words[info.k].start : info.words[info.k].end;
@@ -5197,7 +5613,7 @@ function применитьПолеСлова(какой) {
   }
   updateWordInfo();
   const снова = selectedWord();
-  if (снова) поле.value = (какой === 'start' ? снова.words[info.k].start : снова.words[info.k].end).toFixed(3);
+  if (снова) поле.value = fmtTimeMs(какой === 'start' ? снова.words[info.k].start : снова.words[info.k].end);
 }
 
 ['sel-word-start', 'sel-word-end'].forEach((id) => {
@@ -5490,7 +5906,7 @@ function seekTo(t) {
   editor.stageKey = '';
   renderEditStage();
   updatePlayerUI();
-  setText('edit-time', fmtTime(audio.position()));
+  setText('edit-time', fmtTimeCs(audio.position()));
 }
 
 tl.addEventListener('pointerdown', (e) => {
@@ -6683,6 +7099,13 @@ function установитьТему(новая) {
   собратьПереключателиТемы();
 }
 
+/* Какой значок у какой темы: фирменная — палитра (в ней и есть цвет),
+   нейтральная — круг, наполовину залитый серым. Подписи «Фирменная» и
+   «Нейтральная» с кнопок ушли: два слова в шапке занимали больше места,
+   чем переключатель языка рядом, а прочитать их нужно ровно один раз.
+   Название осталось в подсказке и в aria-label — там, где его ищут. */
+const ЗНАЧОК_ТЕМЫ = { signature: 'palette', neutral: 'contrast' };
+
 /* Переключатель собирается кодом теми же приёмами, что и языковой:
    подписи одинаково читаются на любом языке, порядок кнопок общий,
    и держать их в разметке незачем (см. собратьПереключателиЯзыка). */
@@ -6694,7 +7117,7 @@ function собратьПереключателиТемы() {
       кнопка.type = 'button';
       кнопка.className = 'theme-btn';
       кнопка.dataset.theme = код;
-      кнопка.textContent = t('тема.' + код);
+      кнопка.appendChild(значокSVG(ЗНАЧОК_ТЕМЫ[код] || 'palette'));
       кнопка.title = t('тема.' + код + '.полно');
       кнопка.setAttribute('aria-label', кнопка.title);
       const свой = код === тема;
@@ -6734,6 +7157,14 @@ window.THEME = {
 /* Подписи редактора, зависящие от языка. Вынесены из openEditor,
    чтобы их можно было обновить и без пересборки всего редактора. */
 function обновитьПодписиРедактора() {
+  /* Подпись «сдвинуть всё» с панели ушла — вместо неё подсказка у
+     каждой кнопки. Число в ней читается по-разному на двух языках
+     (−0,1 против −0.1), поэтому собирается кодом, а не разметкой. */
+  document.querySelectorAll('#shift-all [data-shift]').forEach((кнопка) => {
+    const v = кнопка.dataset.shift.replace('.', десРазделитель()).replace('-', '−');
+    кнопка.title = t('ред.сдвинуть.подсказка', { v });
+    кнопка.setAttribute('aria-label', кнопка.title);
+  });
   const пер = $('sel-vocal');
   if (пер && пер.parentElement) {
     пер.parentElement.title = t(state.instrumentalBuffer ? 'ред.вокал.есть' : 'ред.вокал.моно');
@@ -6781,6 +7212,10 @@ document.addEventListener('i18n', () => {
   updateStyleUI();
   updateEqUI();
   updateInstUI();
+  // Строка «3:15 · стерео · 48,0 кГц» собрана кодом: слова в ней
+  // переводятся, и без пересборки она осталась бы на прежнем языке
+  обновитьСведенияОТреке();
+  обновитьПамять();
   $('btn-bg-add').textContent = t(state.bgImage ? 'минусовка.заменить' : 'минусовка.выбрать');
   // Подпись кнопки «развернуть» ставится кодом, а не разметкой
   const полный = stageFullOn();
@@ -6829,6 +7264,8 @@ document.addEventListener('i18n', () => {
   // Фон ставим через setBgImage: он же обновляет предпросмотр и кнопки
   if (saved && saved.bg) setBgImage(saved.bg);
   updateInstUI();
+  // Что лежит в памяти — видно сразу, до всякой загрузки файла
+  обновитьПамять();
   tickPlayer(); // общий цикл обновления UI (лёгкий, обновляет только видимое)
 
   // Проверяем обновления при запуске и раз в полчаса

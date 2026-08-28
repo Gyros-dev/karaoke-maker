@@ -440,7 +440,7 @@ I18N.EN = {
 
   /* ---------- Шаг 3: редактор ---------- */
   'ред.справка.заголовок': 'How to fix the timing',
-  'ред.справка.первый': 'The text is on the left — edit it in the list, double-click to jump to a line. The preview is in the middle, the selected-line and selected-word inspector on the right. The timeline is at the bottom: drag a block’s edges to move a boundary, its middle to move the whole line; the bottom lane works the same way for word edges, and clicking a word selects it — its numbers show up in the inspector. Line starts are tapped with the spacebar: the “tap again” button.',
+  'ред.справка.первый': 'The text is on the left — edit it in the list, double-click to jump to a line. The preview is in the middle, the inspector on the right: the selected word on top, the line it belongs to underneath. Times in the inspector read the same way as on the timeline — minutes and seconds. The timeline is at the bottom: drag a block’s edges to move a boundary, its middle to move the whole line; the bottom lane works the same way for word edges, and clicking a word selects it — its numbers show up in the inspector. The “S” button by a track name leaves that track alone in your headphones. Line starts are tapped with the spacebar: the “tap again” button.',
   'ред.справка.оригинал': '<b>The top lane is the original.</b> Drag across it and the real words from the recording play on that stretch instead of the instrumental — handy for an intro you’d rather not sing. Pull the edges to adjust; the cross, a double-click or <kbd>Delete</kbd> removes a stretch. Inside a stretch the original is heard in full, wherever the “Vocals” slider sits in karaoke — and it goes into the .wav instrumental and the recorded video just the same. In the editor itself you won’t hear the difference: the original plays everywhere here, or there would be nothing to time against. To hear the stretches, clear “hear the original” on the right or go to karaoke.',
   'ред.легенда.оригинал': 'original plays here',
   'ред.легенда.голос': 'voice',
@@ -461,22 +461,20 @@ I18N.EN = {
   'ред.покругу.подсказка': 'Play the selected line round and round (key L)',
   'ред.магнит': 'snap',
   'ред.магнит.подсказка': 'Snapping: edges stick to neighbouring lines, to neighbouring word edges, to the playhead, to original stretches and to the real vocal onset. The S key turns it off for good, holding Alt suspends it for one drag',
-  'ред.сдвинуть': 'shift everything',
   'ред.сдвиг.минус': '−0.1',
   'ред.сдвиг.плюс': '+0.1',
   'ред.отдалить': 'Zoom out (key −)',
-  'ред.масштаб': 'zoom',
+  'ред.отдалить.aria': 'Zoom out',
   'ред.приблизить': 'Zoom in (key +)',
+  'ред.приблизить.aria': 'Zoom in',
   'ред.вся': 'whole song',
   'ред.вся.подсказка': 'Show the whole song',
   'ред.окно.строки': 'Lines',
   'ред.окно.просмотр': 'Preview',
-  'ред.окно.строка': 'Line',
   'ред.начало': 'start',
-  'ред.начало.подсказка': 'Line start in seconds. Enter applies, Esc puts it back',
+  'ред.начало.подсказка': 'Line start as minutes:seconds, the way the timeline reads it (plain seconds work too). Enter applies, Esc puts it back',
   'ред.конец': 'end',
-  'ред.конец.подсказка': 'Line end in seconds. Enter applies, Esc puts it back',
-  'ред.длительность': 'length',
+  'ред.конец.подсказка': 'Line end as minutes:seconds, the way the timeline reads it (plain seconds work too). Enter applies, Esc puts it back',
   'ред.секунды': 's',
   'ред.прослушать': 'audition',
   'ред.прослушать.подсказка': 'Audition this line (Enter)',
@@ -495,10 +493,13 @@ I18N.EN = {
   'ред.слова.сохранить': 'Save',
   'ред.слова.отменить': 'Cancel',
   /* ---------- Панель выбранного слова ---------- */
-  'ред.словоЗаголовок': 'Word',
-  'ред.началоСлова.подсказка': 'Word start in seconds. The line’s first word has no handle of its own — it moves with the line start',
-  'ред.конецСлова.подсказка': 'Word end in seconds. The line’s last word has no handle of its own — it moves with the line end',
+  'ред.началоСлова.подсказка': 'Word start as minutes:seconds, the way the timeline reads it (plain seconds work too). The line’s first word has no handle of its own — it moves with the line start',
+  'ред.конецСлова.подсказка': 'Word end as minutes:seconds, the way the timeline reads it (plain seconds work too). The line’s last word has no handle of its own — it moves with the line end',
   'ред.слово.поКругу.подсказка': 'Play this word round and round, with a short run-up and tail (key L)',
+  'черновик.сохранить': 'Save a draft',
+  'черновик.сохранить.подсказка': 'Save a draft file: the lyrics, the timing, the original stretches and the styling',
+  'черновик.открыть': 'Open a draft',
+  'черновик.открыть.подсказка': 'Open a draft file',
   'ред.назад': '← Lyrics',
   'ред.дальше': 'Karaoke →',
 
@@ -587,6 +588,62 @@ I18N.СТРОКИ = {
       + 'It remembers one song at a time — open another and the timing for '
       + 'this one is gone for good.\n\n'
       + 'Open “{новая}”?',
+  },
+  /* ---------- Что сейчас в памяти студии ----------
+     Студия помнит одну работу за раз, и раньше об этом узнавали только
+     из вопроса «открыть другую песню?» — когда рука уже занесена над
+     чужой разметкой. Теперь то же самое написано заранее: чипом в ряду
+     шагов и строкой над зоной загрузки. */
+  'память.чип.подсказка': { ru: 'Что сейчас в памяти студии', en: 'What the studio is holding right now' },
+  'память.строк': {
+    ru: '«{имя}» · размечено строк: {n} из {всего}',
+    en: '“{имя}” · {n} of {всего} lines timed',
+  },
+  'память.безРазметки': { ru: '«{имя}» · разметки пока нет', en: '“{имя}” · no timing yet' },
+  'память.ждётПесню': {
+    ru: 'В памяти работа над песней «{имя}»: строк в тексте {всего}, размечено {n}. '
+      + 'Загрузи тот же файл — и продолжишь с того же места. Другой файл заменит эту работу.',
+    en: 'The studio is holding work on “{имя}”: {всего} lines of text, {n} of them timed. '
+      + 'Load the same file and you carry on where you left off. A different file replaces this work.',
+  },
+  'память.безИмени': { ru: 'черновик', en: 'draft' },
+
+  /* ---------- Черновик файлом ----------
+     Проект живёт в хранилище браузера, а оно теряется: чистка кэша,
+     другой браузер, переустановка приложения. Черновик — тот же проект,
+     но файлом, который можно положить куда угодно. Звук в него не
+     кладём: песня и так есть у человека, а файл вышел бы в десятки
+     мегабайт. Поэтому в черновике записано имя песни, и при открытии
+     оно сверяется с тем, что загружено. */
+  'черновик.нечего': {
+    ru: 'Пока нечего сохранять: нет ни текста, ни разметки.',
+    en: 'Nothing to save yet: no lyrics and no timing.',
+  },
+  'черновик.неПрочитался': {
+    ru: 'Не удалось открыть этот файл как черновик Karaoke Punch.',
+    en: 'Couldn’t open this file as a Karaoke Punch draft.',
+  },
+  'черновик.новее': {
+    ru: 'Черновик сделан в студии версии {v}, а эта — {своя}. '
+      + 'Часть работы может не открыться. Всё равно открыть?',
+    en: 'This draft was made in studio version {v}; this one is {своя}. '
+      + 'Some of the work may not open. Open it anyway?',
+  },
+  'черновик.поверх': {
+    ru: 'Сейчас в студии «{прежняя}», размечено строк: {n}.\n'
+      + 'Открыть черновик «{новая}»? Нынешняя разметка будет заменена.',
+    en: 'The studio currently holds “{прежняя}”, with {n} lines timed.\n'
+      + 'Open the draft “{новая}”? The current timing will be replaced.',
+  },
+  'черновик.другаяПесня': {
+    ru: 'Черновик сделан для песни «{имя}», а открыта «{текущая}». '
+      + 'Разметка может не совпасть со звуком. Всё равно открыть?',
+    en: 'This draft was made for “{имя}”, but “{текущая}” is open. '
+      + 'The timing may not match the audio. Open it anyway?',
+  },
+  'черновик.открыт': {
+    ru: 'Черновик открыт: строк {всего}, из них размечено {n}.',
+    en: 'Draft opened: {всего} lines, {n} of them timed.',
   },
   'песня.читаем': { ru: 'Читаем файл…', en: 'Reading the file…' },
   'песня.декодируем': { ru: 'Декодируем аудио…', en: 'Decoding the audio…' },
@@ -718,8 +775,6 @@ I18N.СТРОКИ = {
     ru: '— появится, когда уберёшь вокал нейросетью',
     en: '— appears once you remove the vocals with the neural network',
   },
-  'ред.до': { ru: 'до {t}', en: 'to {t}' },
-  'ред.длина': { ru: '{v} с', en: '{v} s' },
   'ред.глазок.подсказка': {
     ru: 'Время подобрано приблизительно — послушай и поправь',
     en: 'This timing is a rough guess — listen and fix it',
@@ -757,6 +812,20 @@ I18N.СТРОКИ = {
   'ред.словаКнопка': { ru: 'слова', en: 'words' },
   'ред.словаКнопкаГотово': { ru: 'слова', en: 'words' },
   'ред.словоНеВыбрано': { ru: 'Слово не выбрано', en: 'No word selected' },
+  /* Инспектор выбранного: подписи рядов. Короткие нарочно — ряд читается
+     слева направо, а места в узком столбце мало. */
+  'ред.окно.строка': { ru: 'Строка', en: 'Line' },
+  'ред.словоЗаголовок': { ru: 'Слово', en: 'Word' },
+  'ред.инсп.слово': { ru: 'слово', en: 'word' },
+  'ред.инсп.строка': { ru: 'строка', en: 'line' },
+  'ред.инсп.длина': { ru: 'длина', en: 'length' },
+  'ред.словоНет': { ru: 'не выбрано', en: 'none' },
+  'ред.строкаНет': { ru: 'не выбрана', en: 'none' },
+  'ред.номер': { ru: '№{n}', en: '#{n}' },
+  'ред.сдвинуть.подсказка': {
+    ru: 'Сдвинуть всю разметку на {v} с',
+    en: 'Shift the whole timing by {v} s',
+  },
   'ред.словоНомер': { ru: 'Слово №{n} из {всего}', en: 'Word {n} of {всего}' },
 
   /* ---------- Подписи на дорожке ---------- */
@@ -775,6 +844,11 @@ I18N.СТРОКИ = {
      Место под будущую кнопку «слушать только это» уже заложено
      в вёрстке (см. .tl-head-solo в style.css) — сама кнопка появится
      отдельным заходом, сейчас только подпись и отступ под неё. */
+  /* Кнопка «слушать только эту дорожку» в колонке заголовков полос.
+     Буква S на кнопке одна и та же на обоих языках — как в монтажных
+     программах (solo, соло). */
+  'дорожка.соло': { ru: 'Слушать только «{имя}»', en: 'Listen to “{имя}” only' },
+  'дорожка.соло.выкл': { ru: 'Вернуть обычную смесь', en: 'Back to the normal mix' },
   'дорожка.заголовок.время': { ru: 'время', en: 'time' },
   'дорожка.заголовок.минус': { ru: 'минус', en: 'instrumental' },
   'дорожка.заголовок.строки': { ru: 'строки', en: 'lines' },

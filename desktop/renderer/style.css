@@ -286,6 +286,9 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   overflow: hidden;
 }
 .theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   border: none;
   color: var(--text-dim);
@@ -294,15 +297,20 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   font-weight: 700;
   letter-spacing: 0.01em;
   white-space: nowrap;
-  padding: 0.35rem 0.75rem;
+  /* Значок вместо подписи (см. ЗНАЧОК_ТЕМЫ в app.js): «Фирменная»
+     и «Нейтральная» занимали в шапке больше места, чем весь языковой
+     переключатель рядом, а читают их ровно один раз. Название осталось
+     в подсказке и в aria-label. */
+  padding: 0.35rem 0.6rem;
   cursor: pointer;
   transition: color 0.15s, background 0.15s;
 }
+.theme-btn .icon { width: 1.05em; height: 1.05em; margin: 0; }
 .theme-btn + .theme-btn { border-left: 1px solid var(--border); }
 .theme-btn:hover { color: var(--text); }
 .theme-btn.active { color: var(--text); background: rgba(16, 185, 129, 0.16); }
 @media (max-width: 1120px) {
-  .theme-btn { font-size: 0.74rem; padding: 0.3rem 0.55rem; }
+  .theme-btn { font-size: 0.74rem; padding: 0.3rem 0.5rem; }
 }
 /* На совсем узком окне меню и так прячется (см. ниже .site-nav) —
    темой можно пожертвовать раньше языка: язык важнее для чтения */
@@ -588,6 +596,62 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   transition: color 0.15s, border-color 0.15s;
 }
 .steps-help:hover { color: var(--text); border-color: var(--violet); }
+/* Что в памяти студии и черновик. Как и ссылка на руководство, вынесены
+   из потока: ряд шагов остаётся ровно посередине, а высоты рабочее
+   место не теряет ни пикселя. */
+.proj-box {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 40%;
+}
+.proj-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 15rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.proj-chip .icon { flex: none; opacity: 0.7; }
+/* Имя песни бывает длинным — обрезаем многоточием, целиком оно
+   всё равно написано в подсказке */
+.proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.steps-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.steps-tool:hover { color: var(--text); border-color: var(--violet); }
+.steps-tool .icon { margin: 0; }
+/* В узком окне ряд шагов подбирается к чипу вплотную: сперва прячем
+   имя песни (оно есть в подсказке), потом весь чип — кнопки черновика
+   важнее, без них работу не сохранить */
+@media (max-width: 1200px) {
+  .proj-name { display: none; }
+  .proj-chip { padding: 0.3rem 0.5rem; }
+}
+@media (max-width: 900px) {
+  .proj-chip { display: none; }
+}
 .steps-help-text { margin-left: 0.4rem; }
 /* В узком окне ряд шагов подбирается к ссылке вплотную: сперва ужимаем
    её, а совсем близко к краю оставляем один знак вопроса — подпись
@@ -742,6 +806,22 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Что уже лежит в памяти студии — над зоной загрузки, до всякого
+   выбора файла. Тон спокойный: это не ошибка, а напоминание. */
+.mem-note {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.8rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--sel-ring);
+  border-radius: var(--ed-radius);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-align: left;
+}
 .track-info { padding: 1rem 0; }
 .track-row {
   display: flex; align-items: center; gap: 1rem;
@@ -920,10 +1000,13 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   font-family: var(--ed-num);
   font-variant-numeric: tabular-nums;
 }
-.edit-row .ts { min-width: 2.7rem; flex-shrink: 0; }
-.edit-row .end-ts { min-width: 3.2rem; }
+/* Начало и конец — «1:22,40», сотые доли: та же запись, что на линейке
+   дорожки и в часах, только короче тысячных из полей инспектора.
+   Ширина под неё одинаковая у обоих столбцов, иначе колонка дёргается */
+.edit-row .ts { min-width: 3.7rem; flex-shrink: 0; }
+.edit-row .end-ts { min-width: 3.7rem; color: var(--text-dim); }
 .edit-row .dur-ts {
-  min-width: 2.3rem;
+  min-width: 2.6rem;
   color: var(--text-dim);
   font-weight: 400;
   text-align: right;
@@ -960,10 +1043,13 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    ряд читается слева направо, а не столбиком, как было при кнопках.
    Ряды невысокие: панель должна быть тихой, значения в ней смотрят
    чаще, чем правят. */
+/* Ряд инспектора: подпись прижата к значению, значения выстроены
+   в один столбец у правого края — как в инспекторах монтажных
+   программ, где числа сверяют глазами сверху вниз. */
 .insp-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
 }
 .sel-field { display: flex; align-items: center; gap: 0.25rem; }
@@ -972,7 +1058,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    инспектор не должен выглядеть анкетой. */
 /* Ширина под "-12.345" — тысячные добавили знак, поле стало чуть шире */
 .sel-num {
-  width: 5.2rem;
+  width: 5.6rem;
   padding: 0.2rem 0.35rem;
   border: 1px solid transparent;
   border-radius: var(--ed-radius-ctl);
@@ -1001,7 +1087,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .insp-actions { display: flex; flex-direction: column; gap: 0.25rem; }
 .insp-actions .nudge-btn { display: flex; align-items: center; text-align: left; padding: 0.3rem 0.5rem; }
 .sel-panel .ed-pane-body { gap: 0.4rem; }
-.sel-label { color: var(--text-dim); font-size: 0.85em; }
+.sel-label { color: var(--text-dim); font-size: 0.85em; text-align: right; }
 .sel-vocal {
   display: flex;
   align-items: center;
@@ -1020,20 +1106,13 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
    Зеркало панели строки чуть выше: тот же .insp-row, то же .sel-num,
    просто с отдельным маленьким заголовком-разделителем, чтобы было
    видно, где кончается строка и начинается слово. */
-.sel-subhead {
+/* Черта между столбцом слова и столбцом строки. Подписи у неё нет
+   нарочно: заголовок окна и так говорит, что сейчас правят, а у обоих
+   столбцов первым рядом стоит своё имя — «слово» и «строка». */
+.sel-line {
   margin-top: 0.15rem;
-  padding-top: 0.4rem;
+  padding-top: 0.5rem;
   border-top: 1px solid var(--border);
-  color: var(--text-dim);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.sel-word {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
 }
 .sel-word.empty { opacity: 0.75; }
 /* .nudge-btn.on уже красит включённое кольцо строки акцентом темы —
@@ -1045,6 +1124,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .step-panel.tapping > .panel-hint,
 .step-panel.tapping > .editor-grid,
 .step-panel.tapping > .ed-bar,
+.step-panel.tapping > .timeline-legend,
 .step-panel.tapping > .panel-actions { display: none; }
 
 .tap-mode { display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 1rem; }
@@ -1212,7 +1292,6 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .ed-group { display: flex; align-items: center; gap: 0.4rem; }
 .ed-group .nudge-btn { white-space: nowrap; }
 .ed-right { margin-left: auto; }
-.ed-label { white-space: nowrap; }
 /* Часы — как табло в монтажной: текущее время крупно, длина песни рядом.
    Цифры счётчика — одно из четырёх мест фирменного зелёного
    (--accent-clock); в нейтральной теме это просто цвет текста. */
@@ -1228,6 +1307,9 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   font-variant-numeric: tabular-nums;
 }
 .ed-clock b { color: var(--accent-clock); font-size: 0.95rem; font-weight: 600; }
+/* Косая между текущим временем и длиной песни: разделитель, а не число,
+   поэтому и тише обоих */
+.ed-clock-sep { opacity: 0.45; }
 
 .timeline-wrap {
   flex-shrink: 0;
@@ -1237,16 +1319,32 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   background: var(--bg-card);
   overflow: hidden;
 }
-.tl-shift-label { white-space: nowrap; }
-/* Подпись выбранной строки — первая строка инспектора. Тот же цвет,
-   что и рамка выделения: это часть одной и той же обратной связи. */
-.tl-sel {
+/* Значение ряда инспектора: номер строки, само слово. Тот же цвет,
+   что и рамка выделения, — это часть одной и той же обратной связи.
+   Ширина ограничена шириной поля рядом: длинное слово не должно
+   растягивать столбец. */
+.sel-value {
   display: block;
+  max-width: 5.6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
   color: var(--sel-ring);
   font-size: 0.82rem;
   font-family: var(--ed-num);
   font-variant-numeric: tabular-nums;
   line-height: 1.35;
+}
+/* Строка с выдуманным временем («≈ на глазок») — тем же цветом, что
+   и её пунктирный блок на дорожке */
+.sel-value.guess { color: #f59e0b; }
+/* Столбец слова и столбец строки в одном окне: между ними черта,
+   чтобы было видно, где кончается одно и начинается другое */
+.sel-line, .sel-word {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 /* Включённый переключатель дорожки (по кругу, притягивание к голосу) —
    второе из четырёх мест акцента темы */
@@ -1282,9 +1380,32 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   white-space: nowrap;
   overflow: hidden;
 }
-/* Место под будущую кнопку соло — ширина зарезервирована, чтобы её
-   вставка потом не сдвинула подписи и не потребовала перевёрстки */
-.tl-head-solo-space { flex: none; width: 14px; }
+/* «Слушать только это»: буква S, как в монтажных программах. Включённая
+   горит акцентом темы — тем же, которым обведён выбранный блок. */
+.tl-solo {
+  flex: none;
+  width: 15px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.tl-solo:hover:not(:disabled) { color: var(--text); border-color: var(--violet); }
+.tl-solo.on {
+  color: var(--sel-ring);
+  border-color: var(--sel-ring);
+  background: var(--sel-ring-bg);
+}
+.tl-solo:disabled { opacity: 0.3; cursor: not-allowed; }
 .tl-canvas-wrap { position: relative; flex: 1; min-width: 0; padding: 0.5rem 0.6rem; }
 /* Подпись с точным временем у курсора при перетаскивании границы —
    тысячные доли, как и в полях инспектора (см. applyDrag в app.js) */
@@ -1315,14 +1436,18 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   cursor: pointer;
   touch-action: none;
 }
-/* Что каким цветом нарисовано на дорожке */
+/* Что каким цветом нарисовано на дорожке. Стоит прямо под дорожкой,
+   а не в свёрнутой справке: цвета нужны, когда смотришь на дорожку. */
 .timeline-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem 1rem;
-  margin-top: 0.5rem;
+  gap: 0.2rem 1rem;
+  margin-top: 0.35rem;
+  padding: 0 0.2rem;
+  flex-shrink: 0;
   color: var(--text-dim);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 .tl-key { display: flex; align-items: center; gap: 0.35rem; }
 .tl-key b { color: var(--text-dim); font-weight: 400; opacity: 0.75; }

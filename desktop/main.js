@@ -741,6 +741,191 @@ function createWindow() {
             if (!былаАктивна) панель.classList.remove('active');
           }
         })(),
+        /* Время в полях инспектора. Раньше поля показывали голые секунды,
+           и одно и то же место песни читалось на дорожке как «3:10»,
+           а в поле как «190». Проверяем ровно эту беду: что показано
+           минутами и что набранное понимается в обоих видах —
+           и «1:27,44», и просто «87.44». Плохое (буквы, минус) обязано
+           отклоняться, не трогая разметку. */
+        времяВПолях: (() => {
+          const былиСтроки = state.lines;
+          const былБуфер = state.originalBuffer;
+          const былаДлина = audio.duration;
+          const панель = document.getElementById('step-3');
+          const былаАктивна = панель.classList.contains('active');
+          try {
+            const SR = 8000, dur = 240;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            state.originalBuffer = ctx.createBuffer(1, SR * dur, SR);
+            audio.duration = dur;
+            state.lines = [
+              { text: 'Первая строка', time: 100, end: null, ручнойКонец: false, сомнительная: false },
+              { text: 'Вторая строка', time: 190, end: null, ручнойКонец: false, сомнительная: false },
+            ];
+            панель.classList.add('active');
+            editor.peaks = null;
+            clearVoiceTrack();
+            clearHistory();
+            openEditor();
+            selectLine(1, {});
+
+            const поле = document.getElementById('sel-start');
+            const показано = поле.value;
+            const набрать = (v) => {
+              поле.value = v;
+              поле.dispatchEvent(new Event('change', { bubbles: true }));
+              return { поле: поле.value, время: +state.lines[1].time.toFixed(3),
+                плохо: поле.classList.contains('bad') };
+            };
+            const минутами = набрать('3:05,500');
+            const секундами = набрать('150.25');
+            const буквы = набрать('нет');
+            const минус = набрать('-1');
+            // В сетке строк и в часах — тот же вид, только сотые
+            const вСетке = document.querySelector('#edit-list .ts').textContent;
+            const часы = document.getElementById('edit-total').textContent;
+            return {
+              показано, минутами, секундами, буквы, минус, вСетке, часы,
+              вНорме: /^\\d+:\\d\\d[.,]\\d\\d\\d$/.test(показано)
+                && Math.abs(минутами.время - 185.5) < 1e-6 && !минутами.плохо
+                && Math.abs(секундами.время - 150.25) < 1e-6 && !секундами.плохо
+                // Плохое не применилось: время осталось от прошлой удачной правки
+                && буквы.плохо && Math.abs(буквы.время - 150.25) < 1e-6
+                && минус.плохо && Math.abs(минус.время - 150.25) < 1e-6
+                && /^\\d+:\\d\\d[.,]\\d\\d$/.test(вСетке)
+                && /^\\d+:\\d\\d[.,]\\d\\d$/.test(часы),
+            };
+          } finally {
+            state.lines = былиСтроки;
+            state.originalBuffer = былБуфер;
+            audio.duration = былаДлина;
+            editor.peaks = null;
+            editor.sel = -1;
+            editor.wordSel = -1;
+            editor.spansKey = '';
+            clearHistory();
+            if (!былаАктивна) панель.classList.remove('active');
+          }
+        })(),
+        /* Дописанные строки. Беда: человек вспоминает про забытый куплет,
+           дописывает его в текст — и на дорожке этих строк нет вовсе,
+           потому что времени у них нет. Проверяем, что место им находится
+           между размеченными соседями, что они помечены «на глазок»
+           и что строку, которую просто ещё не простучали, никто не трогает. */
+        новыеСтроки: (() => {
+          const былаДлина = audio.duration;
+          try {
+            audio.duration = 60;
+            const строки = [
+              { text: 'раз', time: 10, end: null },
+              { text: 'вставка А', time: null, end: null },
+              { text: 'вставка Б', time: null, end: null },
+              { text: 'два', time: 16, end: null },
+              { text: 'не простукана', time: null, end: null },
+              { text: 'три', time: 20, end: null },
+              { text: 'хвост', time: null, end: null },
+            ];
+            // Дописаны только вставки и хвост; «не простукана» — старая строка
+            расставитьНовыеСтроки(строки, new Set([1, 2, 6]));
+            const времена = строки.map((l) => (l.time == null ? null : +l.time.toFixed(2)));
+            return {
+              времена,
+              глазок: строки.map((l) => !!l.сомнительная),
+              вНорме: времена[1] === 12 && времена[2] === 14
+                // Промежуток 10…16 поделён на три равные части
+                && времена[4] === null   // не простуканную не выдумываем
+                && времена[6] > 20 && времена[6] <= 60
+                && строки[1].сомнительная && строки[2].сомнительная && строки[6].сомнительная
+                && !строки[0].сомнительная,
+            };
+          } finally {
+            audio.duration = былаДлина;
+          }
+        })(),
+        /* Черновик файлом и строка «что в памяти». Проверяем круг целиком:
+           собрали проект → потеряли работу → открыли черновик → всё на
+           месте. Файл берём не с диска — тем же JSON, каким он уходит
+           в download. */
+        черновик: (() => {
+          const былиСтроки = state.lines;
+          const былаДлина = audio.duration;
+          const былоИмя = state.fileName;
+          const былТекст = document.getElementById('lyrics-input').value;
+          const былПроект = localStorage.getItem('karaoke-project');
+          try {
+            audio.duration = 60;
+            state.fileName = 'проба.mp3';
+            state.lines = [
+              { text: 'раз', time: 5, end: null, ручнойКонец: false, сомнительная: false },
+              { text: 'два', time: 9, end: null, ручнойКонец: false, сомнительная: false },
+            ];
+            document.getElementById('lyrics-input').value = 'раз\\nдва';
+            state.origSpans = [{ start: 1, end: 2 }];
+            const проект = собратьПроект();
+
+            // Работа потеряна: текст другой, времён нет
+            state.lines = [{ text: 'чужое', time: null, end: null }];
+            document.getElementById('lyrics-input').value = 'чужое';
+            применитьЧерновик(проект);
+
+            const времена = state.lines.map((l) => l.time);
+            const п = сведенияОПамяти();
+            обновитьПамять();
+            const чип = document.getElementById('proj-chip');
+            return {
+              времена,
+              текст: document.getElementById('lyrics-input').value,
+              отрезков: отрезкиОригинала().length,
+              память: п,
+              чипВиден: !чип.classList.contains('hidden'),
+              чипИмя: document.getElementById('proj-name').textContent,
+              вНорме: времена.length === 2 && времена[0] === 5 && времена[1] === 9
+                && document.getElementById('lyrics-input').value === 'раз\\nдва'
+                && отрезкиОригинала().length === 1
+                && п.имя === 'проба.mp3' && п.всего === 2 && п.размечено === 2
+                && !чип.classList.contains('hidden'),
+            };
+          } finally {
+            state.lines = былиСтроки;
+            state.fileName = былоИмя;
+            audio.duration = былаДлина;
+            state.origSpans = [];
+            document.getElementById('lyrics-input').value = былТекст;
+            if (былПроект != null) localStorage.setItem('karaoke-project', былПроект);
+            else localStorage.removeItem('karaoke-project');
+            обновитьПамять();
+          }
+        })(),
+        /* «Слушать только это». Отдельной дорожки голоса у студии нет:
+           голос — это разница песни и минусовки, поэтому в режиме
+           «только голос» минусовка идёт в противофазе. Проверяем сами
+           усиления и то, что соло не переживает уход из редактора. */
+        соло: (() => {
+          const былоСоло = editor.solo;
+          /* Какие панели были открыты: goToStep ниже переключит шаг,
+             а следующие признаки меряют, что видно на экране, — оставить
+             открытым чужой шаг значит соврать им */
+          const былиАктивны = [...document.querySelectorAll('.step-panel.active')];
+          try {
+            const есть = (код) => усиленияСоло(код, true);
+            const моно = усиленияСоло('voice', false);
+            editor.solo = 'orig';
+            goToStep(4);
+            const послеУхода = editor.solo;
+            return {
+              оригинал: есть('orig'), минус: есть('inst'), голос: есть('voice'),
+              безМинусовки: моно, послеУхода,
+              вНорме: есть('orig').вокал === 1 && есть('orig').минусовка === 0
+                && есть('inst').вокал === 0 && есть('inst').минусовка === 1
+                && есть('voice').вокал === 1 && есть('voice').минусовка === -1
+                && моно === null && послеУхода === null,
+            };
+          } finally {
+            editor.solo = былоСоло;
+            document.querySelectorAll('.step-panel').forEach((p) => p.classList.remove('active'));
+            былиАктивны.forEach((p) => p.classList.add('active'));
+          }
+        })(),
         /* Режим простукивания. Проверяем не наличие кнопок, а само
            поведение: забирает ли режим экран себе и по каким правилам
            переписываются метки. Стучим не вызовами tapHit, а пробелом
@@ -879,7 +1064,11 @@ function createWindow() {
             разметка: document.getElementById('btn-asr-run').textContent,
             оценкаРазделения: document.getElementById('ai-eta').textContent,
             оценкаРазметки: document.getElementById('asr-eta').textContent,
-            строка: document.getElementById('tl-sel').textContent,
+            /* Подпись, собранная кодом: заголовки полос дорожки строит
+               renderTimelineHeads. Раньше здесь стояла подпись выбранной
+               строки, но она стала номером («№2» против «#2») — по ней
+               уже не видно, залип перевод или нет. */
+            дорожка: document.querySelector('#tl-heads .tl-head-row span').textContent,
             минусовка: document.getElementById('btn-inst-add').textContent,
             подсказкаОтмены: document.getElementById('tl-undo').title,
             поле: document.getElementById('lyrics-input').placeholder,
@@ -900,7 +1089,9 @@ function createWindow() {
               const p = n.parentElement;
               if (p.closest('script,style')) continue;
               // Текст песни и всё, что набрал человек, не переводится
-              if (p.closest('#edit-list, #lyrics-stage, #edit-stage, #tap-mode, #word-tap')) continue;
+              // Имя песни в чипе памяти и в заметке над зоной загрузки —
+              // тоже данные человека: это имя его файла
+              if (p.closest('#edit-list, #lyrics-stage, #edit-stage, #tap-mode, #word-tap, #proj-chip, #mem-note')) continue;
               if (КИР.test(t) && !ждёмКириллицу) {
                 счёт++;
                 следы.push((p.id || p.className || p.tagName) + ': ' + t.slice(0, 60));
