@@ -3044,10 +3044,18 @@ function lineWords(line, span) {
     const at = (t) => start + (t + delta - start) * k;
     return arr.map((w, i) => ({
       text: w.text,
+      /* Начало первого слова НЕ приравнивается к началу строки: если
+         человек отодвинул его, at(w.time) окажется правее start — и это
+         пауза перед первым словом, законная ровно так же, как пауза
+         между словами. Певец вступает не сразу. */
       start: at(w.time),
       end: i === arr.length - 1
-        // Последнее слово тянется, пока звучит голос: это и есть распев
-        ? Math.max(at(natEnd), end)
+        /* Последнее слово тянется, пока звучит голос: это и есть распев.
+           Но конец, выставленный ЧЕЛОВЕКОМ (w.ручнойКонец — тот же
+           признак, что line.ручнойКонец у строки), важнее автоматики:
+           тогда хвост остаётся за строкой, а слово кончается там,
+           где сказано. */
+        ? (w.ручнойКонец && w.end != null ? at(natEnd) : Math.max(at(natEnd), end))
         : at(w.end != null ? w.end : arr[i + 1].time),
     }));
   }
@@ -4452,7 +4460,12 @@ function snapshotTimings() {
     end: l.end != null ? l.end : null,
     hand: !!l.ручнойКонец,
     guess: !!l.сомнительная,
-    words: l.words ? l.words.map((w) => ({ text: w.text, time: w.time, end: w.end })) : null,
+    /* Ключ признака в снимке тот же, что и в самой метке: снимок
+       разворачивается обратно спредом ({...w}), и переименование
+       потеряло бы ручной конец последнего слова. */
+    words: l.words ? l.words.map((w) => ({
+      text: w.text, time: w.time, end: w.end, ручнойКонец: !!w.ручнойКонец,
+    })) : null,
   }));
   /* Отрезки оригинала едут в снимке отдельным свойством, а не лишним
      элементом списка: снимок повсюду перебирается как список строк,
@@ -4480,6 +4493,7 @@ function snapshotEqual(a, b) {
       if (xw.length !== yw.length) return false;
       for (let k = 0; k < xw.length; k++) {
         if (xw[k].time !== yw[k].time || xw[k].end !== yw[k].end) return false;
+        if (!!xw[k].ручнойКонец !== !!yw[k].ручнойКонец) return false;
       }
     }
   }
@@ -6536,6 +6550,18 @@ function timelineHit(x, y) {
           if (Math.abs(x - tToX(words[k].start)) <= EDGE_GRAB) return { kind: 'word-start', row: sp.row, k };
         }
       }
+      /* Крайние края строки: начало ПЕРВОГО слова и конец ПОСЛЕДНЕГО.
+         Раньше своей ручки у них не было — первое слово начиналось
+         вместе со строкой, конец последнего тянулся до конца строки,
+         и подвинуть их было нечем. Но пауза перед первым словом такая
+         же законная, как пауза между словами: певец вступает не сразу.
+         Проверяем ПОСЛЕ внутренних границ — те и раньше были главнее
+         тела слова, и порядок между ними менять незачем. */
+      if (words.length) {
+        const п = words.length - 1;
+        if (Math.abs(x - tToX(words[0].start)) <= EDGE_GRAB) return { kind: 'word-start', row: sp.row, k: 0 };
+        if (Math.abs(x - tToX(words[п].end)) <= EDGE_GRAB) return { kind: 'word-end', row: sp.row, k: п };
+      }
       for (let k = 0; k < words.length; k++) {
         const x0 = tToX(words[k].start);
         const x1 = tToX(words[k].end);
@@ -6634,6 +6660,12 @@ function точкиМагнита(что) {
   if (о.свои != null) {
     const своя = editorSpans().find((sp) => sp.row === о.свои);
     if (своя) {
+      /* И края самой строки: у начала первого слова и у конца
+         последнего соседнего СЛОВА нет вовсе, а вернуть их вплотную
+         к строке (закрыть паузу перед первым словом, отдать хвост
+         распева обратно) человеку надо ровно так же. */
+      добавить(своя.start, 'строка');
+      добавить(своя.end, 'строка');
       lineWords(своя.line, своя).forEach((w, i) => {
         if (i !== о.безНачала) добавить(w.start, 'слово');
         if (i !== о.безКонца) добавить(w.end, 'слово');
@@ -6840,10 +6872,12 @@ function updateWordInfo() {
   }
 
   const w = info ? info.words[info.k] : null;
-  // Своей ручки для перетаскивания нет у самого первого и самого
-  // последнего слова строки — их края держат сама строка, см. wordEdgeCore
-  const можноНачало = !!info && info.k > 0;
-  const можноКонец = !!info && info.k < info.words.length - 1;
+  /* Оба края правятся у любого слова, включая первое и последнее:
+     пауза перед первым словом и укороченный конец последнего —
+     такие же законные случаи, как пауза между словами
+     (см. nudgeWordEdge и wordEdgeOneCore). */
+  const можноНачало = !!info;
+  const можноКонец = !!info;
   const заполнить = (id, v, можно) => {
     const поле = $(id);
     if (!поле) return;
@@ -6903,6 +6937,12 @@ function wordEdgeOneCore(row, idx, край, t) {
     const hi = words[idx + 1] ? words[idx + 1].time : sp.end;
     const nt = Math.min(Math.max(t, lo), Math.max(lo, hi));
     w.end = nt;
+    /* Конец ПОСЛЕДНЕГО слова автоматика тянет до конца строки — это
+       распев (см. lineWords). Раз его подвинул человек, метку надо
+       уважать, поэтому помечаем её ручной. Подвёл обратно вплотную
+       к концу строки — снова стык, признак снимается, и хвост опять
+       достаётся слову сам собой. */
+    if (idx === words.length - 1) w.ручнойКонец = !стыкли(nt, sp.end);
     return nt;
   }
   const lo = words[idx - 1]
@@ -6922,23 +6962,38 @@ function wordEdgeOneCore(row, idx, край, t) {
    ставит концы слов по распознаванию), двигается ровно тот край,
    о котором поле: пауза остаётся паузой и правится по числу.
    Аргумент «край» говорит, чей это край: 'start' — слова idx,
-   'end' — слова idx−1. */
+   'end' — слова idx−1.
+
+   Крайние края строки — начало ПЕРВОГО слова (idx = 0) и конец
+   ПОСЛЕДНЕГО (idx = число слов) — соседа не имеют: сваривать не с чем,
+   там всегда один край. Раньше их просто не двигали вовсе. */
 function nudgeWordEdge(row, idx, delta, край) {
   const sp = spanOfRow(row);
   if (!sp) return null;
   const words = ensureWords(sp.line, sp);
-  if (!words[idx]) return null;
   const пред = words[idx - 1];
-  const сварены = стыкли(пред ? пред.end : null, words[idx].time);
+  const тек = words[idx];
+  if (!пред && !тек) return null;
+  const сварены = !!пред && !!тек && стыкли(пред.end, тек.time);
   let nt;
-  if (сварены || !край) {
-    nt = wordEdgeCore(row, idx, words[idx].time + delta);
+  if (сварены || (!край && пред && тек)) {
+    nt = wordEdgeCore(row, idx, тек.time + delta);
   } else if (край === 'end') {
     if (!пред) return null;
-    const было = пред.end != null ? пред.end : words[idx].time;
+    /* У последнего слова показанный конец — не та же величина, что
+       записанная метка: пока конец не выставлен руками, автоматика
+       тянет его до конца строки (распев). Двигаемся от того, что
+       ВИДНО, иначе первое же нажатие клавиши прыгнуло бы на всю
+       длину хвоста. */
+    const показан = !тек ? lineWords(sp.line, sp)[idx - 1].end : null;
+    const было = показан != null ? показан
+      : (пред.end != null ? пред.end : (тек ? тек.time : пред.time + MIN_SPAN));
     nt = wordEdgeOneCore(row, idx - 1, 'end', было + delta);
+  } else if (край === 'start') {
+    if (!тек) return null;
+    nt = wordEdgeOneCore(row, idx, 'start', тек.time + delta);
   } else {
-    nt = wordEdgeOneCore(row, idx, 'start', words[idx].time + delta);
+    return null;
   }
   refreshTimes();
   saveProject();
@@ -6955,13 +7010,12 @@ function применитьПолеСлова(какой) {
   const info = selectedWord();
   if (!info) { updateWordInfo(); return; }
   const idx = какой === 'start' ? info.k : info.k + 1;
-  const можно = idx >= 1 && idx < info.words.length;
   const v = читатьВремя(поле.value);
   if (v == null || v < 0) { поле.classList.add('bad'); return; }
   поле.classList.remove('bad');
   const было = какой === 'start' ? info.words[info.k].start : info.words[info.k].end;
   delete поле.dataset.набирают;
-  if (можно && Math.abs(v - было) >= 0.0005) {
+  if (Math.abs(v - было) >= 0.0005) {
     pushHistory();
     nudgeWordEdge(info.row, idx, v - было, какой);
     dropEmptyHistory();
@@ -7958,9 +8012,8 @@ function nudgeSelectedWord(what, delta) {
   const info = selectedWord();
   if (!info) return;
   const idx = what === 'start' ? info.k : info.k + 1;
-  // Своей ручки нет — как и у мыши (первое и последнее слово строки
-  // держит сама строка), тогда клавиша молча ничего не делает
-  if (idx < 1 || idx >= info.words.length) return;
+  // Края первого и последнего слова двигаются теми же клавишами, что
+  // и все прочие: переучиваться не приходится (см. nudgeWordEdge)
   pushHistory();
   nudgeWordEdge(info.row, idx, delta, what);
   dropEmptyHistory();
