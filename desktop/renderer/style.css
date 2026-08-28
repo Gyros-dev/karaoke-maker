@@ -996,6 +996,18 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   background: var(--sel-ring-bg);
   box-shadow: inset 2px 0 0 var(--sel-ring);
 }
+/* Строка попала в выделенный диапазон: его двигают и растягивают целиком.
+   Помечена справа и сиреневым — тем же цветом, что полоса выделения на
+   линейке дорожки, — чтобы не спорить с выбранной строкой: у той метка
+   слева и цветом темы. Так обе пометки читаются на одной строке сразу. */
+.edit-row.in-range {
+  background: rgba(167, 139, 250, 0.12);
+  box-shadow: inset -3px 0 0 rgba(167, 139, 250, 0.85);
+}
+.edit-row.in-range.selected-row {
+  background: var(--sel-ring-bg);
+  box-shadow: inset 2px 0 0 var(--sel-ring), inset -3px 0 0 rgba(167, 139, 250, 0.85);
+}
 .edit-row .ts, .edit-row .end-ts, .edit-row .dur-ts, .edit-row .num {
   font-family: var(--ed-num);
   font-variant-numeric: tabular-nums;

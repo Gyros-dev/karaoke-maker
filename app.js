@@ -3744,6 +3744,10 @@ const editor = {
   sel: -1,       // выбранная строка (номер в state.lines), -1 — ничего
   wordSel: -1,   // выбранное слово внутри неё (номер в массиве слов), -1 — ничего
   origSel: -1,   // выбранный отрезок оригинала (номер в state.origSpans)
+  /* Выделенный кусок разметки: { from, to } — номера строк в state.lines,
+     включительно. Порядок концов не важен: from — якорь (с него начали),
+     to — край, который расширяют; читаются через строкиДиапазона. */
+  range: null,
   loop: false,   // играть выбранную строку (или слово) по кругу
   loopScope: 'line', // что именно крутит кольцо: 'line' или 'word'
   snap: true,     // магнит: притягивать границы к осмысленным точкам
@@ -3806,6 +3810,222 @@ function editorSpans() {
 // Раскладка одной строки по её номеру в state.lines (или null)
 function spanOfRow(row) {
   return editorSpans().find((s) => s.row === row) || null;
+}
+
+/* ============================================================
+   Выделение диапазона
+
+   Беда, которую это лечит, ровно две:
+   1) целый куплет уехал на 0,4 с — кнопки сдвига двигали ВСЮ разметку,
+      то есть заодно портили верно размеченный остаток песни;
+   2) разметка «плывёт»: первая строка куплета стоит верно, последняя
+      опаздывает на секунду. Такое лечилось только руками, строка за
+      строкой, — а лечится одним пропорциональным растяжением.
+
+   Выделяют протяжкой по линейке дорожки (как «цикл» в монтажных
+   программах) или Shift+щелчком в сетке строк. Границы выделения —
+   МЕТКИ первой и последней строки, а не размах их блоков: ручка стоит
+   ровно на метке, поэтому край встаёт туда, куда его привели, без
+   пересчёта через lineSpan (конец блока там зависит от соседей и
+   на растяжении «резинил» бы).
+
+   Размах вместе с ручными концами и метками слов (мин/макс) нужен
+   отдельно: им выделение упирается в соседние строки.
+   ============================================================ */
+
+/* Номера выделенных строк — только тех, у которых есть время */
+function строкиДиапазона() {
+  const r = editor.range;
+  if (!r) return [];
+  const от = Math.min(r.from, r.to);
+  const до = Math.max(r.from, r.to);
+  const rows = [];
+  for (let i = Math.max(0, от); i <= Math.min(до, state.lines.length - 1); i++) {
+    if (state.lines[i] && state.lines[i].time != null) rows.push(i);
+  }
+  return rows;
+}
+
+/* Докуда строка простирается вправо и влево вместе со своими метками:
+   ручной конец и слова заданы абсолютным временем и едут вместе с ней */
+function правыйКрайСтроки(l) {
+  let m = l.time;
+  if (l.ручнойКонец && l.end != null && l.end > m) m = l.end;
+  if (l.words) {
+    for (const w of l.words) {
+      const e = w.end != null ? w.end : w.time;
+      if (e > m) m = e;
+    }
+  }
+  return m;
+}
+
+function левыйКрайСтроки(l) {
+  let m = l.time;
+  if (l.words) for (const w of l.words) { if (w.time < m) m = w.time; }
+  return m;
+}
+
+function границыДиапазона() {
+  const rows = строкиДиапазона();
+  if (!rows.length) return null;
+  const a = state.lines[rows[0]].time;
+  const b = state.lines[rows[rows.length - 1]].time;
+  let мин = a;
+  let макс = b;
+  for (const row of rows) {
+    const l = state.lines[row];
+    const лев = левыйКрайСтроки(l);
+    const прав = правыйКрайСтроки(l);
+    if (лев < мин) мин = лев;
+    if (прав > макс) макс = прав;
+  }
+  return { rows, a, b, мин, макс };
+}
+
+/* Куда выделению можно двигаться: упирается в конец предыдущей строки
+   и в начало следующей — тех, что остались за его краями, — и в саму
+   песню. Соседей внутри выделения здесь нет: они едут вместе с ним. */
+function пределыДиапазона(rows) {
+  let пред = null;
+  for (let i = rows[0] - 1; i >= 0; i--) {
+    if (state.lines[i] && state.lines[i].time != null) { пред = state.lines[i]; break; }
+  }
+  let след = null;
+  for (let i = rows[rows.length - 1] + 1; i < state.lines.length; i++) {
+    if (state.lines[i] && state.lines[i].time != null) { след = state.lines[i]; break; }
+  }
+  const конец = audio.duration || Infinity;
+  return {
+    lo: Math.max(0, пред ? правыйКрайСтроки(пред) + 0.05 : 0),
+    hi: Math.min(конец, след ? левыйКрайСтроки(след) - 0.05 : конец),
+  };
+}
+
+/* Снимок времён выделения. Растяжение считается ОТ НЕГО, а не от
+   нынешних значений: иначе за одно перетаскивание множители копились
+   бы друг на друге и разметка уезжала бы по экспоненте. */
+function снимокДиапазона(rows) {
+  return rows.map((row) => {
+    const l = state.lines[row];
+    return {
+      row,
+      time: l.time,
+      end: l.end,
+      ручной: !!l.ручнойКонец,
+      words: l.words ? l.words.map((w) => ({ time: w.time, end: w.end })) : null,
+    };
+  });
+}
+
+/* Разложить снимок обратно: новое = якорь + (старое − якорь) × k + сдвиг.
+   Чистый сдвиг — тот же пересчёт при якорь = 0 и k = 1.
+   Едут не только начала строк, но и ручные концы, и метки слов: иначе
+   слова уехали бы от своих строк. */
+function разложитьДиапазон(снимок, якорь, k, сдвиг) {
+  const f = (t) => якорь + (t - якорь) * k + сдвиг;
+  снимок.forEach((s) => {
+    const l = state.lines[s.row];
+    if (!l) return;
+    l.time = f(s.time);
+    if (s.ручной && s.end != null) l.end = f(s.end);
+    if (s.words && l.words) {
+      l.words = s.words.map((w, i) => ({
+        ...(l.words[i] || {}),
+        time: f(w.time),
+        end: w.end != null ? f(w.end) : w.end,
+      }));
+    }
+  });
+  editor.spansKey = '';
+}
+
+/* Насколько выделение вправе съехать целиком: упирается краями в соседей */
+function зажатьСдвигДиапазона(гр, пред, сдвиг) {
+  const низ = пред.lo - гр.мин;
+  const верх = пред.hi - гр.макс;
+  if (низ > верх) return 0;                 // места нет вовсе
+  return Math.min(Math.max(сдвиг, низ), верх);
+}
+
+/* Насколько выделение вправе растянуться. k > 0 всегда: при нуле
+   и минусе строки схлопнулись бы в точку или перевернулись порядком.
+   Снизу держим зазор между метками, сверху — соседние строки. */
+function зажатьРастяжение(k, якорь, гр, пред) {
+  const пролёт = Math.abs(гр.b - гр.a);
+  const низ = пролёт > 0
+    ? Math.max(0.02, (0.05 * Math.max(1, гр.rows.length - 1)) / пролёт) : 0.02;
+  let верх = Infinity;
+  /* Точка правее якоря растёт вместе с k, левее — уходит влево;
+     обе обязаны остаться в пределах [lo, hi] */
+  if (гр.макс > якорь + 1e-9) верх = Math.min(верх, (пред.hi - якорь) / (гр.макс - якорь));
+  if (гр.мин < якорь - 1e-9) верх = Math.min(верх, (пред.lo - якорь) / (гр.мин - якорь));
+  if (!(верх > низ)) верх = низ;
+  return Math.min(Math.max(k, низ), верх);
+}
+
+/* Сдвиг только выделенного — им живут и кнопки −1/−0,1/+0,1/+1,
+   пока выделение есть */
+function сдвинутьДиапазон(delta) {
+  const гр = границыДиапазона();
+  if (!гр) return;
+  const d = зажатьСдвигДиапазона(гр, пределыДиапазона(гр.rows), delta);
+  if (!d) return;
+  разложитьДиапазон(снимокДиапазона(гр.rows), 0, 1, d);
+  refreshTimes();
+  saveProject();
+}
+
+/* Пометить выделенные строки в сетке. Список не пересобираем: там правят
+   текст, и пересборка узлов выбила бы курсор из поля (та же причина,
+   что и у refreshTimes). */
+function отметитьДиапазон() {
+  const набор = new Set(строкиДиапазона());
+  document.querySelectorAll('#edit-list .edit-row').forEach((el) => {
+    el.classList.toggle('in-range', набор.has(+el.dataset.row));
+  });
+}
+
+function установитьДиапазон(from, to) {
+  editor.range = { from, to };
+  if (!строкиДиапазона().length) editor.range = null;
+  отметитьДиапазон();
+  обновитьПодписиРедактора();
+  drawTimeline();
+}
+
+function снятьДиапазон() {
+  if (!editor.range) return;
+  editor.range = null;
+  отметитьДиапазон();
+  обновитьПодписиРедактора();
+  drawTimeline();
+}
+
+/* Строк стало меньше или их пересобрали заново — выделение уже не о них */
+function проверитьДиапазон() {
+  if (!editor.range) return;
+  const r = editor.range;
+  if (r.from >= state.lines.length || r.to >= state.lines.length
+    || r.from < 0 || r.to < 0 || !строкиДиапазона().length) editor.range = null;
+}
+
+/* Расширить выделение с клавиатуры (Shift+↑/↓). Выделения ещё нет —
+   начинаем с выбранной строки: она и становится якорем. */
+function расширитьДиапазон(delta) {
+  const rows = state.lines
+    .map((l, i) => (l.time != null ? i : -1))
+    .filter((i) => i >= 0);
+  if (!rows.length) return;
+  if (!editor.range) {
+    if (editor.sel < 0) return;
+    editor.range = { from: editor.sel, to: editor.sel };
+  }
+  const at = rows.indexOf(editor.range.to);
+  const next = at < 0 ? rows[0] : rows[Math.min(rows.length - 1, Math.max(0, at + delta))];
+  установитьДиапазон(editor.range.from, next);
+  const sp = spanOfRow(next);
+  if (sp) showTime(sp);
 }
 
 /* ============================================================
@@ -3941,6 +4161,7 @@ function applySnapshot(snap) {
   }
   state.origSpans = нормОтрезки(snap.отрезки || [], audio.duration);
   if (editor.origSel >= state.origSpans.length) editor.origSel = -1;
+  проверитьДиапазон();
   editor.spansKey = '';
   refreshTimes();
   renderEditList();
@@ -3995,6 +4216,7 @@ function openEditor() {
   if (!editor.peaks) computePeaks();
   // Разметку пересобрали заново — прежние снимки уже не о тех строках
   if (editor.histLines !== state.lines.length) clearHistory();
+  проверитьДиапазон();   // и выделение тоже могло стать не о тех строках
   editor.spansKey = '';
   if (editor.sel >= state.lines.length || (editor.sel >= 0 && state.lines[editor.sel].time == null)) {
     editor.sel = -1;
@@ -4037,11 +4259,15 @@ function openEditor() {
 function renderEditList() {
   const ul = $('edit-list');
   const synced = syncedLines();
+  const вДиапазоне = new Set(строкиДиапазона());
   ul.innerHTML = '';
   state.lines.forEach((line, i) => {
     const li = document.createElement('li');
     li.className = 'edit-row';
     if (i === editor.sel) li.classList.add('selected-row');
+    // Строка попала в выделенный диапазон — двигается и растягивается
+    // вместе с ним; в сетке это тихая пометка, стиль в style.css
+    if (вДиапазоне.has(i)) li.classList.add('in-range');
     li.dataset.row = i;
 
     const num = document.createElement('span');
@@ -4101,11 +4327,27 @@ function renderEditList() {
   });
 }
 
-/* Любой клик по строке делает её выбранной: с ней работают клавиши,
-   кольцо, полоса слов на дорожке и панель выбранной строки */
-$('edit-list').addEventListener('click', (e) => {
+/* Shift+щелчок — выделить диапазон от выбранной строки до этой.
+   Ловим на mousedown и гасим событие: иначе Shift+щелчок растянул бы
+   выделение ТЕКСТА в поле строки, и на экране спорили бы два выделения. */
+$('edit-list').addEventListener('mousedown', (e) => {
+  if (!e.shiftKey || editor.sel < 0) return;
   const row = e.target.closest('.edit-row');
-  if (row && +row.dataset.row !== editor.sel) {
+  if (!row) return;
+  e.preventDefault();
+  установитьДиапазон(editor.sel, +row.dataset.row);
+});
+
+/* Любой клик по строке делает её выбранной: с ней работают клавиши,
+   кольцо, полоса слов на дорожке и панель выбранной строки.
+   Обычный щелчок заодно снимает выделение диапазона — как и щелчок
+   по линейке дорожки. */
+$('edit-list').addEventListener('click', (e) => {
+  if (e.shiftKey) return;   // это была правка выделения, см. mousedown выше
+  const row = e.target.closest('.edit-row');
+  if (!row) return;
+  снятьДиапазон();
+  if (+row.dataset.row !== editor.sel) {
     selectLine(+row.dataset.row, { scrollTimeline: true });
   }
 });
@@ -4284,6 +4526,7 @@ function deleteLine(row) {
   $('lyrics-input').value = state.lines.map((l) => l.text).join('\n');
   editor.spansKey = '';
   editor.sel = Math.min(row, state.lines.length - 1);
+  editor.range = null;   // строк стало меньше — выделение уже не о них
   renderEditList();
   refreshTimes();
   updateWordExportBtn();
@@ -4293,12 +4536,17 @@ function deleteLine(row) {
   drawTimeline();
 }
 
-/* Сдвиг всей разметки разом — раньше жил на шаге «Синхронизация» */
+/* Сдвиг разметки разом — раньше жил на шаге «Синхронизация».
+   Есть выделение — двигаем только его: беда, ради которой это сделано,
+   ровно в том и состоит, что уехал один куплет, а остальная песня
+   размечена верно и трогать её нельзя. Подсказку у кнопок ставит
+   обновитьПодписиРедактора — она же меняет её вслед за выделением. */
 $('shift-all').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-shift]');
   if (!btn) return;
   pushHistory();
-  shiftAllLines(+btn.dataset.shift);
+  if (editor.range) сдвинутьДиапазон(+btn.dataset.shift);
+  else shiftAllLines(+btn.dataset.shift);
   dropEmptyHistory();
   renderEditList();
   editor.stageKey = '';
@@ -5125,11 +5373,24 @@ function drawWaveLane(g, lane, W) {
   }
 }
 
+/* Цвет выделенного диапазона. Сиреневый выбран потому, что все
+   остальные породы на дорожке уже заняты: розовый — оригинал,
+   лаймовый — строки, жёлтый — слова, голубой — голос. */
+const ЦВЕТ_ДИАПАЗОНА = {
+  тень: 'rgba(167, 139, 250, 0.10)',   // заливка на всю высоту дорожки
+  полоса: 'rgba(167, 139, 250, 0.34)', // полоса на линейке
+  ручка: '#c4b5fd',                    // ручки по её краям
+  блок: 'rgba(167, 139, 250, 0.20)',   // подсветка выделенного блока строки
+  контур: '#a78bfa',
+};
+
 /* ---------- Блоки строк ---------- */
 function drawLineBlocks(g, lane, W) {
   g.font = '10px sans-serif';
   g.textAlign = 'left';
   g.textBaseline = 'middle';
+  // Один раз на кадр: строк бывает под сотню, а перебор идёт каждый кадр
+  const вДиапазоне = new Set(строкиДиапазона());
   for (const sp of editorSpans()) {
     const x0 = tToX(sp.start);
     const x1 = tToX(sp.end);
@@ -5144,12 +5405,18 @@ function drawLineBlocks(g, lane, W) {
     g.fillStyle = sel ? 'rgba(132, 204, 22, 0.34)'
       : guess ? 'rgba(245, 158, 11, 0.22)' : 'rgba(16, 185, 129, 0.24)';
     g.fill();
+    /* Блок попал в выделенный диапазон — лёгкая сиреневая подсветка
+       поверх своего цвета: видно, что он поедет вместе с остальными,
+       но своя порода блока (обычная, «на глазок», выбранная) читается */
+    const вДиап = вДиапазоне.has(sp.row);
+    if (вДиап) { g.fillStyle = ЦВЕТ_ДИАПАЗОНА.блок; g.fill(); }
     /* Выделенный блок обведён ярко и со свечением — самый светлый
        контур на дорожке, а не мягкая подсветка, как раньше. Цвет
        берём из темы (edTheme.selRing): жёлтый в нейтральной,
        зелёный в фирменной — это её третье из четырёх мест акцента. */
     g.lineWidth = sel ? 2 : 1;
-    g.strokeStyle = sel ? edTheme.selRing : guess ? '#f59e0b' : '#10b981';
+    g.strokeStyle = sel ? edTheme.selRing
+      : вДиап ? ЦВЕТ_ДИАПАЗОНА.контур : guess ? '#f59e0b' : '#10b981';
     g.setLineDash(guess ? [4, 3] : []);
     if (sel) { g.shadowColor = edTheme.selGlow; g.shadowBlur = 6; }
     g.stroke();
@@ -5273,6 +5540,17 @@ function drawTimeline() {
     }
   }
 
+  /* Выделенный диапазон: лёгкая заливка на всю высоту — сразу видно,
+     какой кусок песни сейчас двигают или растягивают. Полоса с ручками
+     рисуется ниже, вместе с линейкой, чтобы цифры времени легли поверх. */
+  const диап = границыДиапазона();
+  if (диап) {
+    const x0 = tToX(диап.a);
+    const x1 = tToX(диап.b);
+    g.fillStyle = ЦВЕТ_ДИАПАЗОНА.тень;
+    g.fillRect(x0, L.ruler.y, Math.max(2, x1 - x0), H - L.ruler.y);
+  }
+
   drawLineBlocks(g, L.lines, W);
   drawWordBlocks(g, L.words, W);
 
@@ -5287,6 +5565,19 @@ function drawTimeline() {
   // Высота полосы, а не сама полоса: раньше здесь стоял объект L.ruler,
   // высота выходила NaN — и линейка рисовалась поверх старого кадра
   g.fillRect(0, 0, W, L.ruler.h);
+  /* Полоса выделения с двумя ручками — как «цикл» в монтажной программе.
+     Ручки стоят ровно на метках первой и последней выделенной строки:
+     край, за который тянут, встаёт туда, куда его привели. */
+  if (диап) {
+    const x0 = tToX(диап.a);
+    const x1 = tToX(диап.b);
+    const w = Math.max(2, x1 - x0);
+    g.fillStyle = ЦВЕТ_ДИАПАЗОНА.полоса;
+    g.fillRect(x0, L.ruler.y, w, L.ruler.h);
+    g.fillStyle = ЦВЕТ_ДИАПАЗОНА.ручка;
+    g.fillRect(x0, L.ruler.y, 3, L.ruler.h);
+    g.fillRect(x1 - 3, L.ruler.y, 3, L.ruler.h);
+  }
   g.fillStyle = '#9a9ab0';
   // Моноширинный: время бежит вперёд, и цифры не должны подрагивать
   // от смены ширины символов на каждом кадре (см. пункт про тысячные)
@@ -5351,6 +5642,21 @@ function drawTimeline() {
    ============================================================ */
 function timelineHit(x, y) {
   const L = timelineLanes();
+
+  /* Линейка: полоса выделенного диапазона с двумя ручками. Пустое место
+     линейки — протяжка нового выделения; протяжки не вышло, значит это
+     был обычный щелчок, и он, как и раньше, перематывает (см. endRangeDrag) */
+  if (y >= L.ruler.y && y < L.ruler.y + L.ruler.h) {
+    const гр = границыДиапазона();
+    if (гр) {
+      const x0 = tToX(гр.a);
+      const x1 = tToX(гр.b);
+      if (Math.abs(x - x0) <= EDGE_GRAB) return { kind: 'range-start' };
+      if (Math.abs(x - x1) <= EDGE_GRAB) return { kind: 'range-end' };
+      if (x > x0 && x < x1) return { kind: 'range-move' };
+    }
+    return { kind: 'range-new' };
+  }
 
   // Отрезки оригинала
   if (y >= L.orig.y && y < L.orig.y + L.orig.h) {
@@ -5464,6 +5770,9 @@ function точкиМагнита(что) {
   };
   for (const sp of editorSpans()) {
     if (sp.row === о.кромеСтроки) continue;
+    // Строки выделенного диапазона едут вместе с ним — сами себе целью
+    // быть не могут, иначе край липнул бы к тому, что тащат
+    if (о.кромеСтрок && о.кромеСтрок.has(sp.row)) continue;
     добавить(sp.start, 'строка');
     добавить(sp.end, 'строка');
     /* Слова соседних строк — цели не хуже самих строк: вступление
@@ -5990,6 +6299,101 @@ function endOrigDrag() {
   drawTimeline();
 }
 
+/* ---------- Перетаскивание выделенного диапазона ----------
+   Середина полосы двигает выделение целиком, край — растягивает его
+   пропорционально: противоположный край стоит якорем, все времена
+   внутри пересчитываются «новое = якорь + (старое − якорь) × k».
+   Считаем от снимка, снятого при нажатии, а не от нынешних значений:
+   иначе множители копились бы за одно перетаскивание. */
+function beginRangeDrag(hit, t) {
+  if (hit.kind === 'range-new') {
+    /* Снимок в историю здесь не кладём: выделение — это не правка
+       разметки, отменять в нём нечего */
+    снятьДиапазон();
+    editor.drag = { kind: 'range-new', grabT: t, moved: false };
+    return;
+  }
+  const гр = границыДиапазона();
+  if (!гр) return;
+  pushHistory();
+  editor.drag = {
+    kind: hit.kind,
+    grabT: t,
+    moved: false,
+    гр,
+    пред: пределыДиапазона(гр.rows),
+    было: снимокДиапазона(гр.rows),
+    кроме: new Set(гр.rows),
+  };
+}
+
+function applyRangeDrag(t) {
+  const d = editor.drag;
+  d.moved = Math.abs(t - d.grabT) * editor.pxPerSec >= 4;
+
+  if (d.kind === 'range-new') {
+    if (!d.moved) return;
+    /* В выделение попадают строки, НАЧАЛО которых внутри протянутого
+       времени: так же отбирают клипы рамкой в монтажных программах */
+    const от = Math.min(d.grabT, t);
+    const до = Math.max(d.grabT, t);
+    const попали = [];
+    state.lines.forEach((l, i) => {
+      if (l.time != null && l.time >= от && l.time <= до) попали.push(i);
+    });
+    editor.range = попали.length ? { from: попали[0], to: попали[попали.length - 1] } : null;
+    отметитьДиапазон();
+    editor.dragTip = t;
+    drawTimeline();
+    return;
+  }
+
+  const { гр, пред, было } = d;
+  if (d.kind === 'range-move') {
+    // Липнет ведущая граница — левая, как у блока строки (line-move)
+    const нов = примагнитить(гр.a + (t - d.grabT), { кромеСтрок: d.кроме });
+    const сдвиг = зажатьСдвигДиапазона(гр, пред, нов - гр.a);
+    разложитьДиапазон(было, 0, 1, сдвиг);
+    editor.dragTip = гр.a + сдвиг;
+  } else {
+    const якорь = d.kind === 'range-end' ? гр.a : гр.b;
+    const пролёт = (d.kind === 'range-end' ? гр.b : гр.a) - якорь;
+    // Одна строка в выделении — растягивать нечего, только двигать
+    if (Math.abs(пролёт) < 0.05) return;
+    // Магнит — тому краю, который тащат
+    const цель = примагнитить(t, { кромеСтрок: d.кроме });
+    const k = зажатьРастяжение((цель - якорь) / пролёт, якорь, гр, пред);
+    разложитьДиапазон(было, якорь, k, 0);
+    editor.dragTip = якорь + пролёт * k;
+  }
+  refreshTimes();
+  editor.stageKey = '';
+  drawTimeline();
+}
+
+function endRangeDrag() {
+  const d = editor.drag;
+  editor.drag = null;
+  editor.snapped = null;
+  hideDragTip();
+  if (d.kind === 'range-new') {
+    // Щелчок без протяжки — по-прежнему перемотка, а выделение снято
+    if (!d.moved) seekTo(d.grabT);
+    обновитьПодписиРедактора();
+    drawTimeline();
+    return;
+  }
+  if (!dropEmptyHistory()) {
+    saveProject();
+    renderEditList();
+    updateSelInfo();
+    editor.stageKey = '';
+    renderEditStage();
+  }
+  обновитьПодписиРедактора();
+  drawTimeline();
+}
+
 function beginDrag(hit, t) {
   const sp = spanOfRow(hit.row);
   if (!sp) return;
@@ -6157,7 +6561,13 @@ tl.addEventListener('pointerdown', (e) => {
     удалитьОтрезок(hit.i);
     return;
   }
-  if (hit && hit.kind.startsWith('orig-')) {
+  if (hit && hit.kind.startsWith('range-')) {
+    // Линейка: выделение диапазона. Выбор слова снимается, как и при
+    // всяком щелчке мимо полосы слов
+    if (editor.wordSel !== -1) { editor.wordSel = -1; updateWordInfo(); }
+    beginRangeDrag(hit, xToT(x));
+    try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
+  } else if (hit && hit.kind.startsWith('orig-')) {
     if (editor.wordSel !== -1) { editor.wordSel = -1; updateWordInfo(); }
     beginOrigDrag(hit, xToT(x));
     try { tl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
@@ -6196,7 +6606,8 @@ tl.addEventListener('pointermove', (e) => {
      перетаскивания — как в монтажных программах */
   editor.одинКрай = !!(e.metaKey || e.ctrlKey);
   if (editor.drag) {
-    if (editor.drag.kind.startsWith('orig-')) applyOrigDrag(xToT(x));
+    if (editor.drag.kind.startsWith('range-')) applyRangeDrag(xToT(x));
+    else if (editor.drag.kind.startsWith('orig-')) applyOrigDrag(xToT(x));
     else applyDrag(xToT(x));
     showDragTip(x, editor.dragTip);
     return;
@@ -6204,15 +6615,17 @@ tl.addEventListener('pointermove', (e) => {
   const hit = timelineHit(x, y);
   tl.style.cursor = !hit ? 'pointer'
     : hit.kind === 'orig-del' ? 'pointer'
-      : hit.kind === 'orig-new' ? 'crosshair'
+      : hit.kind === 'orig-new' || hit.kind === 'range-new' ? 'crosshair'
         : hit.kind === 'line-start' || hit.kind === 'line-end'
           || hit.kind === 'word-edge' || hit.kind === 'word-start' || hit.kind === 'word-end'
           || hit.kind === 'orig-start' || hit.kind === 'orig-end'
+          || hit.kind === 'range-start' || hit.kind === 'range-end'
           ? 'ew-resize' : 'grab';
 });
 
 function endDrag() {
   if (!editor.drag) return;
+  if (editor.drag.kind.startsWith('range-')) { endRangeDrag(); return; }
   if (editor.drag.kind.startsWith('orig-')) { endOrigDrag(); return; }
   editor.drag = null;
   editor.snapped = null;
@@ -6487,8 +6900,16 @@ document.addEventListener('keydown', (e) => {
   if (cmd || typing) return;
 
   switch (code) {
-    case 'ArrowUp': e.preventDefault(); moveSelection(-1); break;
-    case 'ArrowDown': e.preventDefault(); moveSelection(1); break;
+    // Shift расширяет выделение диапазона, без него — просто переход
+    // на соседнюю строку. Так же в списках везде, где выделяют куском.
+    case 'ArrowUp':
+      e.preventDefault();
+      if (e.shiftKey) расширитьДиапазон(-1); else { снятьДиапазон(); moveSelection(-1); }
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      if (e.shiftKey) расширитьДиапазон(1); else { снятьДиапазон(); moveSelection(1); }
+      break;
     case 'ArrowLeft': e.preventDefault(); nudgeSelected('start', -editorStep(e)); break;
     case 'ArrowRight': e.preventDefault(); nudgeSelected('start', editorStep(e)); break;
     case 'BracketLeft': e.preventDefault(); nudgeSelected('end', -editorStep(e)); break;
@@ -6514,6 +6935,7 @@ document.addEventListener('keydown', (e) => {
       break;
     case 'Escape':
       if (editor.loop) { e.preventDefault(); setLoop(false); }
+      else if (editor.range) { e.preventDefault(); снятьДиапазон(); }
       else if (editor.wordSel >= 0) { e.preventDefault(); editor.wordSel = -1; updateWordInfo(); drawTimeline(); }
       else if (editor.origSel >= 0) { editor.origSel = -1; drawTimeline(); }
       break;
@@ -7403,10 +7825,13 @@ window.THEME = {
 function обновитьПодписиРедактора() {
   /* Подпись «сдвинуть всё» с панели ушла — вместо неё подсказка у
      каждой кнопки. Число в ней читается по-разному на двух языках
-     (−0,1 против −0.1), поэтому собирается кодом, а не разметкой. */
+     (−0,1 против −0.1), поэтому собирается кодом, а не разметкой.
+     Пока есть выделение, кнопки двигают только его — и подсказка
+     говорит об этом, иначе она бы врала. */
+  const ключСдвига = editor.range ? 'ред.сдвинуть.диапазон' : 'ред.сдвинуть.подсказка';
   document.querySelectorAll('#shift-all [data-shift]').forEach((кнопка) => {
     const v = кнопка.dataset.shift.replace('.', десРазделитель()).replace('-', '−');
-    кнопка.title = t('ред.сдвинуть.подсказка', { v });
+    кнопка.title = t(ключСдвига, { v });
     кнопка.setAttribute('aria-label', кнопка.title);
   });
   const пер = $('sel-vocal');
