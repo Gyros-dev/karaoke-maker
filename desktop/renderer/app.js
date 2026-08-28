@@ -208,6 +208,40 @@ function собратьМикс(ctx) {
    Соло живёт только в редакторе и только в живом плеере: ни в минусовку
    .wav, ни в записанное видео оно не попадает — там смесь считается
    через усиленияМикса. */
+/* ---------- Уровни дорожек в наушниках ----------
+   По ползунку у полосы оригинала и у полосы минусовки. Это НЕ громкость
+   караоке (та живёт на четвёртом шаге и уезжает в видео) — это то, что
+   слышно, пока размечаешь: голос погромче, музыку потише. Работает
+   только в редакторе и только в живом плеере.
+
+   Своей дорожки у голоса нет: он берётся вычитанием минусовки из песни
+   (тем же приёмом, что и «слушать только голос», и само приглушение
+   вокала). Поэтому «оригинал O, минусовка M» — это песня с усилением O
+   и минусовка с усилением M−O:
+
+     O = 1, M = 1 — песня ровно как записана (умолчание редактора);
+     O = 0, M = 1 — чистая минусовка (снятая галка «слышу оригинал»);
+     O = 1, M = 0,4 — голос тот же, музыка тише: так разбирают слова.
+
+   Галка «слышу оригинал» — те же уровни двумя пресетами: она ставит
+   O в 1 или в 0, а ползунок, уведённый ниже единицы, её снимает.
+   Иначе вышло бы два органа управления об одном и том же, и один
+   из них молчал бы. */
+function уровниПоУмолчанию() {
+  return { orig: 1, inst: 1 };
+}
+
+/* Принудительный оригинал (простукивание, кольцо, прослушивание строки)
+   не даёт увести голос ниже записи: там на слух ловят слова, и тихий
+   голос сделал бы это невозможным. */
+function усиленияНаушников(mix, hasInst, принудительно) {
+  if (!hasInst) return { вокал: 1, минусовка: 0 };   // делить нечего
+  const O = принудительно
+    ? Math.max(1, +mix.orig || 0) : Math.max(0, +mix.orig || 0);
+  const M = Math.max(0, +mix.inst || 0);
+  return { вокал: O, минусовка: M - O };
+}
+
 function усиленияСоло(код, hasInst) {
   if (код === 'orig') return { вокал: 1, минусовка: 0 };
   if (!hasInst) return null;   // моно: второй дорожки попросту нет
@@ -479,7 +513,9 @@ const audio = {
     /* Соло старше и ползунка, и отрезков оригинала: человек нажал
        «слушать только это» — значит, слушать надо именно это, без
        переключений источника посреди песни. */
-    const соло = editor.solo ? усиленияСоло(editor.solo, !!state.instrumentalBuffer) : null;
+    const вРедакторе = редакторОткрыт();
+    const соло = вРедакторе && editor.solo
+      ? усиленияСоло(editor.solo, !!state.instrumentalBuffer) : null;
     if (соло) {
       this.vocalGain.gain.cancelScheduledValues(0);
       this.instGain.gain.cancelScheduledValues(0);
@@ -487,7 +523,12 @@ const audio = {
       this.instGain.gain.value = соло.минусовка;
       return;
     }
-    const база = усиленияМикса(state.vocalMix, !!state.instrumentalBuffer, this.forceVocal);
+    /* В редакторе смесь задают ползунки дорожек, на других шагах —
+       ползунок вокала караоке: там обязано звучать ровно то, что уедет
+       в .wav и в видео. */
+    const база = вРедакторе
+      ? усиленияНаушников(editor.mix, !!state.instrumentalBuffer, this.forceVocal)
+      : усиленияМикса(state.vocalMix, !!state.instrumentalBuffer, this.forceVocal);
     if (!this.playing) {
       this.vocalGain.gain.cancelScheduledValues(0);
       this.instGain.gain.cancelScheduledValues(0);
@@ -3701,6 +3742,7 @@ const editor = {
   snapped: null,  // { t, вид } — куда притянулось, для направляющей
   hearVocal: true, // в редакторе по умолчанию звучит оригинал с вокалом
   solo: null,      // 'orig' | 'voice' | 'inst' — слушаем только одну дорожку
+  mix: { orig: 1, inst: 1 }, // уровни дорожек в наушниках, см. усиленияНаушников
 
   // Отмена и повтор: снимки времён, см. pushHistory
   history: [],
@@ -4208,7 +4250,12 @@ $('btn-sel-tap').addEventListener('click', () => {
 
 $('sel-vocal').addEventListener('change', () => {
   editor.hearVocal = $('sel-vocal').checked;
+  // Галка — те же уровни двумя пресетами (см. усиленияНаушников):
+  // оригинал звучит как в записи или не звучит вовсе
+  editor.mix.orig = editor.hearVocal ? 1 : 0;
+  renderTimelineHeads(timelineLanes());
   audio.restoreVocal();
+  audio.applyMix();
 });
 
 /* Убрать строку из караоке. Отменяется общей отменой: снимок держит
@@ -4782,11 +4829,38 @@ const TL_HEAD_LABEL = {
    слушать нечего — это разметка, а не звук. Значение — код соло,
    его понимает усиленияСоло. */
 const TL_HEAD_SOLO = { orig: 'orig', voice: 'voice', wave: 'inst' };
+/* Ползунок уровня — только там, где есть чем крутить: оригинал (он же
+   голос: на нуле остаётся чистая минусовка) и минусовка. У полосы
+   голоса своего звука нет, она рисует огибающую, поэтому ей только
+   кнопка соло. */
+const TL_HEAD_GAIN = { orig: 'orig', wave: 'inst' };
 
 function переключитьСоло(код) {
   editor.solo = editor.solo === код ? null : код;
   audio.applyMix();
   renderTimelineHeads(timelineLanes());
+}
+
+/* Ползунок уровня у полосы. Шаг крупный (5 %): это не тонкая настройка,
+   а «сделай погромче»; двойной щелчок возвращает умолчание — как
+   у фейдера в монтажной программе.
+
+   Галка «слышу оригинал» и ползунок оригинала — об одном и том же,
+   поэтому ходят вместе: уводя ползунок ниже записи, снимаем галку,
+   возвращая — ставим. */
+function поставитьУровень(код, v) {
+  editor.mix[код] = Math.min(1.5, Math.max(0, v));
+  if (код === 'orig') {
+    const слышно = editor.mix.orig >= 1;
+    if (editor.hearVocal !== слышно) {
+      editor.hearVocal = слышно;
+      const пер = $('sel-vocal');
+      if (пер) пер.checked = слышно;
+      audio.restoreVocal();   // он же позовёт applyMix
+      return;
+    }
+  }
+  audio.applyMix();
 }
 
 function renderTimelineHeads(L) {
@@ -4802,6 +4876,34 @@ function renderTimelineHeads(L) {
     const label = document.createElement('span');
     label.textContent = t(TL_HEAD_LABEL[key] || key);
     row.appendChild(label);
+    const гейн = TL_HEAD_GAIN[key];
+    if (гейн) {
+      const уровень = document.createElement('input');
+      уровень.type = 'range';
+      уровень.className = 'tl-gain';
+      уровень.min = '0';
+      уровень.max = '1.5';
+      уровень.step = '0.05';
+      уровень.value = String(editor.mix[гейн]);
+      уровень.dataset.gain = гейн;
+      // Крутить нечего, пока делить песню не на что: у моно минусовки нет
+      уровень.disabled = !state.instrumentalBuffer;
+      const подпись = () => t(гейн === 'orig' ? 'дорожка.уровень.оригинал' : 'дорожка.уровень',
+        { 'имя': t(TL_HEAD_LABEL[key]), 'v': Math.round(editor.mix[гейн] * 100) });
+      уровень.title = подпись();
+      уровень.setAttribute('aria-label', уровень.title);
+      уровень.addEventListener('input', () => {
+        поставитьУровень(гейн, +уровень.value);
+        уровень.title = подпись();
+        уровень.setAttribute('aria-label', уровень.title);
+      });
+      // Двойной щелчок — обратно к умолчанию, как у фейдера в монтажной
+      уровень.addEventListener('dblclick', () => {
+        поставитьУровень(гейн, уровниПоУмолчанию()[гейн]);
+        renderTimelineHeads(timelineLanes());
+      });
+      row.appendChild(уровень);
+    }
     const код = TL_HEAD_SOLO[key];
     if (код) {
       const кнопка = document.createElement('button');

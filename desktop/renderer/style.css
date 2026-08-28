@@ -1362,7 +1362,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
    и канвас разъедутся по высоте. */
 .tl-heads {
   flex: none;
-  width: 84px;
+  width: 132px;
   border-right: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.025);
   overflow: hidden;
@@ -1372,7 +1372,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  padding: 0 7px;
+  padding: 0 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   color: var(--text-dim);
   font-size: 10px;
@@ -1380,6 +1380,57 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   white-space: nowrap;
   overflow: hidden;
 }
+/* Подпись полосы: сжимается первой, длинное «instrumental» обрезается
+   многоточием — ползунок и кнопку соло отодвигать некуда */
+.tl-head-row > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Ползунок уровня дорожки в наушниках. Тонкий и тихий: это не главный
+   орган управления, а подстройка на слух во время разметки. Полоска
+   красится акцентом темы, ползунок — маленький кружок. */
+.tl-gain {
+  flex: 1;
+  min-width: 24px;
+  max-width: 48px;
+  height: 10px;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.tl-gain::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.tl-gain::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.tl-gain::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 8px;
+  height: 8px;
+  margin-top: -2.5px;
+  border: none;
+  border-radius: 50%;
+  background: var(--sel-ring);
+}
+.tl-gain::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border: none;
+  border-radius: 50%;
+  background: var(--sel-ring);
+}
+.tl-gain:disabled { opacity: 0.25; cursor: not-allowed; }
+.tl-gain:focus-visible { outline: 1px solid var(--sel-ring); outline-offset: 2px; }
+
 /* «Слушать только это»: буква S, как в монтажных программах. Включённая
    горит акцентом темы — тем же, которым обведён выбранный блок. */
 .tl-solo {
