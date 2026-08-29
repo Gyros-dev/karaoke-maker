@@ -1947,8 +1947,14 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
    переносится на несколько рядов — так делают в нынешних караоке:
    лучше перенести, чем ужать до нечитаемого. Словам нужен pre-wrap:
    при обычном pre браузеру негде разорвать строку между словами. */
-.stage-line.wrap { white-space: normal; }
-.stage-line.wrap .w { white-space: pre-wrap; }
+/* Слово длиннее ряда рвём по буквам: переносить его между словами
+   негде, и без этого строка из трёхсот знаков без пробелов уезжала
+   за край сцены (у неё overflow-x: hidden) — на экране оставалась
+   четверть. anywhere, а не break-all: пока в строке есть пробелы,
+   перенос идёт по ним, как и раньше. Тот же приём стоит у подписей
+   простукивания (.tap-now, .tap-next). */
+.stage-line.wrap { white-space: normal; overflow-wrap: anywhere; }
+.stage-line.wrap .w { white-space: pre-wrap; overflow-wrap: anywhere; }
 .stage-line.current { opacity: 1; filter: none; }
 /* Эффект «заливка» — классическое караоке */
 /* Подсветка идёт по словам: каждое слово — свой элемент со своей

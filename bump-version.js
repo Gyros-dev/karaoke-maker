@@ -3,7 +3,8 @@
    Меняет номер версии сразу везде, где он нужен.
 
    Версий две и они независимы:
-     • сайт        — три места: app.js, version.json, index.html
+     • сайт        — четыре места: app.js, version.json, index.html,
+                     package.json (корневой — это пакет САЙТА)
      • приложение  — desktop/package.json
 
    Запуск:
@@ -25,9 +26,11 @@ function currentVersions() {
   const app = read('app.js').match(/const APP_VERSION = '([^']+)'/);
   const ver = JSON.parse(read('version.json'));
   const pkg = JSON.parse(read('desktop/package.json'));
+  const корень = JSON.parse(read('package.json'));
   return {
     сайт: app ? app[1] : '?',
     versionJson: ver.version,
+    сайтPackage: корень.version,
     приложение: pkg.version,
   };
 }
@@ -63,8 +66,16 @@ function bumpSite(version) {
   if (html === before) throw new Error('в index.html не нашёл пути с ?v=');
   write('index.html', html);
 
+  /* 4. Корневой package.json — это пакет САЙТА (karaoke-punch-site).
+     Наружу он не выходит (private), но отставший номер в нём читается
+     как ошибка: пакет объявлял 1.2.0, когда везде было уже 1.12.0.
+     Двигаем вместе с остальными — руками его не вспомнит никто. */
+  const корень = JSON.parse(read('package.json'));
+  корень.version = version;
+  write('package.json', JSON.stringify(корень, null, 2) + '\n');
+
   console.log(`Сайт → ${version}`);
-  console.log('  app.js, version.json, index.html обновлены');
+  console.log('  app.js, version.json, index.html, package.json обновлены');
 }
 
 function bumpApp(version) {
@@ -89,10 +100,13 @@ const [what, v1, v2] = process.argv.slice(2);
 if (!what) {
   const c = currentVersions();
   console.log('Текущие версии:');
-  console.log(`  сайт         ${c.сайт}  (version.json: ${c.versionJson})`);
+  console.log(`  сайт         ${c.сайт}  (version.json: ${c.versionJson}, package.json: ${c.сайтPackage})`);
   console.log(`  приложение   ${c.приложение}`);
   if (c.сайт !== c.versionJson) {
     console.log('\n⚠️  app.js и version.json разошлись — сайт будет вечно предлагать обновиться');
+  }
+  if (c.сайт !== c.сайтPackage) {
+    console.log('\n⚠️  корневой package.json отстал от сайта — почини: node bump-version.js site ' + c.сайт);
   }
   console.log('\nКак менять:');
   console.log('  node bump-version.js site 1.3.0');
