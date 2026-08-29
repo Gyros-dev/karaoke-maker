@@ -385,7 +385,10 @@
       setProgress(0, t('ии.готовимЗвук'), подсказкаПрогресса(прикидка));
 
       audio.pause();
-      const src44 = await resample(state.originalBuffer, MODEL_SR);
+      /* Разделяем НЕТРОНУТУЮ песню: если человек уже сменил
+         тональность, в state.originalBuffer лежит сдвинутая, и
+         нейросеть слушала бы не ту запись. */
+      const src44 = await resample(чистыйОригинал(), MODEL_SR);
       const { left, right } = toStereo(src44);
 
       setProgress(0, t('ии.загружаемМодель'), подсказкаПрогресса(прикидка));
@@ -434,6 +437,10 @@
 
       audio.stop();
       state.instrumentalBuffer = buf;
+      /* Минусовка нейросети посчитана по нетронутой песне — значит,
+         и звучать всё начинает в исходной тональности. Кэш прежних
+         тональностей теперь про другую минусовку и не годится. */
+      сменилсяЗвук();
       state.customInst = true;
       state.instName = shifts > 1
         ? t('ии.имяНесколько', { n: shifts })
@@ -735,7 +742,7 @@
     // Чистый вокал точнее, но если его нет — слушаем полный микс
     let pcm = asr.vocal;
     if (!pcm) {
-      const buf = state.originalBuffer;
+      const buf = чистыйОригинал();
       const mono = new Float32Array(buf.length);
       const ch0 = buf.getChannelData(0);
       const ch1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0;

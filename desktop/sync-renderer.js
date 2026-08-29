@@ -326,6 +326,16 @@ try {
   fs.writeFileSync(path.join(OUT, 'app.js'), js);
   fs.writeFileSync(path.join(OUT, 'i18n.js'), i18n);
 
+  /* Рабочий поток смены тональности. Он общий с сайтом (на сайте
+     нейросетей нет, а вокодер лёгкий и работает везде), поэтому
+     живёт в корне и переносится сюда наравне с app.js. Без него
+     смена тональности в приложении молча падала бы на попытке
+     создать Worker. */
+  const ТОН = 'pitch-worker.js';
+  const тонИсходник = path.join(WEB, ТОН);
+  if (!fs.existsSync(тонИсходник)) throw new Error(`нет ${ТОН} в веб-версии`);
+  fs.copyFileSync(тонИсходник, path.join(OUT, ТОН));
+
   /* Фирменные шрифты. Их подключает style.css относительным путём
      fonts/…, и без этих файлов приложение молча рисовало бы имя
      запасным шрифтом. Лицензия OFL требует носить свой текст вместе
@@ -356,6 +366,7 @@ try {
   console.log('  style.css  — полоса прогресса нейросети');
   console.log('  app.js     — без изменений');
   console.log('  i18n.js    — без изменений');
+  console.log('  pitch-worker.js — смена тональности, без изменений');
   console.log('  fonts/     — Bungee, Bungee Shade и лицензия OFL');
 } catch (err) {
   console.error('Не получилось:', err.message);
