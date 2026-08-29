@@ -2165,6 +2165,57 @@ input[type="range"]::-moz-range-thumb {
 }
 .eq-hint { color: var(--text-dim); font-size: 0.78rem; }
 
+/* --- Тональность (закладка «Звук») ---
+   Число здесь крупное нарочно: это единственная настройка на закладке,
+   у которой значение читают ИЗДАЛЕКА, стоя у микрофона. Стрелки по
+   бокам, «Применить» появляется только тогда, когда выбранное ещё
+   не звучит. */
+.key-block {
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+.key-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.9rem;
+}
+.key-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+.key-pick .nudge-btn { font-size: 1.05rem; line-height: 1; }
+.key-val {
+  min-width: 2.6rem;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+/* Выбрано, но ещё не посчитано: число приглушено, пока не «Применить» */
+.key-val.key-pending { color: var(--text-dim); opacity: 0.75; }
+#key-note { margin: 0.5rem 0 0.4rem; }
+#key-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--grad-btn);
+  transition: width 0.3s linear;
+}
+/* Тональность в чипе памяти: тот же размер, что имя песни, но
+   не обрезается — это два-три знака */
+.proj-key {
+  flex: none;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Панель «Оформление»: слева настройки, справа предпросмотр ---
    Раскладка как в монтажной программе. Раньше настройки лежали длинным
    списком под сценой: сцена уезжала за край экрана, и человек, двигая

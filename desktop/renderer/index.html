@@ -572,6 +572,9 @@
       <span class="proj-chip hidden" id="proj-chip">
         <svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg>
         <span class="proj-name" id="proj-name"></span>
+        <!-- Выбранная тональность. Ноль не показываем вовсе: чип
+             узкий, и раздувать его ради «0» незачем. -->
+        <span class="proj-key hidden" id="proj-key"></span>
       </span>
       <button class="steps-tool" id="btn-draft-save"
         data-i18n-title="черновик.сохранить.подсказка" data-i18n-aria="черновик.сохранить"
@@ -911,8 +914,31 @@
             <p class="side-note" data-i18n="караоке.заметка.видео">Оформление попадает и в видео для YouTube</p>
           </div>
 
-          <!-- Закладка «Звук»: эквалайзер -->
+          <!-- Закладка «Звук»: тональность и эквалайзер -->
           <div class="side-group" data-g="sound">
+
+            <!-- Тональность. Стоит ПЕРВОЙ и отделена чертой: это самая
+                 крупная правка звучания на этой закладке, и она же
+                 единственная, которая считается — 20–30 секунд на песню.
+                 Поэтому стрелки только выбирают значение, а считает
+                 «Применить»; готовое (и ноль) ставится сразу. -->
+            <div class="key-block">
+              <div class="key-row">
+                <span class="eq-label" data-i18n-html="караоке.тональность">Тональность <small>выше или ниже записи</small></span>
+                <span class="key-pick">
+                  <button class="nudge-btn icon-btn" id="key-down" data-i18n-title="караоке.тон.ниже.подсказка" title="На полтона ниже" aria-label="На полтона ниже" data-i18n-aria="караоке.тон.ниже.подсказка">−</button>
+                  <b class="key-val" id="key-val">0</b>
+                  <button class="nudge-btn icon-btn" id="key-up" data-i18n-title="караоке.тон.выше.подсказка" title="На полтона выше" aria-label="На полтона выше" data-i18n-aria="караоке.тон.выше.подсказка">+</button>
+                </span>
+              </div>
+              <div class="eq-actions">
+                <button class="btn btn-primary btn-small hidden" id="key-apply" data-i18n-title="караоке.тон.применить.подсказка" title="Посчитать выбранную тональность. Считает примерно полминуты на трёхминутную песню — обе дорожки сразу" data-i18n="караоке.тон.применить">Применить</button>
+                <button class="nudge-btn" id="key-reset" data-i18n-title="караоке.тон.вНоль.подсказка" title="Вернуть песню в ту тональность, в которой она записана. Это мгновенно" data-i18n="караоке.тон.вНоль">В ноль</button>
+              </div>
+              <p class="eq-hint" id="key-note"></p>
+              <p class="eq-hint" data-i18n="караоке.тон.подсказка">Темп и длина не меняются, разметка остаётся на местах. Сдвигаются обе дорожки — и минусовка, и оригинал на отрезках. Всё это слышно в плеере и попадает в минусовку .wav и в видео.</p>
+            </div>
+
             <div class="eq-row">
               <span class="eq-label" data-i18n-html="караоке.низкие">Низкие <small>бас, бочка</small></span>
               <input type="range" id="eq-low" min="-12" max="12" step="1" value="0">
@@ -992,6 +1018,24 @@
         <div class="export-bar"><div id="export-fill"></div></div>
         <p class="export-hint" data-i18n="экспорт.подсказка">Запись идёт в реальном времени. Её можно свернуть: экспорт продолжится в фоне. Не закрывай страницу до окончания.</p>
         <button class="btn btn-ghost" id="btn-export-cancel" data-i18n-title="экспорт.отменить.подсказка" title="Прервать запись видео. Уже записанное не сохранится" data-i18n="экспорт.отменить">Отменить</button>
+      </div>
+    </div>
+
+    <!-- Окно ожидания смены тональности. Устроено как окна экспорта
+         и нейросетей (.export-overlay), чтобы долгое ожидание везде
+         выглядело одинаково. Отмена здесь обязательна: полминуты
+         счёта иначе нечем прервать. -->
+    <div class="export-overlay hidden" id="key-overlay">
+      <div class="export-box">
+        <p id="key-status" data-i18n="караоке.тон.считаем">Меняем тональность…</p>
+        <!-- Почему студия считает, когда её об этом сейчас не просили:
+             тональность выбрали в прошлый раз, а посчитать её негде,
+             кроме как здесь. Строка отдельная, потому что в заголовке
+             её съедали бы проценты хода. -->
+        <p class="export-hint hidden" id="key-why"></p>
+        <div class="export-bar"><div id="key-fill"></div></div>
+        <p class="export-hint" data-i18n="караоке.тон.ждать">Считаются обе дорожки — минусовка и оригинал. Прежняя тональность останется на месте, если прервать.</p>
+        <button class="btn btn-ghost" id="btn-key-cancel" data-i18n-title="караоке.тон.отменить.подсказка" title="Прервать расчёт и оставить прежнюю тональность" data-i18n="караоке.тон.отменить">Отменить</button>
       </div>
     </div>
   </div>

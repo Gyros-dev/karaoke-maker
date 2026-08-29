@@ -466,6 +466,20 @@ I18N.EN = {
   'караоке.отсчёт': 'Count-in before a line',
   'караоке.отсчёт.подсказка': 'Three dots fade out over the three seconds before you come in — so you know when to start after a break',
   'караоке.заметка.видео': 'The look carries over into the YouTube video',
+  /* Тональность: орган управления на закладке «Звук».
+     Key вместо pitch — это то слово, которым про песню и говорят. */
+  'караоке.тональность': 'Key <small>higher or lower than recorded</small>',
+  'караоке.тон.ниже.подсказка': 'A semitone down',
+  'караоке.тон.выше.подсказка': 'A semitone up',
+  'караоке.тон.применить': 'Apply',
+  'караоке.тон.применить.подсказка': 'Work out the chosen key. Takes about half a minute for a three-minute song — both tracks at once',
+  'караоке.тон.вНоль': 'Back to zero',
+  'караоке.тон.вНоль.подсказка': 'Put the song back into the key it was recorded in. This is instant',
+  'караоке.тон.подсказка': 'Tempo and length stay exactly as they were, and so does your timing. Both tracks move — the instrumental and the original on its stretches. You hear it in the player, and it goes into the .wav instrumental and the video.',
+  'караоке.тон.считаем': 'Changing the key…',
+  'караоке.тон.ждать': 'Both tracks are worked out — the instrumental and the original. Stop it and the previous key stays as it was.',
+  'караоке.тон.отменить': 'Cancel',
+  'караоке.тон.отменить.подсказка': 'Stop the calculation and keep the previous key',
   'караоке.низкие': 'Low <small>bass, kick</small>',
   'караоке.средние': 'Mid <small>guitars, voice</small>',
   'караоке.высокие': 'High <small>cymbals, air</small>',
@@ -1128,9 +1142,10 @@ I18N.СТРОКИ = {
   'ии.ход': { ru: 'Убираем вокал: {кусок} из {кусков}', en: 'Removing vocals: {кусок} of {кусков}' },
 
   /* ---------- Смена тональности ----------
-     Органов управления у неё пока нет — их рисует следующий заход,
-     а надписи нужны уже сейчас: расчёт идёт в рабочем потоке и умеет
-     и докладывать о ходе, и сорваться. */
+     Надписи, которые собирает код: ход расчёта, состояние органа
+     управления («звучит на два полутона выше», «выбрано, но ещё
+     не посчитано») и значок в чипе памяти. Всё, что написано прямо
+     в разметке, лежит в EN — там же рядом. */
   'тон.считаем': { ru: 'Меняем тональность…', en: 'Changing the key…' },
   'тон.ход': {
     ru: 'Меняем тональность: {процент} %',
@@ -1138,6 +1153,41 @@ I18N.СТРОКИ = {
   },
   'тон.сбойПотока': { ru: 'сбой в потоке расчёта', en: 'the worker thread failed' },
   'тон.неПолучилось': { ru: 'Не получилось сменить тональность: ', en: 'Couldn’t change the key: ' },
+  'тон.возвращаем': {
+    ru: 'Возвращаем тональность {выбрано}, выбранную в прошлый раз…',
+    en: 'Restoring the key {выбрано} you chose last time…',
+  },
+  'тон.какЗаписана': {
+    ru: 'Песня звучит так, как записана.',
+    en: 'The song plays exactly as recorded.',
+  },
+  'тон.выше': {
+    ru: {
+      one: 'Звучит на {n} полутон выше записи.',
+      few: 'Звучит на {n} полутона выше записи.',
+      many: 'Звучит на {n} полутонов выше записи.',
+    },
+    en: {
+      one: 'Playing {n} semitone above the recording.',
+      other: 'Playing {n} semitones above the recording.',
+    },
+  },
+  'тон.ниже': {
+    ru: {
+      one: 'Звучит на {n} полутон ниже записи.',
+      few: 'Звучит на {n} полутона ниже записи.',
+      many: 'Звучит на {n} полутонов ниже записи.',
+    },
+    en: {
+      one: 'Playing {n} semitone below the recording.',
+      other: 'Playing {n} semitones below the recording.',
+    },
+  },
+  'тон.ждёт': {
+    ru: 'Выбрано {выбрано}, а звучит {звучит}. Нажми «Применить» — расчёт займёт около {сек} с.',
+    en: 'Chosen {выбрано}, playing {звучит}. Press “Apply” — it takes about {сек} s.',
+  },
+  'тон.чип': { ru: 'тональность {выбрано}', en: 'key {выбрано}' },
 
   /* ---------- Распознавание и подгонка текста ---------- */
   'asr.чистыйВокал': { ru: '✓ слушаем чистый вокал', en: '✓ listening to the clean vocal' },
