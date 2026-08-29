@@ -6353,13 +6353,17 @@ function finishTapMode() {
    тоже: спрашиваем. Стирание попадает в тот же снимок отмены. */
 function проверитьПорядокПослеЗахода() {
   const last = tap.done[tap.done.length - 1];
-  const t = state.lines[last.row] ? state.lines[last.row].time : null;
-  if (t == null) return;
+  /* Имя «t» здесь занимать нельзя: этой же буквой зовётся перевод,
+     и локальная переменная перекрывала его — confirm ниже падал
+     с «t is not a function», а вместе с ним обрывался весь
+     finishTapMode, не дойдя до сохранения. Заход терялся целиком. */
+  const время = state.lines[last.row] ? state.lines[last.row].time : null;
+  if (время == null) return;
   let k = -1;
   for (let i = last.row + 1; i < state.lines.length; i++) {
     if (state.lines[i].time != null) { k = i; break; }
   }
-  if (k < 0 || state.lines[k].time > t) return;
+  if (k < 0 || state.lines[k].time > время) return;
   const ok = confirm(t('ред.порядок', { k: k + 1, 'мод': МОД }));
   if (!ok) return;
   for (let i = k; i < state.lines.length; i++) {
