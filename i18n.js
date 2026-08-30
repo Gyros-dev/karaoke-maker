@@ -208,19 +208,19 @@ I18N.EN = {
   'новости.починки': '<b>Fixes after a bug hunt.</b> The big one: a tapping run is no longer lost. Tap a line later than the mark already sitting on the next one and the studio failed silently — the “erase the marks after this?” question never appeared, and the run itself was never saved, so it vanished on reload. Also: editor keys no longer fire through open windows (you could page through the guide with the arrow keys and quietly shift your timing), the tempo field no longer sticks on a rejected number, text cleared in a line field comes back honestly, “reset words” redraws the timeline at once, and a very long word now wraps instead of running off the stage.',
   'новости.тональность': '<b>You can sing a song in your own key.</b> Karaoke step → Look → Sound: shift it up to seven semitones up or down. The tempo does not move by a hundredth — all the timing stays where it was, and the .wav instrumental and the video carry the same key you rehearsed with. It is worked out once before you sing, about half a minute per song; the choice is remembered, and going back to a key you already used is instant.',
   'новости.краяСлов': '<b>Any word’s start can be edited now.</b> The first word of a line had no handle at all: it was moved by the line start, and a pause before the singer comes in could not be expressed. It now has a handle and a field like every other word. The last word’s end works too: the melisma tail still stretches on its own, but an end set by hand stays where it was put.',
-  'новости.подложка': '<b>The scrim under the text covers all of it.</b> It used to be a band of fixed height while the line positions move on sliders — pull the lines apart and the second one hung on bare artwork. The scrim is now measured from where the lines actually are, and you can set its height yourself. Along with it: an instrumental break is drawn with five notes instead of three, the count-in dots never land on the text any more, and the sound under the cursor is off by default — switch it on like snapping.',
+  'новости.подложка': '<b>The scrim under the text covers all of it.</b> It used to be of a fixed height while the line positions move on sliders — pull the lines apart and the second one hung on bare artwork. The scrim is now measured from where the lines actually are, and you can set its height yourself. Along with it: an instrumental break is drawn with five notes instead of three, the count-in dots never land on the text any more, and the sound under the cursor is off by default — switch it on like snapping.',
   'новости.безВитрины': '<b>The app opens straight into the studio.</b> The site’s shop window — the cover, the feature cards, the questions — is no longer shown inside the program: you read that when you downloaded it, not every time you start it. The window opens maximised and the studio fills it. “How to use it” opens the guide over the studio.',
-  'новости.тише': '<b>The studio got quieter.</b> The colour key moved under the “? colours” button by the timeline, the help text moved below the editor, the invitation in the original lane fades once you make your first stretch, the line list shows two time columns instead of three, and the “♪” mark now flags the rare case: once the whole song is timed by word, it marks the lines WITHOUT hand-made word marks. The inspector folds up by section, and remembers it.',
+  'новости.тише': '<b>The studio got quieter.</b> The colour key moved under the “? colours” button by the timeline, the help text moved below the editor, the invitation in the original track fades once you make your first stretch, the line list shows two time columns instead of three, and the “♪” mark now flags the rare case: once the whole song is timed by word, it marks the lines WITHOUT hand-made word marks. The inspector folds up by section, and remembers it.',
   'новости.скиммирование': '<b>Sound under the cursor, just from hovering.</b> A passage used to play only while you dragged the playhead. Now moving the mouse over the timeline is enough: you find the spot by ear, and the playhead stays where it was.',
   'новости.поиск': '<b>Search across the lines.</b> A song runs to fifty lines and the right one had to be found by eye. The field above the list keeps only what matches; the numbers stay real, Esc brings everything back.',
   'новости.подсказки': '<b>Every button has a hint.</b> Our own, not the system one: it shows up at once and is written in the studio’s own style. Forty-seven buttons that said nothing at all were found and labelled along the way.',
-  'новости.черновик': '<b>Your work can be saved to a file.</b> The project used to live only in the browser’s memory, and that memory goes: a cleared cache, another browser, a reinstall. There is a draft file now — lyrics, timing, original stretches and styling — saved and opened with the buttons beside the step row. The same place shows whose work the studio is holding right now: before you load another song, not after.',
+  'новости.черновик': '<b>Your project can be saved to a file.</b> The project used to live only in the browser’s memory, and that memory goes: a cleared cache, another browser, a reinstall. There is a draft file now — lyrics, timing, original stretches and the look — saved and opened with the buttons beside the step row. The same place shows whose project the studio is holding right now: before you load another song, not after.',
   'новости.время': '<b>Time is written the same way everywhere.</b> The timeline said “3:10” while the fields said “190”, and there was no way to check one against the other. It is minutes and seconds all round now, and a field takes either form. The inspector was rearranged too: the selected word on top, the line it belongs to underneath.',
   'новости.дописанные': '<b>Add a line and it shows up on the timeline.</b> You remember a forgotten verse, type it in — and those lines simply were not on the timeline: with no timing there is nothing to draw. Now a new line is given room between its neighbours and marked “≈”: the timing is a guess and worth checking.',
   'новости.пауза': '<b>Words can have a pause between them.</b> A word’s end had to equal the next one’s start, so on a swallowed word the highlight sailed right on. Drag the joint between two words with <kbd><span class="mod-key">Cmd</span></kbd> held and the edges come apart — in the pause the highlight honestly waits.',
-  'новости.диапазон': '<b>A stretch of timing can be moved or stretched.</b> A verse drifts half a second late — the whole song used to move with it. Select a stretch by dragging along the ruler (or Shift-clicking in the line list) and move it as one; pull an edge and every time inside stretches proportionally, word marks included.',
+  'новости.диапазон': '<b>A range of timing can be moved or stretched.</b> A verse drifts half a second late — the whole song used to move with it. Select a range by dragging along the ruler (or Shift-clicking in the line list) and move it as one; pull an edge and every time inside stretches proportionally, word marks included.',
   'новости.наушники': '<b>You can hear where you are pointing.</b> While you drag the playhead or an edge, the sound under the cursor plays — the spot is found by ear in a second. Tracks also gained a “listen to this only” button and a level slider: music quieter, voice as recorded — that is how words get made out.',
-  'новости.доли': '<b>A beat grid.</b> The studio works out the song’s tempo and can snap edges to beats. You switch it on yourself: the tempo is not always read correctly, and a wrong grid would get in the way more than it helped. The beats per minute and the first beat’s offset can both be set by hand.',
+  'новости.доли': '<b>A beat grid.</b> The studio works out the song’s tempo and can snap edges to beats. You switch it on yourself: the tempo is not always read correctly, and a wrong grid would get in the way more than it helped. The tempo and the first beat’s offset can both be set by hand.',
   'новости.словаНастройки': '<b>Words now have settings of their own.</b> Precise editing used to stop at the line — a word could only be dragged. A selected word now has numeric start, end and length fields, the same keys as a line, loop playback and snapping. Next to them: “spread”, which lays the words out across the line by syllable count.',
   'новости.тема': '<b>The studio now looks like an editing suite.</b> Tighter layout, proper icons instead of mismatched emoji, times down to the millisecond, a column of track names, and the exact time under the cursor while you drag. There is a theme picker too — the green signature look or a neutral grey one, right in the header.',
   'новости.закрыть': 'Close',
@@ -254,7 +254,7 @@ I18N.EN = {
 
   /* ---------- Первый экран ---------- */
   'герой.заголовок': 'Turn any song<br><span class="grad-text">into karaoke</span>',
-  'герой.подзаголовок': 'Load a track — the studio ducks the vocals, helps you time the lyrics line by line and word by word, and runs karaoke with word-level highlighting. Nothing is uploaded anywhere: it all happens on your device.',
+  'герой.подзаголовок': 'Load a song — the studio ducks the vocals, helps you time the lyrics line by line and word by word, and runs karaoke with word-level highlighting. Nothing is uploaded anywhere: it all happens on your device.',
   'герой.кнопка': 'Make karaoke →',
   'герой.скачать': 'Better with the app: neural networks remove the vocals and time the lyrics',
   'герой.мак': '🍎 Download for macOS',
@@ -267,7 +267,7 @@ I18N.EN = {
   'возможности.вокал.заголовок': 'Vocal ducking',
   'возможности.вокал.текст': 'In the browser the voice sitting in the centre of the stereo image is cancelled straight away, and vocal level stays adjustable while you sing. Need a truly clean instrumental — load a ready one as a second file, or take the <a href="#desktop">desktop version</a> with its neural network.',
   'возможности.текст.заголовок': 'Lyric timing',
-  'возможности.текст.текст': 'Paste the lyrics — then tap the spacebar on each line, in time with the music, right in the editor. That’s also where you fix the starts and ends of phrases, audition them one by one, drag blocks on the waveform, and use the “♪ words” button to tap out every word inside a line.',
+  'возможности.текст.текст': 'Paste the lyrics — then tap the spacebar on each line, in time with the music, right in the editor. That’s also where you fix the starts and ends of lines, audition them one by one, drag blocks on the timeline, and use the “♪ words” button to tap out every word inside a line.',
   'возможности.караоке.заголовок': 'Karaoke mode',
   'возможности.караоке.текст': 'Highlighting steps word by word, and three count-in dots fade out before you come in after a break. Your own background image, font, size, colours, outline, scrim under the text, equaliser. Export what you made: video up to 2K, instrumental as WAV, lyrics as LRC — plain or with a timestamp on every word.',
 
@@ -278,7 +278,7 @@ I18N.EN = {
   'настольная.локально': 'Your computer does all the work; nothing goes to the internet.',
   'настольная.мак': '🍎 Download for macOS',
   'настольная.виндоус': '🪟 Download for Windows',
-  'настольная.заметка': 'Free and open source. Each model downloads once, on first use — after that you don’t need the internet: vocal removal is 64 MB, speech recognition a few dozen megabytes. A 3-minute track is cleaned in about 3.5 minutes.<br>macOS — Apple Silicon; Windows — x64 and ARM. <a href="https://github.com/Gyros-dev/karaoke-maker/releases/latest">All releases and release notes</a>',
+  'настольная.заметка': 'Free and open source. Each model downloads once, on first use — after that you don’t need the internet: vocal removal is 64 MB, speech recognition a few dozen megabytes. A 3-minute song is cleaned in about 3.5 minutes.<br>macOS — Apple Silicon; Windows — x64 and ARM. <a href="https://github.com/Gyros-dev/karaoke-maker/releases/latest">All releases and release notes</a>',
   'настольная.первыйЗапуск': 'First launch: your system will ask for confirmation',
   'настольная.подпись': 'The app is self-signed but not notarised by Apple: a developer certificate costs money. So the system refuses the first launch — you allow it by hand, once.',
   'настольная.мак.как': '<b>macOS — step by step:</b>',
@@ -298,7 +298,7 @@ I18N.EN = {
   'как.шаг1.приложение': '<b>And press “Remove vocals” right away.</b> The network will work out a clean instrumental on your computer — not only nicer to sing over, but noticeably better timing on the next step, because the network will hear a voice instead of a mix. It takes a while (the estimate is under the button), which is exactly why it should go first.',
   'как.шаг1.сайт': 'If you already have a clean instrumental — from UVR5, say — drop it into the “Your own instrumental” field: it sounds much better than the built-in ducking.',
   'как.шаг2.заголовок': 'Paste the lyrics',
-  'как.шаг2.текст': 'One non-empty line is one karaoke phrase. Finding the lyrics and copying them takes half a minute; timing them by hand takes far longer.',
+  'как.шаг2.текст': 'One non-empty line is one karaoke line. Finding the lyrics and copying them takes half a minute; timing them by hand takes far longer.',
   'как.шаг2.приложение': '<b>Then press “Fit my lyrics”.</b> The network listens to the singing, finds where each word is sung, and lays your lines out on those marks: the words stay yours, only the timing comes from the network. Line and word timings appear by themselves — no tapping needed. No lyrics at hand? There’s a “Transcribe from scratch” button, but it’s a draft: singing transcribes much worse than speech.',
   'как.шаг3.заголовок': 'Time it in the editor',
   'как.шаг3.сайт': '<b>Tap the song out with the spacebar.</b> The editor has a tapping mode: the song plays and you hit the spacebar at the start of each line. You can start anywhere — earlier marks are left alone.',
@@ -309,7 +309,7 @@ I18N.EN = {
   'как.редактор.заголовок': 'Editor: timeline, snapping, original-audio stretches, words, tapping',
   'как.редактор.дорожка': '<b>Timeline.</b> Lines and words are drawn as blocks — you see length, not just a start point. Drag the edges, drag the whole block. Arrow keys nudge the selected line a little; with Alt held, a lot. <span class="mod-key">Cmd</span>+Z undoes, <span class="mod-key">Cmd</span>+Shift+Z redoes. The loop button plays the selected line round and round — the fastest way to tell whether the timing lands.',
   'как.редактор.магнит': '<b>Snapping.</b> While you drag an edge it sticks to neighbouring lines, to the playhead, to the edges of original-audio stretches and to real vocal onsets. Holding <b>Alt</b> suspends it for that drag — same as Logic Pro and Final Cut. <span class="only-desktop">In the app a vocal envelope is drawn on the timeline as well: you can see where the singing actually is.</span>',
-  'как.редактор.отрезки': '<b>Original-audio stretches.</b> Sometimes the opening should stay as it is — someone is talking, or another voice is singing. Drag across the stretch lane: inside a stretch the original plays instead of the instrumental, the edges can be pulled, an unwanted stretch removed. Works the same in karaoke, in the exported instrumental and in the video — wherever the “Vocals” slider sits.',
+  'как.редактор.отрезки': '<b>Original-audio stretches.</b> Sometimes the opening should stay as it is — someone is talking, or another voice is singing. Drag across the stretch track: inside a stretch the original plays instead of the instrumental, the edges can be pulled, an unwanted stretch removed. Works the same in karaoke, in the exported instrumental and in the video — wherever the “Vocals” slider sits.',
   'как.редактор.слова': '<b>Word timing.</b> If the words aren’t timed, the line’s time is split between them by length — usually enough. When you want it exact, the selected line has a <b>“♪ words”</b> button: the passage plays with vocals and you tap the spacebar on each word. Timed lines are marked green; reset brings the automatic split back.',
   'как.редактор.простукивание': '<b>Tapping.</b> There is no separate step — it’s a mode inside the editor. While it runs, the line list and the preview step aside: the current line stays large on screen, with the next one, a counter and the timeline, where marks appear as you go. Every hit undoes on its own, and the whole run undoes with the usual <span class="mod-key">Cmd</span>+Z.',
   'как.экспорт.заголовок': 'Look and what you can save',
@@ -328,7 +328,7 @@ I18N.EN = {
   'студия.шаг1.подсказка': 'Step 1: load the song, your own instrumental and a background picture',
   'студия.шаг2.подсказка': 'Step 2: paste the lyrics — one line of text becomes one karaoke line',
   'студия.шаг3.подсказка': 'Step 3: time the lines and the words on the timeline',
-  'студия.шаг4.подсказка': 'Step 4: styling, preview and export',
+  'студия.шаг4.подсказка': 'Step 4: the look, preview and export',
   'студия.справка': 'How to use it',
   'студия.справка.подсказка': 'A short guide: the recommended route, the editor and exporting',
   'студия.справка.aria': 'How to use it',
@@ -336,7 +336,7 @@ I18N.EN = {
   /* ---------- Шаг 1 ---------- */
   'шаг1.перетащи': 'Drop an audio file here<br>or click to choose one',
   'шаг1.форматы': 'MP3 · WAV · OGG · M4A',
-  'шаг1.обработка': 'Processing the track…',
+  'шаг1.обработка': 'Processing the song…',
   'шаг1.моно': 'The file is mono — vocals can’t be ducked, but lyric timing and karaoke will work.',
   'шаг1.фон.заголовок': 'Karaoke background',
   'шаг1.фон.текст': 'Optional: the picture sits under the text while you sing',
@@ -351,7 +351,7 @@ I18N.EN = {
   'шаг1.фон.убрать.подсказка': 'Remove the picture — the stage goes back to its plain background',
   'шаг1.минусовка.выбрать.подсказка': 'Pick a ready file with no vocals: it will play instead of the built-in ducking',
   'шаг1.минусовка.убрать.подсказка': 'Drop your own instrumental and go back to the built-in vocal ducking',
-  'шаг1.другойФайл.подсказка': 'Load a different song. The lyrics, the timing and the styling stay',
+  'шаг1.другойФайл.подсказка': 'Load a different song. The lyrics, the timing and the look stay',
   'шаг1.дальше.подсказка': 'Go to step 2: paste the lyrics',
 
   /* ---------- Шаг 1: блоки приложения ---------- */
@@ -404,7 +404,7 @@ I18N.EN = {
   'караоке.вкл.цвет': 'Colour',
   'караоке.вкл.сцена': 'Stage',
   'караоке.вкл.звук': 'Sound',
-  'караоке.сбросить.подсказка': 'Put all the text styling back to its defaults',
+  'караоке.сбросить.подсказка': 'Put the whole look of the text back to its defaults',
   'караоке.вкл.текст.подсказка': 'What the lines are set in and how big they are',
   'караоке.вкл.цвет.подсказка': 'Line colours, the singing effect, the outline and the stage background',
   'караоке.вкл.сцена.подсказка': 'How many lines show, where they sit and how they appear',
@@ -449,9 +449,9 @@ I18N.EN = {
   'караоке.приглушение.подсказка': 'How visible the lines that aren’t being sung are',
   'караоке.размытие': 'Blur on inactive',
   'караоке.подложка': 'Scrim under the text',
-  'караоке.подложка.подсказка': 'A dark band under the lines, over the picture — instead of darkening the whole frame',
+  'караоке.подложка.подсказка': 'A dark scrim under the lines, over the picture — instead of darkening the whole frame',
   'караоке.подложка.высота': 'Scrim height',
-  'караоке.подложка.высота.подсказка': 'How wide the band is: 100% covers both lines exactly, however far apart the “First line at” and “Second line at” sliders put them',
+  'караоке.подложка.высота.подсказка': 'How tall the scrim is: 100% covers both lines exactly, however far apart the “First line at” and “Second line at” sliders put them',
   'караоке.меняются': 'Lines swap places',
   'караоке.меняются.подсказка': 'Turn this on and lines will move up as you sing',
   'караоке.строкВидно': 'Lines visible',
@@ -474,12 +474,12 @@ I18N.EN = {
   'караоке.тон.ниже.подсказка': 'A semitone down',
   'караоке.тон.выше.подсказка': 'A semitone up',
   'караоке.тон.применить': 'Apply',
-  'караоке.тон.применить.подсказка': 'Work out the chosen key. Takes about half a minute for a three-minute song — both tracks at once',
+  'караоке.тон.применить.подсказка': 'Work out the chosen key. Takes about half a minute for a three-minute song — the instrumental and the original at once',
   'караоке.тон.вНоль': 'Back to zero',
   'караоке.тон.вНоль.подсказка': 'Put the song back into the key it was recorded in. This is instant',
-  'караоке.тон.подсказка': 'Tempo and length stay exactly as they were, and so does your timing. Both tracks move — the instrumental and the original on its stretches. You hear it in the player, and it goes into the .wav instrumental and the video.',
+  'караоке.тон.подсказка': 'Tempo and length stay exactly as they were, and so does your timing. Both the instrumental and the original on its stretches move. You hear it in the player, and it goes into the .wav instrumental and the video.',
   'караоке.тон.считаем': 'Changing the key…',
-  'караоке.тон.ждать': 'Both tracks are worked out — the instrumental and the original. Stop it and the previous key stays as it was.',
+  'караоке.тон.ждать': 'Both the instrumental and the original are worked out. Stop it and the previous key stays as it was.',
   'караоке.тон.отменить': 'Cancel',
   'караоке.тон.отменить.подсказка': 'Stop the calculation and keep the previous key',
   'караоке.низкие': 'Low <small>bass, kick</small>',
@@ -513,8 +513,8 @@ I18N.EN = {
 
   /* ---------- Шаг 3: редактор ---------- */
   'ред.справка.заголовок': 'How to fix the timing',
-  'ред.справка.первый': 'The text is on the left — edit it in the list, double-click to jump to a line. The preview is in the middle, the inspector on the right: the selected word on top, the line it belongs to underneath. Times in the inspector read the same way as on the timeline — minutes and seconds. The timeline is at the bottom: drag a block’s edges to move a boundary, its middle to move the whole line; the bottom lane works the same way for word edges, and clicking a word selects it — its numbers show up in the inspector. Two neighbouring words share one handle: the left one’s end and the right one’s start move together. Drag it with Cmd held and the edges come apart, leaving a pause between the words; either edge brings them back together. The first word of a line has a left edge of its own: push it later and a pause appears before it — a singer does not always come in at once. The last word’s right edge stretches to the end of the line by itself (that is the melisma), but once you set it by hand it stays where you put it. The “S” button by a track name leaves that track alone in your headphones, and the slider next to it makes that track louder or quieter. Line starts are tapped with the spacebar: the “tap again” button.',
-  'ред.справка.оригинал': '<b>The top lane is the original.</b> Drag across it and the real words from the recording play on that stretch instead of the instrumental — handy for an intro you’d rather not sing. Pull the edges to adjust; the cross, a double-click or <kbd>Delete</kbd> removes a stretch. Inside a stretch the original is heard in full, wherever the “Vocals” slider sits in karaoke — and it goes into the .wav instrumental and the recorded video just the same. In the editor itself you won’t hear the difference: the original plays everywhere here, or there would be nothing to time against. To hear the stretches, clear “hear the original” on the right or go to karaoke.',
+  'ред.справка.первый': 'The text is on the left — edit it in the list, double-click to jump to a line. The preview is in the middle, the inspector on the right: the selected word on top, the line it belongs to underneath. Times in the inspector read the same way as on the timeline — minutes and seconds. The timeline is at the bottom: drag a block’s edges to move a boundary, its middle to move the whole line; the bottom track works the same way for word edges, and clicking a word selects it — its numbers show up in the inspector. Two neighbouring words share one joint: the left one’s end and the right one’s start move together. Drag it with Cmd held and the edges come apart, leaving a pause between the words; either edge brings them back together. The first word of a line has a left edge of its own: push it later and a pause appears before it — a singer does not always come in at once. The last word’s right edge stretches to the end of the line by itself (that is the melisma), but once you set it by hand it stays where you put it. The “S” button by a track name leaves that track alone in your headphones, and the slider next to it makes that track louder or quieter. Line starts are tapped with the spacebar: the “tap again” button.',
+  'ред.справка.оригинал': '<b>The top track is the original.</b> Drag across it and the real words from the recording play on that stretch instead of the instrumental — handy for an intro you’d rather not sing. Pull the edges to adjust; the cross, a double-click or <kbd>Delete</kbd> removes a stretch. Inside a stretch the original is heard in full, wherever the “Vocals” slider sits in karaoke — and it goes into the .wav instrumental and the recorded video just the same. In the editor itself you won’t hear the difference: the original plays everywhere here, or there would be nothing to time against. To hear the stretches, clear “hear the original” on the right or go to karaoke.',
   'ред.легенда.оригинал': 'original plays here',
   'ред.легенда.голос': 'voice',
   'ред.легенда.строка': 'line',
@@ -598,13 +598,13 @@ I18N.EN = {
   'ред.конецСлова.подсказка': 'Word end as minutes:seconds, the way the timeline reads it (plain seconds work too). The last word’s end stretches to the end of the line by itself — that is the melisma; set it by hand and the tail stays with the line, bring it back flush and it stretches again',
   'ред.слово.поКругу.подсказка': 'Play this word round and round, with a short run-up and tail (key L)',
   'черновик.сохранить': 'Save a draft',
-  'черновик.сохранить.подсказка': 'Save a draft file: the lyrics, the timing, the original stretches and the styling',
+  'черновик.сохранить.подсказка': 'Save a draft file: the lyrics, the timing, the original stretches and the look',
   'черновик.открыть': 'Open a draft',
   'черновик.открыть.подсказка': 'Open a draft file',
   'ред.назад': '← Lyrics',
   'ред.дальше': 'Karaoke →',
   'ред.назад.подсказка': 'Back to step 2: the song lyrics',
-  'ред.дальше.подсказка': 'Go to step 4: styling, preview and export',
+  'ред.дальше.подсказка': 'Go to step 4: the look, preview and export',
 
   /* ---------- Вопросы ---------- */
   'faq.заголовок': 'Frequently asked',
@@ -653,8 +653,8 @@ I18N.СТРОКИ = {
      а не украшает всё подряд. Фирменная — по умолчанию. */
   'тема.neutral': { ru: 'Нейтральная', en: 'Neutral' },
   'тема.signature': { ru: 'Фирменная', en: 'Signature' },
-  'тема.neutral.полно': { ru: 'Нейтральная тема оформления', en: 'Neutral theme' },
-  'тема.signature.полно': { ru: 'Фирменная тема оформления', en: 'Signature theme' },
+  'тема.neutral.полно': { ru: 'Нейтральная тема', en: 'Neutral theme' },
+  'тема.signature.полно': { ru: 'Фирменная тема', en: 'Signature theme' },
 
   /* ---------- Сетка долей ----------
      Уверенность и подсказки ставит код (обновитьСетку в app.js):
@@ -747,10 +747,10 @@ I18N.СТРОКИ = {
   },
   'память.безРазметки': { ru: '«{имя}» · разметки пока нет', en: '“{имя}” · no timing yet' },
   'память.ждётПесню': {
-    ru: 'В памяти работа над песней «{имя}»: строк в тексте {всего}, размечено {n}. '
-      + 'Загрузи тот же файл — и продолжишь с того же места. Другой файл заменит эту работу.',
-    en: 'The studio is holding work on “{имя}”: {всего} lines of text, {n} of them timed. '
-      + 'Load the same file and you carry on where you left off. A different file replaces this work.',
+    ru: 'В памяти проект по песне «{имя}»: строк в тексте {всего}, размечено {n}. '
+      + 'Загрузи тот же файл — и продолжишь с того же места. Другой файл заменит этот проект.',
+    en: 'The studio is holding the project for “{имя}”: {всего} lines of text, {n} of them timed. '
+      + 'Load the same file and you carry on where you left off. A different file replaces this project.',
   },
   'память.безИмени': { ru: 'черновик', en: 'draft' },
 
@@ -847,9 +847,9 @@ I18N.СТРОКИ = {
   },
 
   /* ---------- Сцена ---------- */
-  'сцена.пусто': { ru: 'Нет синхронизированных строк', en: 'No timed lines yet' },
-  'сцена.свернуть': { ru: 'Свернуть предпросмотр (Esc)', en: 'Collapse the preview (Esc)' },
-  'сцена.развернуть': { ru: 'Развернуть предпросмотр (F)', en: 'Expand the preview (F)' },
+  'сцена.пусто': { ru: 'Нет размеченных строк', en: 'No timed lines yet' },
+  'сцена.свернуть': { ru: 'Свернуть просмотр (Esc)', en: 'Collapse the preview (Esc)' },
+  'сцена.развернуть': { ru: 'Развернуть просмотр (F)', en: 'Expand the preview (F)' },
   'сцена.дБ': { ru: '{знак}{v} дБ', en: '{знак}{v} dB' },
 
   /* ---------- Проверка звука ---------- */
@@ -867,10 +867,10 @@ I18N.СТРОКИ = {
   'проверка.состояние': { ru: 'Состояние аудио: {state}, частота {rate} Гц', en: 'Audio state: {state}, sample rate {rate} Hz' },
   'проверка.тишинаВМинусе': {
     ru: '❗ В минусовке на этом месте тишина. Возможно, файл не тот '
-      + '(например, дорожка с одним вокалом) или он короче песни. '
+      + '(например, файл с одним вокалом) или он короче песни. '
       + 'Попробуй убрать свою минусовку или подвинуть позицию.',
     en: '❗ The instrumental is silent at this point. The file may be the wrong one '
-      + '(a vocals-only track, say) or shorter than the song. '
+      + '(a vocals-only file, say) or shorter than the song. '
       + 'Try removing your instrumental or moving the position.',
   },
   'проверка.минусКороче': {
@@ -895,7 +895,7 @@ I18N.СТРОКИ = {
   },
 
   /* ---------- Экспорт ---------- */
-  'экспорт.нетСтрок': { ru: 'Сначала синхронизируй текст.', en: 'Time the lyrics first.' },
+  'экспорт.нетСтрок': { ru: 'Сначала размети текст.', en: 'Time the lyrics first.' },
   'экспорт.имяСлова': { ru: '{имя} (по словам).lrc', en: '{имя} (word by word).lrc' },
   'экспорт.имяМинус': { ru: '{имя} (минус).wav', en: '{имя} (instrumental).wav' },
   'экспорт.имяВидео': { ru: '{имя} (караоке).{ext}', en: '{имя} (karaoke).{ext}' },
@@ -979,7 +979,7 @@ I18N.СТРОКИ = {
     ru: 'Сдвинуть всю разметку на {v} с',
     en: 'Shift the whole timing by {v} s',
   },
-  /* Пока на дорожке выделен кусок, те же кнопки двигают только его */
+  /* Пока на дорожке выделен диапазон, те же кнопки двигают только его */
   'ред.сдвинуть.диапазон': {
     ru: 'Сдвинуть выделенные строки на {v} с',
     en: 'Shift the selected lines by {v} s',
@@ -988,7 +988,7 @@ I18N.СТРОКИ = {
 
   /* ---------- Подписи на дорожке ---------- */
   'дорожка.оригинал.пусто': {
-    ru: 'оригинал: протяни мышью — на этом куске зазвучат настоящие слова',
+    ru: 'оригинал: протяни мышью — на этом отрезке зазвучат настоящие слова',
     en: 'original: drag across — the real words will play on that stretch',
   },
   'дорожка.оригинал': { ru: 'оригинал', en: 'original' },
@@ -998,16 +998,16 @@ I18N.СТРОКИ = {
     en: 'select a line — its words will appear here',
   },
 
-  /* ---------- Колонка заголовков дорожек, слева от полос ----------
+  /* ---------- Колонка заголовков полос, слева от канваса ----------
      Место под будущую кнопку «слушать только это» уже заложено
      в вёрстке (см. .tl-head-solo в style.css) — сама кнопка появится
      отдельным заходом, сейчас только подпись и отступ под неё. */
-  /* Кнопка «слушать только эту дорожку» в колонке заголовков полос.
+  /* Кнопка «слушать только эту полосу» в колонке заголовков полос.
      Буква S на кнопке одна и та же на обоих языках — как в монтажных
      программах (solo, соло). */
   'дорожка.соло': { ru: 'Слушать только «{имя}»', en: 'Listen to “{имя}” only' },
-  /* Ползунок уровня дорожки в наушниках. У голоса он не «громкость», а
-     прибавка: своей дорожки с голосом нет, он берётся вычитанием
+  /* Ползунок уровня полосы в наушниках. У голоса он не «громкость», а
+     прибавка: отдельной записи голоса нет, он берётся вычитанием
      минусовки из песни. Двойной щелчок возвращает умолчание. */
   'дорожка.уровень': {
     ru: 'Уровень «{имя}» в наушниках: {v}%. Двойной щелчок — вернуть как было',
