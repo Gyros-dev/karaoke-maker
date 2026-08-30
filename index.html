@@ -5,7 +5,7 @@
      и отсюда же — app.js, чтобы решить, показывать ли окно. В словаре
      перевода номера нет: там он однажды отстал, и при переключении
      на английский окно объявляло прошлую версию. -->
-<html lang="ru" data-news-version="1.12.1">
+<html lang="ru" data-news-version="1.13.0">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +16,7 @@
   <link rel="icon" href="icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="theme-color" content="#0a0a0f">
-  <link rel="stylesheet" href="style.css?v=1.12.1">
+  <link rel="stylesheet" href="style.css?v=1.13.0">
 </head>
 <body>
 
@@ -79,6 +79,30 @@
     <span class="whatsnew-badge"><span class="dot"></span> <span data-i18n="новости.значок">Обновление</span></span>
     <h3 id="whatsnew-title" data-i18n="новости.заголовок">Что нового в версии {версия}</h3>
     <ul class="whatsnew-list">
+      <li data-i18n-html="новости.темп">
+        <b>Темп определяется куда увереннее.</b> Раньше студия слушала
+        общую громкость, а на плотном сведении удары по ней почти
+        не читаются: уверенность выходила 7–9 %, и одна и та же песня
+        со своей минусовкой могла разойтись в полтора раза. Теперь темп
+        считается по спектру — по тому, где появляется новый звук,
+        а не где становится громче. Уверенность выросла до 41–47 %,
+        а песня и её минусовка дают один темп и одну и ту же долю.
+      </li>
+      <li data-i18n-html="новости.плавность">
+        <b>Редактор перестал работать вхолостую.</b> Стоя на паузе, студия
+        триста раз в секунду перерисовывала дорожку тем же самым рисунком
+        и пересчитывала сцену караоке с четвёртого шага. При перетаскивании
+        границы под музыку список строк прокручивался на каждом кадре.
+        Теперь на кадр попадает только то, что и правда изменилось:
+        перетаскивание идёт в полный кадровый ход вместо трёх четвертей.
+      </li>
+      <li data-i18n-html="новости.словарь">
+        <b>Интерфейс называет вещи одинаково.</b> Дорожка и полоса, песня
+        и трек, оформление и стиль, просмотр и предпросмотр — одно и то же
+        называлось по-разному в разных углах студии, и в переводе тоже.
+        Теперь есть словарь: дорожка целиком и полоса как один её ряд,
+        отрезок оригинала и диапазон строк, проект и черновик.
+      </li>
       <li data-i18n-html="новости.починки">
         <b>Починки после проверки на баги.</b> Главное: заход простукивания
         больше не теряется. Если простучать строку позже той метки, что
@@ -379,9 +403,9 @@
       <span class="hero-get-label" data-i18n="герой.скачать">Лучше — приложением: там нейросети убирают вокал и размечают текст</span>
       <span class="hero-get-buttons">
         <a class="btn btn-primary btn-small" id="dl-mac-hero" data-i18n="герой.мак"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.12.1/Karaoke-Punch-1.12.1-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.13.0/Karaoke-Punch-1.13.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
         <a class="btn btn-primary btn-small" id="dl-win-hero" data-i18n="герой.виндоус"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.12.1/Karaoke-Punch-1.12.1-Windows-Setup.exe">🪟 Скачать для Windows</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.13.0/Karaoke-Punch-1.13.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
       </span>
     </div>
     <div class="hero-note"><span class="pill" data-i18n="герой.приватно">100% приватно</span> <span data-i18n="герой.файлы">файлы не покидают твой компьютер</span></div>
@@ -432,9 +456,9 @@
   </p>
   <div class="desktop-buttons">
     <a class="btn btn-primary" id="dl-mac" data-i18n="настольная.мак"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.12.1/Karaoke-Punch-1.12.1-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.13.0/Karaoke-Punch-1.13.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
     <a class="btn btn-primary" id="dl-win" data-i18n="настольная.виндоус"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.12.1/Karaoke-Punch-1.12.1-Windows-Setup.exe">🪟 Скачать для Windows</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.13.0/Karaoke-Punch-1.13.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
   </div>
   <p class="desktop-note" data-i18n-html="настольная.заметка">
     Бесплатно и с открытым кодом. Каждая модель скачивается один раз при первом
@@ -1409,13 +1433,13 @@
   <button class="footer-link" id="btn-whatsnew" data-i18n="подвал.новости">Что нового в {версия}</button>
 </footer>
 
-<script src="i18n.js?v=1.12.1"></script>
+<script src="i18n.js?v=1.13.0"></script>
 <!-- БПФ и счётчик темпа: общие с рабочими потоками (pitch-worker.js
      считает по fft.js тональность, tempo.js умеет работать и сам
      потоком). Здесь они нужны окну: самопроверке и запасному пути,
      если поток не завёлся. Обязательно ДО app.js. -->
-<script src="fft.js?v=1.12.1"></script>
-<script src="tempo.js?v=1.12.1"></script>
-<script src="app.js?v=1.12.1"></script>
+<script src="fft.js?v=1.13.0"></script>
+<script src="tempo.js?v=1.13.0"></script>
+<script src="app.js?v=1.13.0"></script>
 </body>
 </html>
