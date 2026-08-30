@@ -3125,14 +3125,14 @@ function refreshTimes() {
   const synced = syncedLines();
   document.querySelectorAll('#edit-list .ts[data-ts-i]').forEach((el) => {
     const line = state.lines[+el.dataset.tsI];
-    if (line) el.textContent = line.time == null ? '–:––' : fmtTimeCs(line.time);
+    if (line) писать(el, line.time == null ? '–:––' : fmtTimeCs(line.time));
   });
   document.querySelectorAll('#edit-list .dur-ts[data-dur-i]').forEach((el) => {
     const line = state.lines[+el.dataset.durI];
     if (!line) return;
     const i = synced.indexOf(line);
-    el.textContent = line.time == null
-      ? '' : fmtДлит(lineEnd(synced, i) - lineStart(synced, i), 2);
+    писать(el, line.time == null
+      ? '' : fmtДлит(lineEnd(synced, i) - lineStart(synced, i), 2));
   });
   updateSelInfo();
   updateWordInfo();
@@ -4118,6 +4118,20 @@ function setText(id, text) {
   if (el.textContent !== text) el.textContent = text;
 }
 
+/* То же самое для узла, который уже в руках, — и для полей ввода.
+
+   Присвоение textContent сносит старый текстовый узел и заводит новый,
+   даже когда строка та же самая: браузер считает раскладку заново.
+   В сетке строк таких подписей полторы сотни, и панель инспектора
+   переписывала их при каждом движении мыши по дорожке. */
+function писать(el, text) {
+  if (el && el.textContent !== text) el.textContent = text;
+}
+
+function ставитьЗначение(поле, v) {
+  if (поле && поле.value !== v) поле.value = v;
+}
+
 /* Кнопка играть/пауза несёт оба значка разом (см. index.html) — виден
    только нужный, класс переключает CSS. Тот же приём против пересборки
    узла между нажатием и отпусканием мыши, что и в setText, но textContent
@@ -4138,9 +4152,31 @@ function updatePlayerUI() {
   }
 }
 
+/* Общий цикл обновления — один на все шаги, кадр за кадром.
+
+   Правило у него простое: на каждом кадре пересчитывается только то,
+   что от кадра к кадру и правда меняется. Само по себе едет одно —
+   время: указатель воспроизведения на дорожке, подсветка слов на сцене,
+   часы. Всё прочее (масштаб, выделение, правка, перетаскивание) зовёт
+   свою отрисовку там же, где меняет данные, — и на общий цикл
+   не рассчитывает.
+
+   Было иначе: цикл каждый кадр пересчитывал ОБА рабочих шага сразу.
+   Сидя в редакторе, студия 120 раз в секунду перебирала сцену караоке
+   и полосу перемотки с четвёртого шага — узлы, которых в это время
+   не видно, — а на паузе ещё и перерисовывала дорожку тем же самым
+   рисунком. Замерено на 120-герцевом экране: 360 отрисовок дорожки
+   за три секунды стояния на месте и 600 пересчётов чужой сцены
+   за пять секунд игры. */
 function tickPlayer() {
-  updatePlayerUI();
-  updateStageFill();
+  /* Сцена караоке и полоса перемотки живут на четвёртом шаге. Пока он
+     не на экране, считать их незачем: всё, что они показывают, будет
+     пересчитано при возвращении на шаг (goToStep зовёт renderStage
+     и updatePlayerUI). */
+  if ($('step-4').classList.contains('active')) {
+    updatePlayerUI();
+    updateStageFill();
+  }
 
   // Конец прослушиваемого отрывка — пауза
   if (audio.playing && audio.stopAt != null && audio.position() >= audio.stopAt) {
@@ -4153,14 +4189,33 @@ function tickPlayer() {
 
   // Обновление редактора
   if ($('step-3').classList.contains('active') && editor.peaks) {
-    setText('edit-time', fmtTimeCs(audio.position()));
+    const пос = audio.position();
+    // Кнопка играть/пауза меняется не от времени, а от нажатия — но она
+    // и стоит копейки: setPlayIcon сам ничего не делает, когда значок тот же
     setPlayIcon('btn-edit-play', audio.playing);
-    tickLoop();
-    // В режиме простукивания предпросмотр убран с глаз — считать его незачем
-    if (tap.active) setText('tap-time', fmtTime(audio.position()));
-    else updateEditStage();
-    followPlayhead();
-    drawTimeline();
+    /* Время сдвинулось — считаем кадр. Стоим на месте — считать нечего.
+       Один кадр после остановки всё же проходит: на нём указатель
+       встаёт на своё последнее место (пос уже другой, чем на прошлом
+       кадре), после чего цикл затихает до следующего движения. */
+    const времяЕдет = audio.playing || пос !== editor.кадрПоказан;
+    /* Пустой stageKey — просьба «проверь предпросмотр заново»: её ставят
+       те, кто поменял разметку или текст, не сдвинув времени (скажем,
+       перетаскивание границы на стоящей песне). Без этой ветки живой
+       предпросмотр во время такого перетаскивания замер бы. */
+    if (времяЕдет || editor.stageKey === '') {
+      editor.кадрПоказан = пос;
+      setText('edit-time', fmtTimeCs(пос));
+      tickLoop();
+      // В режиме простукивания предпросмотр убран с глаз — считать его незачем
+      if (tap.active) setText('tap-time', fmtTime(пос));
+      else updateEditStage();
+    }
+    /* Дорожку из цикла рисуем только под движущийся указатель: всё
+       остальное рисует её там же, где меняет (см. отрисоватьВКадре). */
+    if (времяЕдет) {
+      followPlayhead();
+      drawTimeline();
+    }
   }
 
   player.raf = requestAnimationFrame(tickPlayer);
@@ -4240,6 +4295,10 @@ function applyStyle() {
     stage.style.backgroundImage = state.bgImage ? `url("${state.bgImage}")` : '';
   }
 
+  /* Оформление поменялось, а строки те же самые: слепок предпросмотра
+     их не различает, поэтому сбрасываем его прямо здесь — иначе кегль
+     и места строк остались бы прежними (см. renderEditStage). */
+  editor.stageDrawn = null;
   renderStage();
   renderEditStage();
 }
@@ -4845,6 +4904,13 @@ const editor = {
   темпИсточник: null, // по чему считали: 'минус' или 'оригинал'
   drag: null,    // что тащим прямо сейчас, см. timelineHit
   stageKey: '',
+  /* Что уже нарисовано на предпросмотре — слепок ЕГО СОДЕРЖИМОГО,
+     а не только номера строки: по нему renderEditStage узнаёт, что
+     перерисовывать нечего (см. там же) */
+  stageDrawn: null,
+  /* На каком времени посчитан последний кадр редактора. Совпало —
+     значит, указатель стоит и считать нечего (см. tickPlayer) */
+  кадрПоказан: null,
 
   sel: -1,       // выбранная строка (номер в state.lines), -1 — ничего
   wordSel: -1,   // выбранное слово внутри неё (номер в массиве слов), -1 — ничего
@@ -5780,6 +5846,10 @@ function renderEditList() {
   /* Поиск не нашёл ничего — пустой список выглядел бы поломкой */
   const пусто = $('line-search-none');
   if (пусто) пусто.classList.toggle('hidden', !(editor.поиск && показано === 0));
+  /* Ряды собраны заново, и пометки текущей строки на них нет: её ставит
+     предпросмотр (см. renderEditStage). Сбрасываем его слепок, иначе
+     подсветка не вернулась бы до самой смены строки. */
+  editor.stageDrawn = null;
 }
 
 /* ---------- Поиск по строкам ----------
@@ -6478,11 +6548,33 @@ $('edit-list').addEventListener('focusout', (e) => {
   el.textContent = line.text;   // пользовательский текст — только textContent
 });
 
-/* --- Мини-сцена предпросмотра --- */
+/* --- Мини-сцена предпросмотра ---
+
+   Перерисовка стоит дорого: подгонка кегля (fitStageLines) меряет строки
+   холстом и читает раскладку, а следом сетка строк всплывает к текущей.
+   Поэтому у предпросмотра два ключа, а не один.
+
+   * `editor.stageKey` — дешёвый, из одной фазы (какая строка поётся,
+     идёт ли проигрыш). По нему updateEditStage каждый кадр решает,
+     звать ли перерисовку вообще. Полтора десятка мест по всей студии
+     сбрасывают его в '', когда поменяли разметку или текст: «проверь
+     заново» — фаза-то прежняя, а показывать надо другое.
+   * `editor.stageDrawn` — слепок того, что НА САМОМ ДЕЛЕ нарисовано:
+     ключи, тексты, классы и места строк. По нему renderEditStage
+     отличает «проверь заново» от «и правда изменилось».
+
+   Беда, которую это лечит. Каждое движение мыши при перетаскивании
+     границы сбрасывает stageKey в '' — времена-то поехали. Дальше
+     предпросмотр пересобирался целиком, хотя строка поётся та же самая
+     и на экране от этого не менялось ни пикселя. Замерено: за три
+     секунды перетаскивания 360 перерисовок, из них 357 — в пустоту,
+     и с каждой из них подгонка кегля и прокрутка сетки строк. Прокрутка
+     и была тем «событием scroll едва ли не каждый кадр», из-за которого
+     подсказки у кнопок не доживали до своих 180 мс. */
 function renderEditStage() {
   const el = $('edit-stage');
   const lines = syncedLines();
-  if (!lines.length) { el.innerHTML = ''; return; }
+  if (!lines.length) { el.innerHTML = ''; editor.stageDrawn = null; return; }
   const pos = audio.position();
   const ph = stagePhase(pos);
 
@@ -6496,15 +6588,26 @@ function renderEditStage() {
     : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
   const cur = ph.cur;
 
-  syncStageLines(el, state.style.swapLines
+  const items = state.style.swapLines
     ? scrollingItems(lines, ph)
-    : fixedSlotItems(lines, ph));
+    : fixedSlotItems(lines, ph);
+  const globalIdx = cur >= 0 ? state.lines.indexOf(lines[cur]) : -1;
+
+  /* Слепок содержимого. Всё, что попадает на экран, в него входит:
+     поменяется текст строки, её место или класс — слепок разойдётся
+     и перерисовка пойдёт как раньше. */
+  const слепок = globalIdx + '·' + items
+    .map((it) => `${it.key}~${it.text}~${it.cls || ''}~${it.top == null ? '' : it.top}`)
+    .join('|');
+  if (слепок === editor.stageDrawn) return;
+  editor.stageDrawn = слепок;
+
+  syncStageLines(el, items);
 
   // Единый кегль — тот же, что на большой сцене и в видео
   fitStageLines(el);
 
   // Подсветка текущей строки в списке
-  const globalIdx = cur >= 0 ? state.lines.indexOf(lines[cur]) : -1;
   document.querySelectorAll('#edit-list .edit-row').forEach((row) => {
     row.classList.toggle('current-row', +row.dataset.row === globalIdx);
   });
@@ -7099,7 +7202,38 @@ function drawWordBlocks(g, lane, W) {
   g.textBaseline = 'alphabetic';
 }
 
+/* ---------- Отрисовка не чаще раза в кадр ----------
+
+   Дорожка рисуется каждый кадр вместе с указателем воспроизведения —
+   это намеренно. Лишним было другое: за один кадр браузер присылает
+   два-три `pointermove`, и каждое движение мыши перерисовывало холст
+   целиком, поверх кадровой отрисовки. Замерено на 120-герцевом экране:
+   808 отрисовок за 269 кадров перетаскивания под музыку — втрое больше,
+   чем экран способен показать, и кадров при этом выходило 89 в секунду
+   вместо 120.
+
+   Поэтому на время обработки движения мыши отрисовка откладывается
+   до кадра: applyDrag зовёт её как звал, а холст перерисовывается один
+   раз. Флаг живёт ровно внутри обработчика — всё остальное (клавиши,
+   отпускание кнопки, самопроверка) рисует на месте, как раньше. */
+let откладыватьОтрисовку = false;
+let отрисовкаЖдётКадра = false;
+
+function отрисоватьВКадре() {
+  if (отрисовкаЖдётКадра) return;
+  отрисовкаЖдётКадра = true;
+  requestAnimationFrame(() => {
+    отрисовкаЖдётКадра = false;
+    /* Пока песня играет, дорожку рисует общий цикл — и рисует уже
+       с новыми числами: обработчики мыши отрабатывают раньше, чем
+       кадровые обещания. Своей отрисовки тут не добавляем, иначе
+       на кадр их выходит две. */
+    if (!audio.playing) drawTimeline();
+  });
+}
+
 function drawTimeline() {
+  if (откладыватьОтрисовку) { отрисоватьВКадре(); return; }
   if (!editor.peaks) return;
   const c = $('timeline');
   const g = c.getContext('2d');
@@ -7521,10 +7655,11 @@ function updateSelInfo() {
   /* В ряду инспектора слева стоит подпись «строка», поэтому значением
      остаётся только номер: «строка · Строка №26» читалось бы дважды.
      Полное название и пометка «время на глазок» — в подсказке. */
-  el.textContent = !sp ? t('ред.строкаНет') : t('ред.номер', { n: sp.row + 1 });
-  el.title = !sp ? t('ред.строкаНеВыбрана')
+  писать(el, !sp ? t('ред.строкаНет') : t('ред.номер', { n: sp.row + 1 }));
+  const подпись = !sp ? t('ред.строкаНеВыбрана')
     : t('ред.строкаНомер', { n: sp.row + 1 })
       + (line.сомнительная ? t('ред.строкаГлазок') : '');
+  if (el.title !== подпись) el.title = подпись;
   el.classList.toggle('guess', !!(line && line.сомнительная));
 
   /* Поле, в котором прямо сейчас набирают, не трогаем: панель
@@ -7541,15 +7676,14 @@ function updateSelInfo() {
   const заполнить = (id, v) => {
     const поле = $(id);
     if (!поле) return;
-    поле.disabled = !sp;
+    if (поле.disabled !== !sp) поле.disabled = !sp;
     if (document.activeElement === поле && поле.dataset.набирают) return;
     поле.classList.remove('bad');
-    поле.value = sp ? fmtTimeMs(v) : '';
+    ставитьЗначение(поле, sp ? fmtTimeMs(v) : '');
   };
   заполнить('sel-start', sp ? sp.start : 0);
   заполнить('sel-end', sp ? sp.end : 0);
-  const dur = $('sel-dur');
-  if (dur) dur.textContent = sp ? fmtДлит(sp.end - sp.start, 3) : '—';
+  писать($('sel-dur'), sp ? fmtДлит(sp.end - sp.start, 3) : '—');
 
   // Пока строка не выбрана, работать не с чем — кнопки гаснут
   const panel = $('sel-panel');
@@ -7608,17 +7742,18 @@ function updateWordInfo() {
      «пьянь» проще, чем «Слово №6 из 7». Номер остался в подсказке.
      Слово — текст человека, поэтому только textContent. */
   // splitWords оставляет за словом пробел-разделитель — в подписи он лишний
-  head.textContent = !info ? t('ред.словоНет') : info.words[info.k].text.trim();
-  head.title = !info ? t('ред.словоНеВыбрано')
+  писать(head, !info ? t('ред.словоНет') : info.words[info.k].text.trim());
+  const подпись = !info ? t('ред.словоНеВыбрано')
     : t('ред.словоНомер', { n: info.k + 1, всего: info.words.length });
+  if (head.title !== подпись) head.title = подпись;
   /* Заголовок окна идёт за выбором: правят слово — окно про слово.
      Подписи обоих состояний живут в разметке, поэтому ключ ставим
      туда же, где его ищет перевод (data-i18n), а не только текстом. */
   const заголовок = $('sel-pane-head');
   if (заголовок) {
     const ключ = info ? 'ред.словоЗаголовок' : 'ред.окно.строка';
-    заголовок.dataset.i18n = ключ;
-    заголовок.textContent = t(ключ);
+    if (заголовок.dataset.i18n !== ключ) заголовок.dataset.i18n = ключ;
+    писать(заголовок, t(ключ));
   }
 
   const w = info ? info.words[info.k] : null;
@@ -7631,15 +7766,14 @@ function updateWordInfo() {
   const заполнить = (id, v, можно) => {
     const поле = $(id);
     if (!поле) return;
-    поле.disabled = !можно;
+    if (поле.disabled !== !можно) поле.disabled = !можно;
     if (document.activeElement === поле && поле.dataset.набирают) return;
     поле.classList.remove('bad');
-    поле.value = можно && v != null ? fmtTimeMs(v) : '';
+    ставитьЗначение(поле, можно && v != null ? fmtTimeMs(v) : '');
   };
   заполнить('sel-word-start', w ? w.start : null, можноНачало);
   заполнить('sel-word-end', w ? w.end : null, можноКонец);
-  const dur = $('sel-word-dur');
-  if (dur) dur.textContent = w ? fmtДлит(w.end - w.start, 3) : '—';
+  писать($('sel-word-dur'), w ? fmtДлит(w.end - w.start, 3) : '—');
 
   const panel = $('word-panel');
   if (panel) panel.classList.toggle('empty', !info);
@@ -8194,8 +8328,13 @@ function applyDrag(t) {
 function showDragTip(x, sec) {
   const tip = $('tl-tip');
   if (!tip || sec == null) return;
-  tip.textContent = fmtTimeMs(sec);
-  tip.style.left = `${tl.offsetLeft + x}px`;
+  /* Раскладку читаем ДО того, как что-то написать: чтение сразу
+     после записи заставляет браузер пересчитать её на месте, а этот
+     код зовётся на каждое движение мыши при перетаскивании. */
+  const слева = tl.offsetLeft + x;
+  писать(tip, fmtTimeMs(sec));
+  const было = `${слева}px`;
+  if (tip.style.left !== было) tip.style.left = было;
   tip.classList.remove('hidden');
 }
 function hideDragTip() {
@@ -8278,30 +8417,36 @@ tl.addEventListener('pointermove', (e) => {
      перетаскивания — как в монтажных программах */
   editor.одинКрай = !!(e.metaKey || e.ctrlKey);
   if (editor.drag) {
-    if (editor.drag.kind === 'seek') {
-      /* Пока играет обычным ходом, указатель за курсором не тащим:
-         перезапуск воспроизведения на каждое движение мыши — это
-         десятки стартов в секунду. Щелчок при этом перематывает
-         как раньше (он отработал в pointerdown). */
-      if (!audio.playing) {
-        const t = Math.min(Math.max(0, xToT(x)), audio.duration);
-        audio.offset = t;
-        editor.dragTip = t;
-        скрабнуть(t);
-        setText('edit-time', fmtTimeCs(t));
-        showDragTip(x, t);
-        drawTimeline();
+    // Холст перерисуем один раз к кадру, а не на каждое движение мыши
+    откладыватьОтрисовку = true;
+    try {
+      if (editor.drag.kind === 'seek') {
+        /* Пока играет обычным ходом, указатель за курсором не тащим:
+           перезапуск воспроизведения на каждое движение мыши — это
+           десятки стартов в секунду. Щелчок при этом перематывает
+           как раньше (он отработал в pointerdown). */
+        if (!audio.playing) {
+          const t = Math.min(Math.max(0, xToT(x)), audio.duration);
+          audio.offset = t;
+          editor.dragTip = t;
+          скрабнуть(t);
+          setText('edit-time', fmtTimeCs(t));
+          showDragTip(x, t);
+          drawTimeline();
+        }
+        return;
       }
-      return;
+      if (editor.drag.kind.startsWith('range-')) applyRangeDrag(xToT(x));
+      else if (editor.drag.kind.startsWith('orig-')) applyOrigDrag(xToT(x));
+      else applyDrag(xToT(x));
+      showDragTip(x, editor.dragTip);
+      /* Границу строки или слова тоже слышно: звучит то место, куда её
+         привели. Дёшево — тот же кусочек, только время берётся из
+         подписи у курсора, а её ставят все три вида перетаскивания. */
+      скрабнуть(editor.dragTip);
+    } finally {
+      откладыватьОтрисовку = false;
     }
-    if (editor.drag.kind.startsWith('range-')) applyRangeDrag(xToT(x));
-    else if (editor.drag.kind.startsWith('orig-')) applyOrigDrag(xToT(x));
-    else applyDrag(xToT(x));
-    showDragTip(x, editor.dragTip);
-    /* Границу строки или слова тоже слышно: звучит то место, куда её
-       привели. Дёшево — тот же кусочек, только время берётся из
-       подписи у курсора, а её ставят все три вида перетаскивания. */
-    скрабнуть(editor.dragTip);
     return;
   }
   /* Скиммирование: просто ведут мышь над дорожкой — под курсором

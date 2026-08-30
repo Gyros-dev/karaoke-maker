@@ -4247,6 +4247,282 @@ function createWindow() {
         }
       })()`);
 
+      /* Лишняя работа на каждом кадре редактора.
+
+         Редактор — самый плотный экран студии, и дорожка на нём и правда
+         перерисовывается каждый кадр: под движущийся указатель. Всё
+         остальное на кадр попадать не должно. Раньше попадало: на паузе
+         холст перерисовывался тем же самым рисунком, сцена караоке
+         с ЧЕТВЁРТОГО шага пересчитывалась, пока человек сидит в
+         редакторе, а каждое движение мыши при перетаскивании собирало
+         предпросмотр заново — вместе с подгонкой кегля и прокруткой
+         сетки строк к текущей строке. Та прокрутка и была «событием
+         scroll едва ли не каждый кадр», из-за которого подсказки
+         у кнопок не доживали до своих 180 мс.
+
+         Меряем числами, а не на глаз:
+         • стоим на паузе — ни одной отрисовки холста и ни одной правки
+           узлов внутри студии;
+         • играем — отрисовка ровно раз в кадр (указатель обязан ехать
+           плавно), а сетка строк всплывает не чаще смены строки;
+         • тащим границу под музыку — то же самое: отрисовка раз в кадр
+           и считанные прокрутки сетки, а не по одной на кадр;
+         • повторный вызов обновления при неизменных данных не переписывает
+           ни одного узла.
+
+         Всё тронутое возвращается в finally, включая karaoke-project. */
+      report.кадрыРедактора = await win.webContents.executeJavaScript(`(async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былаДлина = audio.duration;
+        const былаПозиция = audio.position;
+        const былаИграет = audio.playing;
+        const былиПики = editor.peaks;
+        const былВыбор = editor.sel;
+        const былПроект = localStorage.getItem('karaoke-project');
+        const исхТрансформ = CanvasRenderingContext2D.prototype.setTransform;
+        const исхПрокрутка = window.scrollEditListTo;
+        const активная = [...document.querySelectorAll('.step-panel')]
+          .find((p) => p.classList.contains('active'));
+        let наблюдатель = null;
+        let вернутьЗаписи = null;   // снимает подмену textContent/value, см. ниже
+        try {
+          /* Песня на три минуты и полсотни строк — как настоящая:
+             на короткой разметке сетка строк не прокручивалась бы вовсе */
+          const SR = 8000, dur = 180;
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          state.originalBuffer = ctx.createBuffer(1, SR * dur, SR);
+          audio.duration = dur;
+          state.lines = Array.from({ length: 60 }, (_, i) => ({
+            text: 'Строка номер ' + (i + 1) + ' с каким-то текстом песни',
+            time: 1 + i * 2.9, end: null, ручнойКонец: false, сомнительная: false,
+          }));
+          editor.peaks = null;
+          audio.playing = false;
+          clearHistory();
+          goToStep(3);
+
+          const кадры = (n) => new Promise((готово) => {
+            let k = 0;
+            const шаг = () => { if (++k >= n) готово(); else requestAnimationFrame(шаг); };
+            requestAnimationFrame(шаг);
+          });
+          await кадры(10);   // дать раскладке улечься
+
+          /* Счётчики. Настоящие отрисовки холста считаем по setTransform:
+             drawTimeline зовёт его ровно один раз за отрисовку, а вызов,
+             отложенный до кадра, выходит раньше. */
+          let отрисовок = 0;
+          CanvasRenderingContext2D.prototype.setTransform = function () {
+            if (this.canvas && this.canvas.id === 'timeline') отрисовок++;
+            return исхТрансформ.apply(this, arguments);
+          };
+          let прокрутокЗвали = 0;
+          let прокрутокСдвинуло = 0;
+          window.scrollEditListTo = function () {
+            прокрутокЗвали++;
+            const l = document.getElementById('edit-list');
+            const до = l ? l.scrollTop : 0;
+            const r = исхПрокрутка.apply(this, arguments);
+            if (l && l.scrollTop !== до) прокрутокСдвинуло++;
+            return r;
+          };
+          /* «Переписал узел» считаем ДВУМЯ приборами сразу.
+
+             MutationObserver ловит пересборку: узлы снесли и собрали
+             заново. Но одного его мало: браузер умеет не заводить записи,
+             когда в textContent кладут ту же самую строку, а у поля ввода
+             value и вовсе не отражается в разметке. Поэтому вторым
+             прибором считаем сами записи — подменяем присвоение
+             textContent и value и смотрим, сколько раз в них написали. */
+          let правок = 0;
+          let записей = 0;
+          наблюдатель = new MutationObserver((з) => { правок += з.length; });
+          const текстОпис = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+          const полеОпис = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          let считаемЗаписи = false;
+          Object.defineProperty(Node.prototype, 'textContent', {
+            ...текстОпис,
+            set(v) { if (считаемЗаписи) записей++; return текстОпис.set.call(this, v); },
+          });
+          Object.defineProperty(HTMLInputElement.prototype, 'value', {
+            ...полеОпис,
+            set(v) { if (считаемЗаписи) записей++; return полеОпис.set.call(this, v); },
+          });
+          вернутьЗаписи = () => {
+            считаемЗаписи = false;
+            Object.defineProperty(Node.prototype, 'textContent', текстОпис);
+            Object.defineProperty(HTMLInputElement.prototype, 'value', полеОпис);
+          };
+          const следить = () => {
+            правок = 0; записей = 0; считаемЗаписи = true;
+            наблюдатель.observe(document.getElementById('studio'), {
+              subtree: true, childList: true, characterData: true, attributes: true,
+            });
+          };
+          const хватит = () => {
+            считаемЗаписи = false;
+            наблюдатель.takeRecords(); наблюдатель.disconnect();
+            return правок + записей;
+          };
+
+          /* ---- 1. Песня стоит: студия не должна делать ничего ---- */
+          отрисовок = 0; прокрутокЗвали = 0;
+          следить();
+          await кадры(120);
+          const правокНаПаузе = хватит();
+          const отрисовокНаПаузе = отрисовок;
+
+          /* ---- 2. Играем: указатель едет, сетка всплывает ---- */
+          const t0 = performance.now();
+          audio.playing = true;
+          audio.position = () => 40 + (performance.now() - t0) / 1000;
+          const списокДо = document.getElementById('edit-list').scrollTop;
+          отрисовок = 0; прокрутокЗвали = 0; прокрутокСдвинуло = 0;
+          let кадровИгры = 0;
+          const указатели = [];
+          await new Promise((готово) => {
+            const шаг = () => {
+              кадровИгры++;
+              if (кадровИгры % 40 === 0) указатели.push(+audio.position().toFixed(3));
+              if (кадровИгры >= 240) { готово(); return; }
+              requestAnimationFrame(шаг);
+            };
+            requestAnimationFrame(шаг);
+          });
+          const отрисовокЗаИгру = отрисовок;
+          const прокрутокЗаИгру = прокрутокЗвали;
+          const списокПосле = document.getElementById('edit-list').scrollTop;
+          const сеткаВсплыла = списокПосле !== списокДо;
+          // Текущая строка правда всплыла: её ряд стоит внутри окна списка
+          const текущаяВидна = (() => {
+            const l = document.getElementById('edit-list');
+            const ряд = l.querySelector('.edit-row.current-row');
+            if (!ряд) return false;
+            const о = l.getBoundingClientRect();
+            const р = ряд.getBoundingClientRect();
+            return р.top >= о.top - 1 && р.bottom <= о.bottom + 1;
+          })();
+
+          /* ---- 3. Тащим границу строки под музыку ---- */
+          const tlRect = tl.getBoundingClientRect();
+          const L = timelineLanes();
+          const yСтрок = L.lines.y + Math.round(L.lines.h / 2);
+          editor.scrollT = 30;
+          drawTimeline();
+          const xСтарт = tToX(state.lines[11].time) + 6;
+          const хит = timelineHit(xСтарт, yСтрок);
+          let тащим = true;
+          let фаза = 0;
+          const шагТяги = () => {
+            if (!тащим) return;
+            фаза++;
+            tl.dispatchEvent(new PointerEvent('pointermove', {
+              clientX: tlRect.left + xСтарт + Math.sin(фаза / 8) * 20,
+              clientY: tlRect.top + yСтрок, bubbles: true, pointerId: 1,
+            }));
+            requestAnimationFrame(шагТяги);
+          };
+          tl.dispatchEvent(new PointerEvent('pointerdown', {
+            clientX: tlRect.left + xСтарт, clientY: tlRect.top + yСтрок,
+            bubbles: true, pointerId: 1, button: 0,
+          }));
+          отрисовок = 0; прокрутокЗвали = 0;
+          requestAnimationFrame(шагТяги);
+          let кадровТяги = 0;
+          await new Promise((готово) => {
+            const шаг = () => {
+              if (++кадровТяги >= 240) { готово(); return; }
+              requestAnimationFrame(шаг);
+            };
+            requestAnimationFrame(шаг);
+          });
+          тащим = false;
+          const отрисовокЗаТягу = отрисовок;
+          const прокрутокЗаТягу = прокрутокЗвали;
+          tl.dispatchEvent(new PointerEvent('pointerup', {
+            clientX: tlRect.left + xСтарт, clientY: tlRect.top + yСтрок,
+            bubbles: true, pointerId: 1,
+          }));
+          audio.playing = false;
+          audio.position = былаПозиция;
+          await кадры(5);
+
+          /* ---- 4. Повторный вызов при неизменных данных не трогает узлы ---- */
+          selectLine(11, {});
+          renderEditList();
+          renderEditStage();
+          refreshTimes();
+          await кадры(3);
+          следить();
+          renderEditStage();
+          const правокОтПредпросмотра = хватит();
+          следить();
+          refreshTimes();
+          const правокОтВремён = хватит();
+          следить();
+          updateSelInfo();
+          updateWordInfo();
+          const правокОтПанелей = хватит();
+
+          const указательЕдет = указатели.length >= 5
+            && указатели.every((v, i) => i === 0 || v > указатели[i - 1]);
+
+          return {
+            отрисовокНаПаузе, правокНаПаузе,
+            кадровИгры, отрисовокЗаИгру, прокрутокЗаИгру, прокрутокСдвинуло,
+            сеткаВсплыла, текущаяВидна,
+            кадровТяги, отрисовокЗаТягу, прокрутокЗаТягу,
+            тянулиЗа: хит ? хит.kind : null,
+            правокОтПредпросмотра, правокОтВремён, правокОтПанелей,
+            указатели, указательЕдет,
+            вНорме:
+              // Стоим — ничего не рисуем и ничего не переписываем
+              отрисовокНаПаузе === 0 && правокНаПаузе === 0
+              /* Играем — ровно по отрисовке на кадр: меньше значит,
+                 что указатель дёргается, больше — что холст рисуется
+                 дважды. Вилка на кадр-другой: счётчик кадров и цикл
+                 студии — два разных обещания. */
+              && отрисовокЗаИгру >= кадровИгры - 3
+              && отрисовокЗаИгру <= кадровИгры + 3
+              // Сетка строк всплывает, но не дёргается на каждом кадре
+              && прокрутокЗаИгру <= 8 && прокрутокСдвинуло >= 1
+              && сеткаВсплыла && текущаяВидна
+              // Тянем границу под музыку — то же самое
+              && хит && хит.kind === 'line-start'
+              && отрисовокЗаТягу >= кадровТяги - 3
+              && отрисовокЗаТягу <= кадровТяги + 3
+              && прокрутокЗаТягу <= 8
+              // Повтор при неизменных данных не переписывает узлы
+              && правокОтПредпросмотра === 0
+              && правокОтВремён === 0
+              && правокОтПанелей === 0
+              && указательЕдет,
+          };
+        } finally {
+          if (наблюдатель) наблюдатель.disconnect();
+          if (вернутьЗаписи) вернутьЗаписи();
+          CanvasRenderingContext2D.prototype.setTransform = исхТрансформ;
+          window.scrollEditListTo = исхПрокрутка;
+          editor.drag = null;
+          editor.dragTip = null;
+          audio.playing = былаИграет;
+          audio.position = былаПозиция;
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          audio.duration = былаДлина;
+          editor.peaks = былиПики;
+          editor.sel = былВыбор;
+          clearHistory();
+          if (былПроект != null) localStorage.setItem('karaoke-project', былПроект);
+          else localStorage.removeItem('karaoke-project');
+          if (активная) {
+            document.querySelectorAll('.step-panel')
+              .forEach((p) => p.classList.toggle('active', p === активная));
+          }
+        }
+      })()`, true);
+
       console.log('SELFTEST', JSON.stringify(report));
 
       /* Звук: проверка считает, а не слушает. Гоняет поддельную песню
@@ -4384,6 +4660,7 @@ function createWindow() {
           console.log(lyrics ? 'FIT-E2E' : 'ASR-E2E', JSON.stringify(res));
         }
       }
+
       } catch (e) {
         console.log('SELFTEST-ОШИБКА', String((e && e.message) || e));
       } finally {
