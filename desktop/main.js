@@ -2481,36 +2481,186 @@ function createWindow() {
            меняется по клику, выбор переживает перезагрузку (localStorage),
            и — самое важное — рамка выделения на дорожке (--sel-ring)
            у тем правда разного цвета, а не только имя атрибута другое. */
+        /* Темы. Их три, и переключатель у них теперь выпадающий:
+           одна кнопка со значком нынешней темы и список из трёх
+           с названиями. Раздел раньше просто считал кнопки в обойме
+           («кнопокВПереключателе: 2») — от нового устройства такой
+           счёт не сказал бы ничего, поэтому проверяем по существу:
+
+             • переключатель собран как список: одна кнопка, три пункта
+               с непустыми названиями, у выбранного стоит отметка;
+             • список открывается нажатием, закрывается по Esc и по
+               щелчку мимо — без этого он остался бы висеть на экране;
+             • ВЫБОР ПРИМЕНЯЕТСЯ: щелчок по пункту меняет атрибут
+               на <html> и переживает перезагрузку (ключ в хранилище);
+             • у всех трёх тем РАЗНЫЕ цвета, а не только имя атрибута,
+               и разные не в одном месте: и рамка выделения (CSS),
+               и грунт канваса дорожки (edTheme — там CSS не читается,
+               цвета кэшируются кодом, и они однажды отставали). */
         тема: __раздел('тема', () => {
           const T = window.THEME;
           if (!T) return { естьМодуль: false, вНорме: false };
           const studio = document.querySelector('.studio');
-          const кольцо = () => (studio ? getComputedStyle(studio).getPropertyValue('--sel-ring').trim() : null);
-          const кнопокВПереключателе = document.querySelectorAll('.theme-switch .theme-btn').length;
+          const кольцо = () => getComputedStyle(studio).getPropertyValue('--sel-ring').trim();
+          const кнопка = () => document.querySelector('.theme-switch .theme-btn');
+          const пункты = () => [...document.querySelectorAll('.theme-switch .theme-item')];
+          const открыт = () => кнопка().getAttribute('aria-expanded') === 'true';
           const исходная = T.тема();
-          const кольцоФирменная = (исходная === 'signature') ? кольцо() : (() => { T.установить('signature'); return кольцо(); })();
-          T.установить('neutral');
-          const атрибутНейтральная = document.documentElement.dataset.theme;
-          const кольцоНейтральная = кольцо();
+
+          // ---- устройство переключателя ----
+          const кнопок = document.querySelectorAll('.theme-switch .theme-btn').length;
+          const названия = пункты().map((п) => п.textContent.trim());
+          const отмечен = (пункты().find((п) => п.getAttribute('aria-checked') === 'true') || {}).dataset;
+          const отмеченаНынешняя = !!отмечен && отмечен.theme === исходная;
+
+          // ---- открыть, походить стрелкой, закрыть по Esc ----
+          const былЗакрыт = !открыт();
+          кнопка().click();
+          const открылся = открыт();
+          const фокусНаВыбранной = document.activeElement
+            === пункты().find((п) => п.dataset.theme === исходная);
+          document.activeElement.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+          const стрелкаВедёт = document.activeElement.classList.contains('theme-item')
+            && document.activeElement.dataset.theme !== исходная;
+          document.activeElement.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          const закрылсяПоEsc = !открыт();
+
+          // ---- открыть и закрыть щелчком мимо ----
+          кнопка().click();
+          document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+          const закрылсяМимо = !открыт();
+
+          // ---- цвета всех трёх тем: рамка выделения и грунт канваса ----
+          const цвета = {};
+          T.ТЕМЫ.forEach((код) => {
+            T.установить(код);
+            цвета[код] = { кольцо: кольцо(), грунт: edTheme.ground, атрибут: document.documentElement.dataset.theme };
+          });
+          const кодов = T.ТЕМЫ.length;
+          const атрибутыСвои = T.ТЕМЫ.every((код) => цвета[код].атрибут === код);
+          const колец = new Set(T.ТЕМЫ.map((к) => цвета[к].кольцо)).size;
+          const грунтов = new Set(T.ТЕМЫ.map((к) => цвета[к].грунт)).size;
+
+          // ---- выбор пунктом списка применяется и переживает перезагрузку ----
+          T.установить(T.ТЕМЫ[0]);
+          кнопка().click();
+          const пункт = пункты().find((п) => п.dataset.theme === 'steel');
+          if (пункт) пункт.click();
+          const пунктПрименился = document.documentElement.dataset.theme === 'steel'
+            && T.тема() === 'steel';
           const сохранилась = (() => {
-            try { return localStorage.getItem('karaoke-theme') === 'neutral'; } catch (e) { return false; }
+            try { return localStorage.getItem('karaoke-theme') === 'steel'; } catch (e) { return false; }
           })();
-          T.установить('signature');
-          const атрибутФирменная = document.documentElement.dataset.theme;
-          const кольцоСноваФирменная = кольцо();
+          // Значок на кнопке пошёл за темой, иначе он врал бы про выбранное
+          const значокПошёлЗаТемой = кнопка().dataset.theme === 'steel';
+
           T.установить(исходная);   // вернуть тему как было до самопроверки
           return {
-            кнопокВПереключателе,
-            атрибутНейтральная,
-            атрибутФирменная,
-            кольцоФирменная,
-            кольцоНейтральная,
-            сохранилась,
-            вНорме: кнопокВПереключателе === 2
-              && атрибутНейтральная === 'neutral' && атрибутФирменная === 'signature'
-              && !!кольцоФирменная && !!кольцоНейтральная && кольцоФирменная !== кольцоНейтральная
-              && кольцоСноваФирменная === кольцоФирменная && сохранилась,
+            кнопок, названия, отмеченаНынешняя,
+            былЗакрыт, открылся, фокусНаВыбранной, стрелкаВедёт, закрылсяПоEsc, закрылсяМимо,
+            цвета, пунктПрименился, сохранилась, значокПошёлЗаТемой,
+            вНорме: кнопок === 1 && названия.length === кодов
+              && названия.every((н) => н.length > 2) && отмеченаНынешняя
+              && былЗакрыт && открылся && фокусНаВыбранной && стрелкаВедёт
+              && закрылсяПоEsc && закрылсяМимо
+              && атрибутыСвои && колец === кодов && грунтов === кодов
+              && пунктПрименился && сохранилась && значокПошёлЗаТемой,
           };
+        }),
+
+        /* Разделитель окон и дорожки. Проверяем не наличие полоски,
+           а то, ради чего она стоит: тянут мышью — высота дорожки
+           меняется, окна ужимаются ровно на столько же; стрелки делают
+           то же с клавиатуры; доля попадает в хранилище и оттуда её
+           читает прочитатьДолю, то есть выбор переживает перезагрузку;
+           двойной щелчок возвращает умолчание. И граница не даёт
+           дорожке съесть окна целиком: снизу у окон есть предел. */
+        разделитель: __раздел('разделитель', () => {
+          const былаДоля = доляДорожки;
+          const былиСтроки = state.lines;
+          const былБуфер = state.originalBuffer;
+          const былаДлина = audio.duration;
+          const панель = document.getElementById('step-3');
+          const былаАктивна = панель.classList.contains('active');
+          try {
+            const SR = 8000, dur = 30;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            state.originalBuffer = ctx.createBuffer(1, SR * dur, SR);
+            audio.duration = dur;
+            state.lines = [1, 2, 3].map((n) => ({
+              text: 'Строка ' + n, time: n * 5, end: null,
+              ручнойКонец: false, сомнительная: false,
+            }));
+            // Чужие шаги гасим: активными их бывает сразу несколько,
+            // и тогда высоту студии они делят между собой (см. выше)
+            document.querySelectorAll('.step-panel.active')
+              .forEach((п) => п.classList.remove('active'));
+            панель.classList.add('active');
+            editor.peaks = null;
+            доляДорожки = ДОЛЯ_ДОРОЖКИ;
+            openEditor();
+
+            const узел = document.getElementById('ed-splitter');
+            const дорожка = document.querySelector('.timeline-wrap');
+            const окна = document.querySelector('.editor-grid');
+            if (!узел) return { разделителяНет: true, вНорме: false };
+            const снимок = () => ({ д: дорожка.offsetHeight, о: окна.offsetHeight });
+
+            const до = снимок();
+            const r = узел.getBoundingClientRect();
+            const тянуть = (на) => {
+              узел.dispatchEvent(new PointerEvent('pointerdown',
+                { bubbles: true, pointerId: 1, clientY: r.top + 4 }));
+              узел.dispatchEvent(new PointerEvent('pointermove',
+                { bubbles: true, pointerId: 1, clientY: r.top + 4 - на }));
+              узел.dispatchEvent(new PointerEvent('pointerup',
+                { bubbles: true, pointerId: 1, clientY: r.top + 4 - на }));
+            };
+            тянуть(40);                       // вверх: дорожка выше
+            const вверх = снимок();
+            const сохранилась = (() => {
+              try { return Math.abs(parseFloat(localStorage.getItem('karaoke-split'))
+                - доляДорожки) < 0.01; } catch (e) { return false; }
+            })();
+            const переживётПерезагрузку = Math.abs(прочитатьДолю() - доляДорожки) < 0.01;
+            тянуть(-40);                      // вниз: обратно
+            const вниз = снимок();
+
+            узел.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+            const стрелкой = снимок();
+
+            // Тянем далеко вверх: окнам всё равно остаётся своё
+            тянуть(4000);
+            const доУпора = снимок();
+
+            узел.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+            const послеДвойного = снимок();
+
+            const сумма = (с) => с.д + с.о;
+            return {
+              до, вверх, вниз, стрелкой, доУпора, послеДвойного,
+              сохранилась, переживётПерезагрузку,
+              вНорме: вверх.д > до.д && вверх.о < до.о
+                // Сумма не меняется: что взяла дорожка, то отдали окна
+                && сумма(вверх) === сумма(до) && сумма(доУпора) === сумма(до)
+                && вниз.д < вверх.д && стрелкой.д > вниз.д
+                && сохранилась && переживётПерезагрузку
+                && доУпора.о >= МИН_ОКОН && доУпора.д <= МАКС_ДОРОЖКИ
+                && Math.abs(послеДвойного.д - до.д) <= 1,
+            };
+          } finally {
+            доляДорожки = былаДоля;
+            state.lines = былиСтроки;
+            state.originalBuffer = былБуфер;
+            audio.duration = былаДлина;
+            editor.peaks = null;
+            editor.sel = -1;
+            editor.spansKey = '';
+            if (!былаАктивна) панель.classList.remove('active');
+            resizeTimeline();
+          }
         })
       }))()`);
       /* Подсказки кнопок студии. Разом три вещи, которые ломались порознь.
@@ -2619,6 +2769,285 @@ function createWindow() {
           панели.forEach((п, i) => п.classList.toggle('active', былиАктивны[i]));
         }
       })`);
+
+      /* Ползунок уровня у полосы дорожки — фейдер монтажной программы:
+         желобок с внутренней тенью и крупная круглая ручка со скосом.
+
+         Беда, ради которой раздел и заведён, — не в рисунке, а в весе
+         селектора: правила «.tl-gain» однажды не применялись вовсе,
+         потому что общее «input[type="range"]» весило больше. Поэтому
+         проверять наличие правила в файле бессмысленно — надо знать,
+         КАКОЕ из них выиграло на живой странице.
+
+         Двумя способами, потому что одного не хватает.
+           • Само поле ввода: его высоту getComputedStyle отдаёт
+             честно. У нас 16 px, у общего правила 6 — если наш блок
+             проиграл, это видно сразу.
+           • Ручка: она псевдоэлемент, и Chrome вычисленных стилей
+             для неё не отдаёт (возвращает стиль самого поля). Значит,
+             каскад разбираем сами — по ЖИВЫМ таблицам стилей окна,
+             а не по тексту файла: собираем все правила про ручку,
+             чья основа подходит нашему полю, и складываем их в том
+             порядке, в каком их сложил бы браузер. */
+      report.ползунокУровня = await win.webContents.executeJavaScript(`__раздел('ползунокУровня', async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былаДлина = audio.duration;
+        const панель = document.getElementById('step-3');
+        const былаАктивна = панель.classList.contains('active');
+        try {
+          const SR = 8000, dur = 30;
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const buf = ctx.createBuffer(1, SR * dur, SR);
+          state.originalBuffer = buf;
+          state.instrumentalBuffer = buf;   // без минусовки ползунок выключен
+          audio.duration = dur;
+          state.lines = [
+            { text: 'Раз строка', time: 2, end: null, ручнойКонец: false, сомнительная: false },
+            { text: 'Два строка', time: 10, end: null, ручнойКонец: false, сомнительная: false },
+          ];
+          /* Чужие шаги гасим, а не просто включаем свой: активными
+             они бывают сразу несколько (раздел включает свой и
+             оставляет прежний), и тогда шаги делят высоту студии
+             между собой — дорожка выходит втрое ниже настоящей,
+             а ряды заголовков полос мерить бессмысленно. */
+          document.querySelectorAll('.step-panel.active')
+            .forEach((п) => п.classList.remove('active'));
+          панель.classList.add('active');
+          editor.peaks = null;
+          openEditor();
+
+          const ползунок = document.querySelector('input.tl-gain');
+          if (!ползунок) return { ползункаНет: true, вНорме: false };
+          const высотаПоля = Math.round(parseFloat(getComputedStyle(ползунок).height));
+
+          /* Вес селектора: сколько в нём идентификаторов, классов
+             (со скобками и псевдоклассами наравне) и тегов. Ровно
+             по этому «.tl-gain» (0,1,0) и проигрывал общему
+             «input[type="range"]» (0,1,1). */
+          const вес = (сел) => {
+            const и = (сел.match(/#[\\w-]+/g) || []).length;
+            const к = (сел.match(/\\.[\\w-]+|\\[[^\\]]*\\]|:(?!:)[\\w-]+/g) || []).length;
+            const т = (сел.match(/(^|[\\s>+~])[a-zA-Z][\\w-]*/g) || []).length;
+            return и * 10000 + к * 100 + т;
+          };
+          const каскад = (эл, псевдо, свойства) => {
+            const подходящие = [];
+            let n = 0;
+            for (const лист of document.styleSheets) {
+              let правила;
+              try { правила = лист.cssRules; } catch (e) { continue; }
+              for (const п of правила) {
+                n++;
+                if (!п.selectorText || п.selectorText.indexOf(псевдо) < 0) continue;
+                for (const кусок of п.selectorText.split(',')) {
+                  const сел = кусок.trim();
+                  if (сел.slice(-псевдо.length) !== псевдо) continue;
+                  const база = сел.slice(0, -псевдо.length).trim();
+                  let своё = false;
+                  try { своё = !!база && эл.matches(база); } catch (e) { своё = false; }
+                  if (своё) подходящие.push({ вес: вес(база), n, style: п.style, сел });
+                }
+              }
+            }
+            // Порядок браузера: сперва вес, при равном — кто позже в файле
+            подходящие.sort((a, b) => (a.вес - b.вес) || (a.n - b.n));
+            const итог = { правил: подходящие.length, победитель: '' };
+            свойства.forEach((имя) => { итог[имя] = ''; });
+            подходящие.forEach((п) => {
+              свойства.forEach((имя) => {
+                const v = п.style.getPropertyValue(имя);
+                if (v) { итог[имя] = v.trim(); итог.победитель = п.сел; }
+              });
+            });
+            return итог;
+          };
+          const свойства = ['width', 'height', 'background-image', 'box-shadow'];
+          const ручка = каскад(ползунок, '::-webkit-slider-thumb', свойства);
+          const желобок = каскад(ползунок, '::-webkit-slider-runnable-track',
+            ['height', 'box-shadow']);
+
+          /* Ветка Firefox (::-moz-range-thumb) каскадом здесь не
+             проверяется и проверена быть не может: Chrome чужой
+             псевдоэлемент не понимает и выбрасывает правило ещё при
+             разборе — в document.styleSheets его просто нет. Поэтому
+             про неё спрашиваем сам файл стилей: если ветку однажды
+             удалят или забудут поправить вместе с webkit'овой, ползунок
+             в Firefox молча вернётся к общему правилу, а заметить это
+             в приложении на Chromium нечем. */
+          const текстСтилей = await fetch('style.css').then((r) => r.text()).catch(() => '');
+          const веткаFirefox = /input\\[type="range"\\]\\.tl-gain::-moz-range-thumb\\s*{[^}]*}/
+            .exec(текстСтилей);
+          const ручкаFF = веткаFirefox ? веткаFirefox[0].replace(/\\s+/g, ' ') : '';
+
+          const размер = (v) => Math.round(parseFloat(v) || 0);
+          /* Ручка обязана помещаться в самый низкий ряд, где она есть:
+             ряды заголовков полос бывают от 18 px, и ручка в 20 px
+             обрезалась бы рамкой колонки. */
+          const ряды = [...document.querySelectorAll('.tl-head-row')]
+            .filter((р) => р.querySelector('input.tl-gain'))
+            .map((р) => Math.round(р.getBoundingClientRect().height));
+          const самыйНизкий = ряды.length ? Math.min(...ряды) : 0;
+
+          return {
+            высотаПоля, ручка, ручкаFF, желобок, ряды,
+            вНорме: высотаПоля === 16                       // выиграл наш блок, не общий
+              && ручка.правил >= 2                          // общее правило тоже нашлось
+              && ручка.победитель.indexOf('.tl-gain') >= 0  // и проиграло нашему
+              && размер(ручка.width) === 14 && размер(ручка.height) === 14
+              // Скос — градиент поверх цвета акцента; у общего правила его нет
+              && ручка['background-image'].indexOf('gradient') >= 0
+              // Ветка Firefox на месте и того же размера
+              && ручкаFF.indexOf('14px') >= 0 && ручкаFF.indexOf('gradient') >= 0
+              // Желобок с внутренней тенью, а не волосяная черта
+              && размер(желобок.height) === 6
+              && желобок['box-shadow'].indexOf('inset') >= 0
+              && самыйНизкий >= 18 && размер(ручка.height) <= самыйНизкий,
+          };
+        } finally {
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          audio.duration = былаДлина;
+          editor.peaks = null;
+          editor.sel = -1;
+          editor.spansKey = '';
+          if (!былаАктивна) панель.classList.remove('active');
+        }
+      })`);
+
+      /* ---------- Высота дорожки на настоящих размерах окна ----------
+
+         Жалоба была про ноутбук: «дорожка мелкая». Мерить её в
+         развёрнутом окне (а самопроверка идёт именно в нём) значило бы
+         мерить не то место, поэтому странице подставляется ровно
+         1440×900, потом 1280×800 — те два размера, на которых студию
+         и смотрят.
+
+         Размер подставляем эмуляцией устройства, а не setContentSize:
+         настоящее окно система обрезает по рабочей области (на этом
+         маке 900 превращались в 838), и числа зависели бы от того, у
+         кого какой монитор и где стоит панель задач. Эмуляция даёт
+         ровно запрошенное на любой машине.
+
+         На каждом размере проверяем три вещи:
+           • дорожка выросла против прежних 122 px (жёсткие 16/18/38/30/20
+             плюс коэффициент 0,8 на низком экране) и не расползлась
+             выше МАКС_ДОРОЖКИ;
+           • полосы поделили высоту целиком: сумма равна высоте канваса,
+             и колонка заголовков ей ровня — иначе подписи разъезжаются
+             с полосами;
+           • ВСЕ ЧЕТЫРЕ ШАГА влезают в подложку студии целиком, а список
+             строк остаётся прокручиваемым.
+
+         Размер окна возвращаем в любом случае: развёрнутым оно и было. */
+      report.высотаДорожки = await (async () => {
+        const ПРЕЖНЯЯ = 122;   // столько полосы занимали до правки
+        const замер = async (w, h) => {
+          win.webContents.enableDeviceEmulation({
+            screenPosition: 'desktop',
+            screenSize: { width: w, height: h },
+            viewSize: { width: w, height: h },
+            viewPosition: { x: 0, y: 0 },
+            deviceScaleFactor: 0,
+            scale: 1,
+          });
+          await new Promise((r) => setTimeout(r, 350));
+          return win.webContents.executeJavaScript(`__раздел('дорожка', () => {
+            const былиСтроки = state.lines;
+            const былБуфер = state.originalBuffer;
+            const былМинус = state.instrumentalBuffer;
+            const былаДлина = audio.duration;
+            const панели = [...document.querySelectorAll('.step-panel')];
+            const былиАктивны = панели.map((п) => п.classList.contains('active'));
+            try {
+              const SR = 8000, dur = 60;
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              const buf = ctx.createBuffer(1, SR * dur, SR);
+              state.originalBuffer = buf;
+              state.instrumentalBuffer = buf;
+              audio.duration = dur;
+              state.lines = [];
+              for (let n = 0; n < 14; n++) {
+                state.lines.push({ text: 'Строка номер ' + (n + 1), time: 2 + n * 4,
+                  end: null, ручнойКонец: false, сомнительная: false });
+              }
+              панели.forEach((п) => п.classList.remove('active'));
+              document.getElementById('step-3').classList.add('active');
+              editor.peaks = null;
+              openEditor();
+
+              /* Меряем ДО обхода шагов: обход оставляет открытым
+                 четвёртый, а у спрятанного шага все размеры нулевые. */
+              const L = timelineLanes();
+              const канвас = document.getElementById('timeline');
+              const колонка = document.getElementById('tl-heads');
+              const рядов = [...колонка.querySelectorAll('.tl-head-row')]
+                .reduce((с, р) => с + Math.round(р.getBoundingClientRect().height), 0);
+              const высотаКанваса = Math.round(канвас.getBoundingClientRect().height);
+              const дорожка = document.querySelector('.timeline-wrap').offsetHeight;
+              const окна = document.querySelector('.editor-grid').offsetHeight;
+              const список = document.querySelector('.ed-lines .edit-list');
+              const прокручивается = getComputedStyle(список).overflowY === 'auto';
+
+              /* Все четыре шага целиком в подложке студии: показываем
+                 каждый и смотрим, не вылез ли он за её низ. */
+              const низСтудии = document.querySelector('.studio').getBoundingClientRect().bottom;
+              const выступы = {};
+              [1, 2, 3, 4].forEach((n) => {
+                панели.forEach((п) => п.classList.remove('active'));
+                const п = document.getElementById('step-' + n);
+                п.classList.add('active');
+                if (n === 3) resizeTimeline();
+                выступы['шаг' + n] = Math.round(
+                  п.getBoundingClientRect().bottom - низСтудии);
+              });
+              const самыйДлинный = Math.max(...Object.values(выступы));
+
+              return {
+                окно: [innerWidth, innerHeight],
+                полос: L.total,
+                высотаКанваса, колонка: рядов, дорожка, окна,
+                полосы: Object.keys(L).filter((к) => к !== 'total')
+                  .map((к) => к + ':' + L[к].h).join(' '),
+                выступы, прокручивается,
+                вНорме: L.total > ${ПРЕЖНЯЯ} * 1.25 && L.total <= МАКС_ДОРОЖКИ
+                  && L.total === высотаКанваса && рядов === L.total
+                  && окна >= МИН_ОКОН
+                  && самыйДлинный <= 0 && прокручивается,
+              };
+            } finally {
+              state.lines = былиСтроки;
+              state.originalBuffer = былБуфер;
+              state.instrumentalBuffer = былМинус;
+              audio.duration = былаДлина;
+              editor.peaks = null;
+              editor.sel = -1;
+              editor.spansKey = '';
+              панели.forEach((п, i) => п.classList.toggle('active', былиАктивны[i]));
+            }
+          })`);
+        };
+        const на1440 = await замер(1440, 900);
+        const на1280 = await замер(1280, 800);
+        win.webContents.disableDeviceEmulation();
+        await new Promise((r) => setTimeout(r, 350));
+        await win.webContents.executeJavaScript(
+          'document.getElementById("step-3").classList.contains("active") '
+          + '? (resizeTimeline(), true) : true');
+        // Размер обязан быть тем, который просили: иначе числа не о том
+        const размерТот = на1440.окно[1] === 900 && на1280.окно[1] === 800
+          && на1440.окно[0] === 1440 && на1280.окно[0] === 1280;
+        return {
+          было: ПРЕЖНЯЯ,
+          'на1440x900': на1440,
+          'на1280x800': на1280,
+          размерТот,
+          вНорме: размерТот && !!на1440.вНорме && !!на1280.вНорме,
+        };
+      })();
+
       /* Ошибки считаем снаружи: страница их нигде не копит, а window.__errors,
          который тут читался раньше, в проекте не создаётся вовсе — признак
          всегда показывал ноль, что бы на странице ни падало. */

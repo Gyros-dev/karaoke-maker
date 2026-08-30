@@ -573,6 +573,8 @@ I18N.EN = {
   'ред.вся.подсказка': 'Show the whole song',
   'ред.окно.строки': 'Lines',
   'ред.окно.просмотр': 'Preview',
+  'ред.разделитель': 'Border between the windows and the timeline',
+  'ред.разделитель.подсказка': 'Drag up or down: the timeline gets taller or shorter, the windows above it the other way round. The ↑ and ↓ keys move the border from the keyboard, a double click puts it back. The position is remembered',
   'ред.начало': 'start',
   'ред.начало.подсказка': 'Line start as minutes:seconds, the way the timeline reads it (plain seconds work too). Enter applies, Esc puts it back',
   'ред.конец': 'end',
@@ -650,14 +652,33 @@ I18N.СТРОКИ = {
   'язык.en.полно': { ru: 'Английский язык интерфейса', en: 'English interface' },
 
   /* ---------- Переключатель темы ----------
-     Две темы, обе — монтажная плотность (см. style.css): «нейтральная»
-     без цветового акцента и «фирменная», где прежний тёмный грунт
+     Три темы, все — монтажная плотность (см. style.css): «нейтральная»
+     без цветового акцента; «фирменная», где прежний тёмный грунт
      и зелёный, но зелёный означает только выделенное и включённое,
-     а не украшает всё подряд. Фирменная — по умолчанию. */
+     а не украшает всё подряд; «стальная» — холодный серый грунт
+     и синий акцент, манера больших монтажных программ. Фирменная —
+     по умолчанию. Короткое имя стоит в пункте списка, полное — в его
+     подсказке; у самой кнопки подсказка говорит, что тема сейчас
+     выбрана и что список открывается нажатием. */
   'тема.neutral': { ru: 'Нейтральная', en: 'Neutral' },
   'тема.signature': { ru: 'Фирменная', en: 'Signature' },
-  'тема.neutral.полно': { ru: 'Нейтральная тема', en: 'Neutral theme' },
-  'тема.signature.полно': { ru: 'Фирменная тема', en: 'Signature theme' },
+  'тема.steel': { ru: 'Стальная', en: 'Steel' },
+  'тема.neutral.полно': {
+    ru: 'Нейтральная тема: серый грунт без оттенка, жёлтая рамка выделения',
+    en: 'Neutral theme: plain grey ground, yellow selection ring',
+  },
+  'тема.signature.полно': {
+    ru: 'Фирменная тема: тёмный грунт и зелёный акцент студии',
+    en: 'Signature theme: dark ground and the studio’s green accent',
+  },
+  'тема.steel.полно': {
+    ru: 'Стальная тема: холодный серый грунт, синий акцент — как в Logic Pro',
+    en: 'Steel theme: cold grey ground and a blue accent, like Logic Pro',
+  },
+  'тема.выбрать': {
+    ru: 'Тема студии: {имя}. Нажми, чтобы выбрать другую',
+    en: 'Studio theme: {имя}. Click to pick another',
+  },
 
   /* ---------- Сетка долей ----------
      Уверенность и подсказки ставит код (обновитьСетку в app.js):

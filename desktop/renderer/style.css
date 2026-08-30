@@ -71,12 +71,17 @@
 }
 
 /* ============ Тема оформления ============
+   Тем три.
    «Фирменная» (signature, по умолчанию) держит прежний синевато-чёрный
    грунт, а зелёный — ровно в четырёх местах: кнопка воспроизведения,
    включённый переключатель, выделенный блок, цифры счётчика.
    «Нейтральная» (neutral) убирает оттенок из грунта и держит вместо
    зелёного жёлтую рамку выделения — ей самое место там, где важно
    заметить, а не показать бренд.
+   «Стальная» (steel) — холодный серо-стальной грунт, панели светлее
+   фона, синий акцент и заголовки полос темнее рабочего поля: манера
+   больших монтажных программ (Logic Pro), где студия должна читаться
+   как инструмент того же класса.
    Тема — атрибут на <html>, как и язык (см. app.js, «Переключение
    темы»); переменные ниже видны только внутри .studio и не трогают
    остальной сайт. */
@@ -85,6 +90,10 @@
      сайта — их не переопределяем, только четыре места акцента и то,
      чего в общих переменных нет (фон самого канваса дорожки). */
   --ed-canvas-bg: #0e0e15;
+  /* Колонка заголовков полос. В двух тёмных темах она чуть светлее
+     панели (обычная подсветка), в стальной — наоборот, темнее рабочего
+     поля, как в Logic Pro. */
+  --tl-heads-bg: rgba(255, 255, 255, 0.025);
   --sel-ring: #34d399;
   --sel-ring-bg: rgba(52, 211, 153, 0.14);
   --sel-ring-glow: rgba(52, 211, 153, 0.5);
@@ -115,6 +124,52 @@ html[data-theme="neutral"] .studio {
   --accent-on-text: var(--text);
   --accent-clock: var(--text);
 }
+/* «Стальная»: холодный серый грунт, панели СВЕТЛЕЕ фона (в двух других
+   темах наоборот), синий акцент вместо зелёного и колонка заголовков
+   полос темнее рабочего поля дорожки. Канвас остаётся тёмным нарочно:
+   волна, блоки строк и слова нарисованы светлыми полупрозрачными
+   красками, и на светлом поле от них не осталось бы ничего.
+   --violet и --pink здесь тоже переопределены (в нейтральной теме нет):
+   ими покрашены рамка активного шага, наведение на кнопки редактора
+   и рамка поля текста — зелень в них выдавала бы прежнюю тему. */
+html[data-theme="steel"] .studio {
+  --bg-soft: #1c1f25;
+  --bg-card: #262a33;
+  --border: #3a404d;
+  --text: #e7ebf2;
+  --text-dim: #99a2b3;
+  --violet: #4d9fff;
+  --pink: #7cc0ff;
+  --ed-canvas-bg: #22262e;
+  --tl-heads-bg: #191c22;
+  --sel-ring: #4d9fff;
+  --sel-ring-bg: rgba(77, 159, 255, 0.16);
+  --sel-ring-glow: rgba(77, 159, 255, 0.55);
+  --accent-btn-bg: linear-gradient(180deg, #4f9bf0, #2f6fc4);
+  --accent-btn-glow: 0 3px 12px rgba(47, 111, 196, 0.45);
+  --accent-on-bg: rgba(77, 159, 255, 0.18);
+  --accent-on-border: #4d80c0;
+  --accent-on-text: #cfe4ff;
+  --accent-clock: #8fc2ff;
+}
+/* Четыре места, где зелёный написан прямо цветом, а не переменной:
+   они общие со всем сайтом, и переменной там взяться неоткуда.
+   В стальной теме они перекрашиваются адресно — иначе главная кнопка
+   шага и подсветка выбранного выдавали бы прежнюю тему. */
+html[data-theme="steel"] .studio .btn-primary {
+  background: linear-gradient(180deg, #4f9bf0, #2f6fc4);
+  box-shadow: 0 4px 18px rgba(47, 111, 196, 0.4);
+}
+html[data-theme="steel"] .studio .btn-primary:not(:disabled):hover {
+  box-shadow: 0 8px 26px rgba(47, 111, 196, 0.5);
+}
+html[data-theme="steel"] .studio .step-tab.active { background: rgba(77, 159, 255, 0.14); }
+html[data-theme="steel"] .studio .step-tab.active span,
+html[data-theme="steel"] .studio .dot {
+  background: linear-gradient(90deg, #6fb2ff, #3f86e0);
+  box-shadow: none;
+}
+html[data-theme="steel"] .studio .edit-row.current-row { background: rgba(77, 159, 255, 0.12); }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -276,39 +331,84 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 
 /* Переключатель темы стоит рядом с языковым, в одном flex-элементе
    шапки (см. .header-switches) — так пара держится вместе и не
-   съезжает при разной длине подписей на разных языках. Манера та же:
-   обойма-таблетка, активная кнопка подсвечена, ширина не скачет. */
+   съезжает при разной длине подписей на разных языках.
+
+   Тем стало три, и обойма из трёх кнопок в шапке уже перевешивала
+   языковой переключатель рядом. Поэтому здесь выпадающий список:
+   одна кнопка со значком нынешней темы, по нажатию — три пункта
+   с названиями. Языковой переключатель остаётся парой кнопок:
+   языков два, и обойма для них — самый короткий путь. */
 .header-switches { display: inline-flex; align-items: center; gap: 0.5rem; }
 .theme-switch {
+  /* Опорная точка для выпадающего списка: он встаёт под кнопкой */
+  position: relative;
   display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  overflow: hidden;
 }
 .theme-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.25rem;
   background: transparent;
-  border: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   color: var(--text-dim);
   font-family: inherit;
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   white-space: nowrap;
-  /* Значок вместо подписи (см. ЗНАЧОК_ТЕМЫ в app.js): «Фирменная»
-     и «Нейтральная» занимали в шапке больше места, чем весь языковой
-     переключатель рядом, а читают их ровно один раз. Название осталось
-     в подсказке и в aria-label. */
+  /* Значок вместо подписи (см. ЗНАЧОК_ТЕМЫ в app.js): названия тем
+     занимали в шапке больше места, чем весь языковой переключатель
+     рядом, а читают их ровно один раз. Названия переехали в пункты
+     списка, в подсказку и в aria-label. */
   padding: 0.35rem 0.6rem;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .theme-btn .icon { width: 1.05em; height: 1.05em; margin: 0; }
-.theme-btn + .theme-btn { border-left: 1px solid var(--border); }
+/* Уголок «здесь список»: вдвое мельче значка темы, чтобы не спорил с ним */
+.theme-btn .theme-caret { width: 0.6em; height: 0.6em; opacity: 0.7; }
 .theme-btn:hover { color: var(--text); }
-.theme-btn.active { color: var(--text); background: rgba(16, 185, 129, 0.16); }
+.theme-btn[aria-expanded="true"] { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+/* Сам список. Стоит под кнопкой и прижат к правому краю: кнопка
+   последняя в шапке, и список, растущий вправо, вылезал бы за окно. */
+.theme-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 11rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+.theme-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.theme-item .icon { flex: none; width: 1.05em; height: 1.05em; margin: 0; }
+/* Галка выбранной темы стоит справа и держит место у всех пунктов —
+   иначе подписи ездили бы по горизонтали при смене темы */
+.theme-item .theme-tick { margin-left: auto; opacity: 0; }
+.theme-item[aria-checked="true"] { color: var(--text); }
+.theme-item[aria-checked="true"] .theme-tick { opacity: 1; }
+.theme-item:hover, .theme-item:focus-visible { color: var(--text); background: rgba(255, 255, 255, 0.08); outline: none; }
 @media (max-width: 1120px) {
   .theme-btn { font-size: 0.74rem; padding: 0.3rem 0.5rem; }
 }
@@ -976,14 +1076,20 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   overflow: hidden;
   font-size: var(--ed-font);
 }
+/* Заголовок окна («СТРОКИ», «ПРОСМОТР», «СТРОКА») стоит дёшево по
+   высоте: полтора десятка пикселей вместо трёх. Читаться он обязан,
+   а вот межстрочный интервал 1,6 от общего текста страницы и поля
+   в 0,3rem съедали 29 px на каждое окно — на редакторе это высота,
+   которой не хватало дорожке. */
 .ed-pane-head {
   flex-shrink: 0;
-  padding: 0.3rem var(--ed-pad);
+  padding: 0.12rem var(--ed-pad);
   border-bottom: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-dim);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
+  line-height: 1.5;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -994,9 +1100,12 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   display: flex;
   flex-direction: column;
   gap: var(--ed-gap);
-  padding: var(--ed-pad);
+  padding: 0.25rem var(--ed-pad);
 }
-.ed-viewer .edit-stage-wrap { margin: 0; padding: 0.5rem; }
+/* Сцена просмотра держит 16:9 и всё равно не занимает окно целиком —
+   поле вокруг неё вычиталось из высоты дважды. Оставляем самое малое,
+   чтобы рамка окна не срезала край сцены. */
+.ed-viewer .edit-stage-wrap { margin: 0; padding: 0.2rem; }
 /* Справка редактора свёрнута: развернул — прочитал — свернул обратно.
    Стоит она под дорожкой и легендой, перед кнопками шага: пока
    свёрнута — это одна строка, и рабочее место от неё ничего не
@@ -1017,7 +1126,12 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    остаётся на виду — иначе свернуть справку нечем, пока не открутишь
    обратно наверх. */
 #step-3 .editor-hint[open] {
-  flex: 0 1 auto;
+  /* Не сжимается (было 0 1 auto). Сжималась она молча и за чужой счёт:
+     пока справка отдавала свои пиксели, сумма «окна плюс дорожка»
+     переставала быть постоянной, и код деления высоты (см. рабочееМесто
+     в app.js) мерил не то место. Теперь развёрнутая справка занимает
+     ровно свою треть, а делят между собой остаток окна и дорожка. */
+  flex: 0 0 auto;
   min-height: 2.4rem;
   max-height: 34%;
   overflow-y: auto;
@@ -1031,19 +1145,52 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   padding-bottom: 0.2rem;
   background: var(--bg-soft);
 }
-/* Пока справка открыта, рабочим окнам разрешено сжаться сильнее
-   обычного: на 1280×800 сумма прежних минимумов в окно не влезала */
-#step-3:has(> .editor-hint[open]) .editor-grid { min-height: 90px; }
 /* Три окна рабочего места: строки — просмотр — инспектор.
    Кегль в просмотре пропорционален его ширине (см. fitStageLines),
-   поэтому окну просмотра отдана заметная доля. */
+   поэтому окну просмотра отдана заметная доля.
+
+   Высоту окна делят с дорожкой через разделитель (см. «Деление высоты»
+   в app.js): окна забирают остаток, дорожка стоит своим числом
+   пикселей. Нижняя граница здесь — только страховка на случай, если
+   код деления почему-то не отработал; настоящий предел (сколько окнам
+   оставить, когда дорожку тянут вверх) держит МИН_ОКОН в app.js —
+   иначе окна упирались бы в свой минимум, а лишнее вылезало бы
+   за нижний край подложки студии. */
 .editor-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 210px;
   gap: var(--ed-gap);
-  flex: 1;
-  min-height: 150px;
+  flex: 1 1 0;
+  min-height: 80px;
 }
+/* ---------- Разделитель окон и дорожки ----------
+   Тянется мышью, как в Logic Pro и Final Cut: сколько высоты у верхних
+   окон, столько и решает человек, а не наши числа в коде. Положение
+   помнится между сеансами (см. КЛЮЧ_ДЕЛЕНИЯ в app.js).
+   Полоска низкая, а брать её удобно: сам ряд 8 px, а видимая черта
+   внутри — 3 px посередине. */
+.ed-splitter {
+  flex: none;
+  height: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  /* Отменяем прокрутку страницы пальцем на самом разделителе: иначе
+     на ноутбуке с тачскрином тянущий жест уезжал бы в прокрутку */
+  touch-action: none;
+}
+.ed-splitter::before {
+  content: '';
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.15s;
+}
+.ed-splitter:hover::before, .ed-splitter.тянут::before { background: var(--sel-ring); }
+.ed-splitter:focus-visible { outline: none; }
+.ed-splitter:focus-visible::before { background: var(--sel-ring); height: 5px; }
 .edit-list {
   list-style: none;
   flex: 1;
@@ -1300,6 +1447,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
    строки уходят с глаз, дорожка и метки на ней остаются. */
 .step-panel.tapping > .panel-hint,
 .step-panel.tapping > .editor-grid,
+.step-panel.tapping > .ed-splitter,
 .step-panel.tapping > .ed-bar,
 .step-panel.tapping > .timeline-legend,
 .step-panel.tapping > .panel-actions { display: none; }
@@ -1530,8 +1678,14 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
 .beat-conf[data-уровень="низкая"] { color: #fb7185; }
 .beat-conf[data-уровень="руками"] { color: var(--sel-ring); }
 
+/* Дорожка стоит своим числом пикселей, а окна над ней забирают
+   остаток: высоту --tl-h ставит код деления (см. применитьДеление
+   в app.js), её же тянет разделитель. Запасное значение — прежняя
+   высота дорожки: если код почему-то не отработал, редактор
+   выглядит как до правки, а не разъезжается. */
 .timeline-wrap {
-  flex-shrink: 0;
+  flex: none;
+  height: var(--tl-h, 140px);
   display: flex;
   border: 1px solid var(--border);
   border-radius: var(--ed-radius);
@@ -1581,13 +1735,16 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
    и канвас разъедутся по высоте. */
 .tl-heads {
   flex: none;
-  /* 150 px, а не прежние 132: рядом с ползунком уровня встало число
-     процентов (как «0.0 dB» у Volume в Final Cut), и без этих
-     восемнадцати пикселей оно выдавливало подпись полосы. У канваса
-     дорожки они не отнимают ничего заметного. */
-  width: 150px;
+  /* 160 px, а было 132: сначала рядом с ползунком уровня встало число
+     процентов (как «0.0 dB» у Volume в Final Cut) — без восемнадцати
+     пикселей оно выдавливало подпись полосы; потом подросла сама ручка
+     ползунка, и ей понадобился ещё десяток. У канваса дорожки они
+     не отнимают ничего заметного. */
+  width: 160px;
   border-right: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.025);
+  /* Цвет из темы: в тёмных темах колонка чуть светлее панели, в
+     стальной — темнее рабочего поля дорожки, как в Logic Pro */
+  background: var(--tl-heads-bg);
   overflow: hidden;
 }
 .tl-head-row {
@@ -1610,16 +1767,24 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Ползунок уровня дорожки в наушниках. Тонкий и тихий: это не главный
-   орган управления, а подстройка на слух во время разметки. Полоска
-   красится акцентом темы, ползунок — маленький кружок.
+/* Ползунок уровня полосы в наушниках — как фейдер в монтажной
+   программе: желобок с внутренней тенью (будто прорезан в панели)
+   и крупная круглая ручка со скосом и собственной тенью. Прежние
+   волосяная черта в 3 px и точка в 7 px читались как царапина:
+   их не было видно, и брать их приходилось прицельно.
+
+   Ручка 14 px в поле ввода высотой 16 px — она обязана помещаться
+   в ряд заголовка полосы, а он бывает и 18 px (полоса оригинала на
+   самой низкой дорожке). Скос сделан не картинкой, а наложением:
+   светлый верх и тёмный низ поверх цвета акцента, — поэтому ручка
+   красится темой сама собой.
 
    Селектор нарочно с тегом и атрибутом: «.tl-gain» весит (0,1,0), а
    общее правило ползунков «input[type="range"]» — (0,1,1), потому что
    квадратные скобки считаются наравне с классом. Общее было сильнее, и
-   ВЕСЬ этот блок до сих пор не применялся вовсе: точка оставалась
-   ручкой в 16 px со свечением в 10 px — от неё и был перегружен ряд
-   заголовка полосы высотой 14–38 px. */
+   ВЕСЬ этот блок однажды не применялся вовсе. Проверять это надо
+   по вычисленным стилям живой страницы, а не по глазу: раздел
+   самопроверки «ползунокУровня» меряет настоящий размер ручки. */
 /* Число процентов рядом с ползунком: по положению кружка уровень
    не прочитать, а сверять его глазами приходится постоянно. Моноширинное
    и с табличными цифрами — иначе «100 %» и «45 %» дёргали бы ряд. */
@@ -1635,9 +1800,9 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
 .tl-gain-val.off { opacity: 0.35; }
 input[type="range"].tl-gain {
   flex: 1;
-  min-width: 24px;
-  max-width: 48px;
-  height: 8px;
+  min-width: 30px;
+  max-width: 54px;
+  height: 16px;
   margin: 0;
   padding: 0;
   appearance: none;
@@ -1645,39 +1810,48 @@ input[type="range"].tl-gain {
   background: transparent;
   cursor: pointer;
 }
+/* Желобок: тёмный, с внутренней тенью сверху и светлой каймой снизу —
+   он должен выглядеть прорезанным в панели, а не нарисованным на ней */
 input[type="range"].tl-gain::-webkit-slider-runnable-track {
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.16);
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.16));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.65), 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 input[type="range"].tl-gain::-moz-range-track {
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.16);
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.16));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.65), 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-/* Точка чуть толще полоски — ровно настолько, чтобы её было куда
-   взять. Свечение снимаем отдельно и явно: оно приходит от общего
-   правила ползунков, где ручка 16 px и ореол в 10 px ей впору, а
-   на точке в 7 px оно читалось кляксой вдвое шире самой точки. */
+/* Ручка. Цвет — акцент темы, скос — наложение поверх него: светлая
+   верхушка, тень внизу, тёмная кайма по кругу и своя тень на желобке.
+   margin-top = (высота желобка − высота ручки) / 2, иначе WebKit
+   поставит её от верха желобка и она уедет вниз. */
 input[type="range"].tl-gain::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 7px;
-  height: 7px;
-  margin-top: -2px;
-  border: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -4px;
+  border: 1px solid rgba(0, 0, 0, 0.55);
   border-radius: 50%;
-  background: var(--sel-ring);
-  box-shadow: none;
+  background-color: var(--sel-ring);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0) 52%, rgba(0, 0, 0, 0.3));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 input[type="range"].tl-gain::-moz-range-thumb {
-  width: 7px;
-  height: 7px;
-  border: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.55);
   border-radius: 50%;
-  background: var(--sel-ring);
+  background-color: var(--sel-ring);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0) 52%, rgba(0, 0, 0, 0.3));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 input[type="range"].tl-gain:disabled { opacity: 0.25; cursor: not-allowed; }
-input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); outline-offset: 2px; }
+input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); outline-offset: 1px; }
 
 /* «Слушать только это»: буква S, как в монтажных программах. Включённая
    горит акцентом темы — тем же, которым обведён выбранный блок. */
@@ -1705,7 +1879,12 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   background: var(--sel-ring-bg);
 }
 .tl-solo:disabled { opacity: 0.3; cursor: not-allowed; }
-.tl-canvas-wrap { position: relative; flex: 1; min-width: 0; padding: 0.5rem 0.6rem; }
+/* Поля только по бокам. Сверху и снизу их нет нарочно: колонка
+   заголовков полос начинается вплотную к рамке, а канвас начинался
+   восемью пикселями ниже — подписи полос стояли не против своих полос,
+   и это было видно на «минусовке». Заодно эти шестнадцать пикселей
+   вернулись самим полосам. */
+.tl-canvas-wrap { position: relative; flex: 1; min-width: 0; padding: 0 0.6rem; }
 /* Подпись с точным временем у курсора при перетаскивании границы —
    тысячные доли, как и в полях инспектора (см. applyDrag в app.js) */
 .tl-tip {
@@ -2707,6 +2886,10 @@ body.is-desktop .site-header .footer-link { font-size: 0.85rem; white-space: now
      Через #step-3 — иначе правило низкого окна (там три колонки)
      оказывается сильнее по весу. */
   #step-3 .editor-grid { grid-template-columns: minmax(0, 1fr); }
+  /* Делить между окнами и дорожкой здесь нечего: студия перестала быть
+     высотой в окно, всё идёт своей высотой и прокручивается страницей.
+     Разделитель без общего запаса высоты только мешал бы. */
+  .ed-splitter { display: none; }
   .ed-lines .edit-list { max-height: 40vh; }
   .edit-stage-wrap { container-type: normal; display: block; }
   .edit-stage { width: 100%; }
