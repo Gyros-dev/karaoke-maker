@@ -90,53 +90,12 @@
    чтобы убедиться, что 220 Гц и правда становятся 440. */
 const МАКС_ПОЛУТОНОВ = 24;
 
-/* ------------------------------------------------------------
-   БПФ по основанию 2, на месте. Своё, а не из dsp.js: dsp.js живёт
-   только в приложении, а тональность нужна и на сайте.
-   ------------------------------------------------------------ */
-function сделатьБПФ(n) {
-  const уровней = Math.round(Math.log2(n));
-  if (2 ** уровней !== n) throw new Error('БПФ: нужна степень двойки');
-  const cosT = new Float64Array(n / 2);
-  const sinT = new Float64Array(n / 2);
-  for (let i = 0; i < n / 2; i++) {
-    cosT[i] = Math.cos((2 * Math.PI * i) / n);
-    sinT[i] = Math.sin((2 * Math.PI * i) / n);
-  }
-  const rev = new Uint32Array(n);
-  for (let i = 0; i < n; i++) {
-    let x = i, r = 0;
-    for (let j = 0; j < уровней; j++) { r = (r << 1) | (x & 1); x >>= 1; }
-    rev[i] = r;
-  }
-  return function бпф(re, im, обратное) {
-    for (let i = 0; i < n; i++) {
-      const j = rev[i];
-      if (j > i) {
-        let t = re[i]; re[i] = re[j]; re[j] = t;
-        t = im[i]; im[i] = im[j]; im[j] = t;
-      }
-    }
-    for (let size = 2; size <= n; size *= 2) {
-      const half = size / 2;
-      const step = n / size;
-      for (let i = 0; i < n; i += size) {
-        for (let j = i, k = 0; j < i + half; j++, k += step) {
-          const l = j + half;
-          const c = cosT[k];
-          const s = обратное ? sinT[k] : -sinT[k];
-          const tre = re[l] * c - im[l] * s;
-          const tim = re[l] * s + im[l] * c;
-          re[l] = re[j] - tre;
-          im[l] = im[j] - tim;
-          re[j] += tre;
-          im[j] += tim;
-        }
-      }
-    }
-    if (обратное) for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
-  };
-}
+/* БПФ живёт в общем файле: то же преобразование нужно счётчику темпа
+   (tempo.js), а две копии одного кода — это починка в одной из них
+   и молчаливая ошибка в другой. location.search переносит сюда номер
+   версии (?v=1.12.1), иначе браузер подсунул бы файл прошлой сборки
+   из кэша. */
+importScripts('fft.js' + (self.location ? self.location.search : ''));
 
 /* Отклонение фазы к ±π: без этого приведения оценка мгновенной
    частоты бессмысленна — фаза за шаг успевает намотать много оборотов */
@@ -223,7 +182,7 @@ function сдвинуть(L, R, sr, полутонов, отчёт) {
   const r = Math.pow(2, полутонов / 12);
   const N = размерОкна(sr);
   const Hs = N / 4;                 // шаг синтеза: перекрытие 75 %
-  const бпф = сделатьБПФ(N);
+  const бпф = БПФ.сделатьБПФ(N);
 
   const окно = new Float32Array(N);
   for (let i = 0; i < N; i++) окно[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N);

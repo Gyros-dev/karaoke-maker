@@ -663,6 +663,12 @@ I18N.СТРОКИ = {
     ru: 'Темп ещё не определён: открой песню и зайди в редактор',
     en: 'Tempo not detected yet: open a song and enter the editor',
   },
+  'ред.доли.считаем': {
+    ru: 'Считаем темп… Разбор идёт в отдельном потоке, студия при этом '
+      + 'не замирает: число появится через полсекунды',
+    en: 'Detecting the tempo… It runs in a background thread, so the studio '
+      + 'stays responsive: the number shows up in about half a second',
+  },
   'ред.доли.руками': { ru: 'своё', en: 'own' },
   'ред.доли.руками.подсказка': {
     ru: 'Темп поставлен руками — автомат его больше не перебивает. '

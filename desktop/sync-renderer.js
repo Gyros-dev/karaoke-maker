@@ -186,7 +186,7 @@ function patchHtml(src) {
   if (s === было) throw new Error('не нашёл картинку логотипа в шапке');
 
   // 3. Версии в путях к файлам не нужны — тут нет кэша браузера
-  s = s.replace(/(href|src)="(style\.css|app\.js|i18n\.js)\?v=[^"]*"/g, '$1="$2"');
+  s = s.replace(/(href|src)="(style\.css|app\.js|i18n\.js|fft\.js|tempo\.js)\?v=[^"]*"/g, '$1="$2"');
 
   // 4. Блок удаления вокала — после блока своей минусовки
   const anchor = '        <input type="file" id="inst-input" accept="audio/*" hidden>\n      </div>\n';
@@ -326,15 +326,20 @@ try {
   fs.writeFileSync(path.join(OUT, 'app.js'), js);
   fs.writeFileSync(path.join(OUT, 'i18n.js'), i18n);
 
-  /* Рабочий поток смены тональности. Он общий с сайтом (на сайте
-     нейросетей нет, а вокодер лёгкий и работает везде), поэтому
-     живёт в корне и переносится сюда наравне с app.js. Без него
-     смена тональности в приложении молча падала бы на попытке
-     создать Worker. */
-  const ТОН = 'pitch-worker.js';
-  const тонИсходник = path.join(WEB, ТОН);
-  if (!fs.existsSync(тонИсходник)) throw new Error(`нет ${ТОН} в веб-версии`);
-  fs.copyFileSync(тонИсходник, path.join(OUT, ТОН));
+  /* Рабочие потоки и общие модули счёта. Все они общие с сайтом
+     (нейросетей на сайте нет, а вокодер и счётчик темпа лёгкие и
+     работают везде), поэтому живут в корне и переносятся сюда наравне
+     с app.js:
+       pitch-worker.js — смена тональности;
+       tempo.js        — счётчик темпа: и модуль для окна, и сам поток;
+       fft.js          — общее для них БПФ.
+     Без любого из них приложение молча падало бы: тональность — на
+     попытке создать Worker, темп — на попытке подтянуть fft.js. */
+  for (const имя of ['pitch-worker.js', 'tempo.js', 'fft.js']) {
+    const исходник = path.join(WEB, имя);
+    if (!fs.existsSync(исходник)) throw new Error(`нет ${имя} в веб-версии`);
+    fs.copyFileSync(исходник, path.join(OUT, имя));
+  }
 
   /* Фирменные шрифты. Их подключает style.css относительным путём
      fonts/…, и без этих файлов приложение молча рисовало бы имя
@@ -366,7 +371,7 @@ try {
   console.log('  style.css  — полоса прогресса нейросети');
   console.log('  app.js     — без изменений');
   console.log('  i18n.js    — без изменений');
-  console.log('  pitch-worker.js — смена тональности, без изменений');
+  console.log('  pitch-worker.js, tempo.js, fft.js — потоки и общее БПФ, без изменений');
   console.log('  fonts/     — Bungee, Bungee Shade и лицензия OFL');
 } catch (err) {
   console.error('Не получилось:', err.message);

@@ -1488,6 +1488,12 @@
 </footer>
 
 <script src="i18n.js"></script>
+<!-- БПФ и счётчик темпа: общие с рабочими потоками (pitch-worker.js
+     считает по fft.js тональность, tempo.js умеет работать и сам
+     потоком). Здесь они нужны окну: самопроверке и запасному пути,
+     если поток не завёлся. Обязательно ДО app.js. -->
+<script src="fft.js"></script>
+<script src="tempo.js"></script>
 <div class="export-overlay hidden" id="ai-overlay">
   <div class="export-box">
     <p id="ai-status" data-i18n="ии.готовим">Готовим модель…</p>
