@@ -350,6 +350,225 @@ function createWindow() {
        Такое зависание хуже провала: его легко принять за долгий расчёт. */
     win.webContents.once('did-finish-load', async () => {
       try {
+      /* ---------- Изоляция разделов ----------
+
+         Беда, которую это лечит. Все полсотни разделов идут подряд
+         по одному окну, над одним состоянием студии, и уборку за
+         собой каждый делал сам: у одних был finally, у других нет,
+         и ничто не мешало следующему автору забыть. Забыл — и
+         следующий раздел мерил чужой мусор: студию «с песней»,
+         открытый чужой шаг, чужой язык.
+
+         Хуже того, мусор переживал ЗАПУСК. Правка разметки сама
+         сохраняет черновик в localStorage, а возврат поля текста
+         черновик НЕ убирает: собратьПроект нарочно бережёт прежний
+         текст, когда поле пустое (иначе первая же правка стирала бы
+         работу). Раздел «разметкаТекста» вписывал туда свои две
+         строки, «простукивание» — свои пять времён, и второй прогон
+         на той же папке профиля поднимался «с песней»: кнопка
+         читалась как «Подогнать мой текст» вместо «Распознать текст»,
+         и раздел «язык» краснел на ровном месте. Признак, который
+         врёт через раз, приучает не верить красному, — а это самая
+         дорогая беда, какая тут бывает.
+
+         Теперь изоляция не зависит от дисциплины автора: __раздел
+         снимает общее состояние ДО раздела и возвращает ПОСЛЕ — что
+         бы раздел ни делал и чем бы ни кончил. Свой finally внутри
+         раздела остаётся полезным (он возвращает состояние сразу, до
+         сверки в самом разделе), но забыть его больше не смертельно.
+
+         Исключение раздела тоже больше не уносит всю проверку: оно
+         ловится здесь и превращается в честный `вНорме: false` с
+         текстом сбоя, а счёт настоящих ошибок страницы не трогается. */
+      await win.webContents.executeJavaScript(`(() => {
+        /* Объекты состояния студии, которые разделы правят «на время».
+           Копия поверхностная плюс один уровень вглубь для простых
+           объектов и коротких списков: иначе правка вида
+           editor.mix.orig = 0 пережила бы раздел. Огибающую голоса и
+           звуковые буферы не копируем вовсе — это мегабайты на каждый
+           раздел, проверка стала бы вдвое дольше; разделы и так
+           подставляют свои, а не правят чужие изнутри. */
+        const ОБЪЕКТЫ = [state, editor, audio, voice, тон, скраб];
+        // Окна поверх студии: раздел мог открыть чужое и не закрыть
+        const ОКНА = ['whatsnew', 'key-overlay', 'export-overlay',
+          'ai-overlay', 'asr-overlay', 'update-bar'];
+
+        const простой = (v) => !!v && typeof v === 'object'
+          && (v.constructor === Object || (Array.isArray(v) && v.length <= 64));
+
+        const снятьОбъект = (о) => {
+          const поля = [];
+          for (const ключ of Object.keys(о)) {
+            const v = о[ключ];
+            if (typeof v === 'function') continue;
+            поля.push([ключ, v, простой(v)
+              ? (Array.isArray(v) ? v.slice() : Object.assign({}, v)) : null]);
+          }
+          return поля;
+        };
+
+        const вернутьОбъект = (о, поля) => {
+          for (const [ключ, было, нутро] of поля) {
+            if (о[ключ] !== было) о[ключ] = было;
+            if (!нутро) continue;
+            if (Array.isArray(нутро)) {
+              if (было.length !== нутро.length
+                || нутро.some((v, i) => было[i] !== v)) {
+                было.length = 0;
+                for (const v of нутро) было.push(v);
+              }
+            } else {
+              for (const к of Object.keys(было)) if (!(к in нутро)) delete было[к];
+              for (const к of Object.keys(нутро)) {
+                if (было[к] !== нутро[к]) было[к] = нутро[к];
+              }
+            }
+          }
+        };
+
+        const снятьХранилище = () => {
+          const к = {};
+          try {
+            for (let i = 0; i < localStorage.length; i++) {
+              const кл = localStorage.key(i);
+              к[кл] = localStorage.getItem(кл);
+            }
+          } catch (e) { return null; }
+          return к;
+        };
+
+        const вернутьХранилище = (было) => {
+          if (!было) return;
+          try {
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+              const кл = localStorage.key(i);
+              if (!(кл in было)) localStorage.removeItem(кл);
+            }
+            for (const кл of Object.keys(было)) {
+              if (localStorage.getItem(кл) !== было[кл]) {
+                localStorage.setItem(кл, было[кл]);
+              }
+            }
+          } catch (e) { /* переполнено — проверку из-за этого не роняем */ }
+        };
+
+        const снятьЭкран = () => ({
+          поле: document.getElementById('lyrics-input').value,
+          шаги: [...document.querySelectorAll('.step-panel')]
+            .map((p) => p.classList.contains('active')),
+          вкладки: [...document.querySelectorAll('.step-tab')]
+            .map((t) => t.classList.contains('active')),
+          тело: document.body.className,
+          корень: document.documentElement.className,
+          окна: ОКНА.map((id) => {
+            const el = document.getElementById(id);
+            return el ? el.classList.contains('hidden') : null;
+          }),
+        });
+
+        const вернутьЭкран = (с) => {
+          const поле = document.getElementById('lyrics-input');
+          if (поле.value !== с.поле) {
+            поле.value = с.поле;
+            /* Подпись главной кнопки разметки («Распознать текст»
+               против «Подогнать мой текст») ставит обработчик поля,
+               а не разметка: без события она осталась бы от чужого
+               текста — ровно то, на чём падал раздел «язык». */
+            поле.dispatchEvent(new Event('input'));
+          }
+          document.querySelectorAll('.step-panel')
+            .forEach((p, i) => p.classList.toggle('active', !!с.шаги[i]));
+          document.querySelectorAll('.step-tab').forEach((t, i) => {
+            t.classList.toggle('active', !!с.вкладки[i]);
+            // Доступность вкладок считается от maxStep, а он уже вернулся
+            t.disabled = +t.dataset.step > state.maxStep;
+          });
+          if (document.body.className !== с.тело) document.body.className = с.тело;
+          if (document.documentElement.className !== с.корень) {
+            document.documentElement.className = с.корень;
+          }
+          ОКНА.forEach((id, i) => {
+            const el = document.getElementById(id);
+            if (el && с.окна[i] !== null) el.classList.toggle('hidden', с.окна[i]);
+          });
+        };
+
+        const снять = () => ({
+          язык: I18N.язык(),
+          тема: window.THEME ? window.THEME.тема() : null,
+          confirm: window.confirm,
+          alert: window.alert,
+          prompt: window.prompt,
+          объекты: ОБЪЕКТЫ.map(снятьОбъект),
+          экран: снятьЭкран(),
+          хранилище: снятьХранилище(),
+        });
+
+        const вернуть = (с) => {
+          /* Заход простукивания и разметка слов забирают экран себе.
+             Закрываем их тем же путём, каким закрывает студия: снять
+             один флаг мало — на экране осталась бы чужая панель. */
+          try { if (tap.active) finishTapMode(); } catch (e) { /* уже закрыт */ }
+          try { if (wordTap.active) finishWordTap(false); } catch (e) { /* уже */ }
+          window.confirm = с.confirm;
+          window.alert = с.alert;
+          window.prompt = с.prompt;
+          ОБЪЕКТЫ.forEach((о, i) => вернутьОбъект(о, с.объекты[i]));
+          /* Кэши отрисовки — единственное, что НЕ возвращаем, а гасим.
+             Это слепки «что уже нарисовано»: вернуть им прежнее
+             значение значило бы сказать редактору, что на холсте лежит
+             картинка, которой там давно нет, — и следующая отрисовка
+             честно ничего не сделала бы. Гашение хуже не сделает:
+             оно просто заставляет посчитать заново. */
+          editor.peaks = null;
+          editor.spans = null;
+          editor.spansKey = '';
+          editor.stageKey = '';
+          editor.stageDrawn = null;
+          editor.кадрПоказан = null;
+          вернутьЭкран(с.экран);
+          /* Язык — после состояния: смена языка перерисовывает
+             пол-студии, и рисовать её надо уже по вернувшимся
+             строкам, а не по чужим. */
+          if (I18N.язык() !== с.язык) I18N.установить(с.язык);
+          if (window.THEME && с.тема && window.THEME.тема() !== с.тема) {
+            window.THEME.установить(с.тема);
+          }
+          /* Хранилище последним: всё, что выше, могло по дороге
+             сохранить черновик — правка разметки делает это сама. */
+          вернутьХранилище(с.хранилище);
+        };
+
+        window.__раздел = (имя, тело) => {
+          const с = снять();
+          const прибрать = () => {
+            try { вернуть(с); } catch (e) {
+              console.error('уборка после раздела ' + имя + ': '
+                + ((e && e.message) || e));
+            }
+          };
+          const сбой = (e) => ({
+            разделСорвался: имя,
+            ошибка: String((e && e.message) || e),
+            вНорме: false,
+          });
+          try {
+            const итог = тело();
+            // Разделы бывают и с await внутри — тогда уборка идёт по хвосту
+            if (итог && typeof итог.then === 'function') {
+              return итог.then(
+                (v) => { прибрать(); return v; },
+                (e) => { прибрать(); return сбой(e); });
+            }
+            прибрать();
+            return итог;
+          } catch (e) {
+            прибрать();
+            return сбой(e);
+          }
+        };
+        return true;
+      })()`);
       const report = await win.webContents.executeJavaScript(`(() => ({
         аиБлокВиден: !document.getElementById('ai-block').classList.contains('hidden'),
         кнопкаЕсть: !!document.getElementById('btn-ai-run'),
@@ -359,7 +578,7 @@ function createWindow() {
         /* Два режима разметки текста: поле пустое — распознаём с нуля,
            текст вставлен — подгоняем его под песню. Проверяем сам
            переключатель: подпись кнопки, вторая кнопка и пояснения. */
-        разметкаТекста: (() => {
+        разметкаТекста: __раздел('разметкаТекста', () => {
           const поле = document.getElementById('lyrics-input');
           const было = поле.value;
           const снимок = () => ({
@@ -376,14 +595,14 @@ function createWindow() {
           поле.value = было;
           поле.dispatchEvent(new Event('input'));
           return { пусто, сТекстом };
-        })(),
+        }),
         /* Умолчания качества. Разделение — один проход: лишние проходы
            на качество не влияют, это замерено, и три прохода означали
            лишь тройное ожидание. Распознавание — крупная модель, она
            и правда слышит лучше. Оба редких варианта обязаны остаться
            в списках (их не удаляли, только спрятали), а сами блоки
            «Ещё варианты» — быть свёрнутыми. */
-        качество: (() => {
+        качество: __раздел('качество', () => {
           const проходы = document.getElementById('ai-quality');
           const модель = document.getElementById('asr-model');
           const свёртки = [...document.querySelectorAll('.ai-more, .asr-more')];
@@ -401,13 +620,13 @@ function createWindow() {
             вНорме: проходы.value === '1' && модель.value === 'small'
               && многопроходный && обычнаяМодель && свёрнуто,
           };
-        })(),
+        }),
         /* Оценка времени. Считается из длины трека, поэтому проверяем её
            на длине настоящего замера — песня 2 мин 53 с (173 с). Настоящие
            числа на этом Маке: разделение одним проходом ≈159 с, обычная
            модель по миксу 104 с, крупная по миксу 202 с, крупная по чистому
            вокалу 355 с. Вилки нарочно широкие: важно не наврать в разы. */
-        оценкаВремени: (() => {
+        оценкаВремени: __раздел('оценкаВремени', () => {
           const o = window.__оценкаВремени(173);
           const в = (v, от, до) => v >= от && v <= до;
           return {
@@ -425,7 +644,7 @@ function createWindow() {
               && document.getElementById('ai-eta').textContent.length > 20
               && document.getElementById('asr-eta').textContent.length > 20,
           };
-        })(),
+        }),
         подгонкаЕсть: !!(window.Align && window.Align.fit),
         мостПодключён: !!(window.desktop && window.desktop.isDesktop),
         шаговВсего: document.querySelectorAll('.step-tab').length,   // четыре: песня → текст → редактор → караоке
@@ -436,7 +655,7 @@ function createWindow() {
            один и тот же размер — базовый. Признак ловит дефект, из-за
            которого закреплённые строки ужимались до предела: их коробка
            шире полей сцены, и подгонка по ширине срабатывала впустую. */
-        размерСтрок: (() => {
+        размерСтрок: __раздел('размерСтрок', () => {
           const панель = document.getElementById('step-4');
           const былаАктивна = панель.classList.contains('active');
           панель.classList.add('active');   // скрытую сцену не измерить
@@ -486,11 +705,11 @@ function createWindow() {
             совпадает: вНорме(местами) && вНорме(закреплённые)
               && Math.abs(местами.минимум - закреплённые.минимум) < 0.01,
           };
-        })(),
+        }),
         /* Редактор: дорожка блоками, отмена действий и полоса голоса.
            Подкладываем короткую «песню» и три строки, гоняем на них всё,
            что должно работать, и возвращаем прежнее состояние. */
-        редактор: (() => {
+        редактор: __раздел('редактор', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -577,7 +796,7 @@ function createWindow() {
             clearHistory();
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
         /* Правка слов — зеркало панели строки: выбор слова щелчком,
            снятие выбора при смене строки, числовые поля (верное/неверное
            значение), клавиши той же грамматики (стрелки/скобки, Shift
@@ -586,7 +805,7 @@ function createWindow() {
            кольцо слова и «распределить» по слогам (Align.spread).
            Своя короткая «песня» с голосом, кончающимся ровно на 5.01 с —
            туда и должен притянуть магнит. */
-        правкаСлов: (() => {
+        правкаСлов: __раздел('правкаСлов', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -758,14 +977,14 @@ function createWindow() {
             clearHistory();
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
         /* Время в полях инспектора. Раньше поля показывали голые секунды,
            и одно и то же место песни читалось на дорожке как «3:10»,
            а в поле как «190». Проверяем ровно эту беду: что показано
            минутами и что набранное понимается в обоих видах —
            и «1:27,44», и просто «87.44». Плохое (буквы, минус) обязано
            отклоняться, не трогая разметку. */
-        времяВПолях: (() => {
+        времяВПолях: __раздел('времяВПолях', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -824,13 +1043,13 @@ function createWindow() {
             clearHistory();
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
         /* Дописанные строки. Беда: человек вспоминает про забытый куплет,
            дописывает его в текст — и на дорожке этих строк нет вовсе,
            потому что времени у них нет. Проверяем, что место им находится
            между размеченными соседями, что они помечены «на глазок»
            и что строку, которую просто ещё не простучали, никто не трогает. */
-        новыеСтроки: (() => {
+        новыеСтроки: __раздел('новыеСтроки', () => {
           const былаДлина = audio.duration;
           try {
             audio.duration = 60;
@@ -859,12 +1078,12 @@ function createWindow() {
           } finally {
             audio.duration = былаДлина;
           }
-        })(),
+        }),
         /* Черновик файлом и строка «что в памяти». Проверяем круг целиком:
            собрали проект → потеряли работу → открыли черновик → всё на
            месте. Файл берём не с диска — тем же JSON, каким он уходит
            в download. */
-        черновик: (() => {
+        черновик: __раздел('черновик', () => {
           const былиСтроки = state.lines;
           const былаДлина = audio.duration;
           const былоИмя = state.fileName;
@@ -913,12 +1132,12 @@ function createWindow() {
             else localStorage.removeItem('karaoke-project');
             обновитьПамять();
           }
-        })(),
+        }),
         /* «Слушать только это». Отдельной дорожки голоса у студии нет:
            голос — это разница песни и минусовки, поэтому в режиме
            «только голос» минусовка идёт в противофазе. Проверяем сами
            усиления и то, что соло не переживает уход из редактора. */
-        соло: (() => {
+        соло: __раздел('соло', () => {
           const былоСоло = editor.solo;
           /* Какие панели были открыты: goToStep ниже переключит шаг,
              а следующие признаки меряют, что видно на экране, — оставить
@@ -943,7 +1162,7 @@ function createWindow() {
             document.querySelectorAll('.step-panel').forEach((p) => p.classList.remove('active'));
             былиАктивны.forEach((p) => p.classList.add('active'));
           }
-        })(),
+        }),
         /* Пауза между словами. Раньше конец слова был обязан равняться
            началу следующего: перетаскивание сваривало соседей, и паузу
            выразить было нечем. Проверяем оба поведения сразу — обычное
@@ -951,7 +1170,7 @@ function createWindow() {
            расходятся, — а заодно то, ради чего это делалось: заливка
            караоке в паузе стоит, и расширенный LRC несёт лишнюю метку
            на конце слова. */
-        паузаМеждуСловами: (() => {
+        паузаМеждуСловами: __раздел('паузаМеждуСловами', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -1052,7 +1271,7 @@ function createWindow() {
             clearHistory();
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
         /* Края КРАЙНИХ слов строки. Жалоба была прямая: «не могу
            подвинуть начало слова, время тоже не выставить» — человек
            выбрал первое слово, а поле «начало» недоступно и ручки
@@ -1066,7 +1285,7 @@ function createWindow() {
            даёт стык, а отмена возвращает как было. И отдельно — конец
            ПОСЛЕДНЕГО слова: пока его не трогали, автоматика тянет его
            до конца строки (распев), а выставленный руками уважается. */
-        краяКрайнихСлов: (() => {
+        краяКрайнихСлов: __раздел('краяКрайнихСлов', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -1230,7 +1449,7 @@ function createWindow() {
             else localStorage.removeItem('karaoke-project');
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
         /* Выделение диапазона и пропорциональное растяжение. Беды две:
            уехал один куплет — а кнопки сдвига двигали ВСЮ разметку,
            то есть портили верный остаток песни; и разметка «плывёт» —
@@ -1240,7 +1459,7 @@ function createWindow() {
            что ручные концы и метки слов поехали вместе, что соседние
            строки не тронуты, что край упирается в соседа и что отмена
            возвращает и времена строк, и метки слов. */
-        диапазон: (() => {
+        диапазон: __раздел('диапазон', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -1389,7 +1608,7 @@ function createWindow() {
             else localStorage.removeItem('karaoke-project');
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
         /* Уровни дорожек в наушниках: ползунок у оригинала и у минусовки.
            Своей дорожки у голоса нет, он берётся вычитанием, поэтому
            «оригинал O, минусовка M» — это песня с усилением O и минусовка
@@ -1398,7 +1617,7 @@ function createWindow() {
            ходить вместе) и то, что принудительный оригинал (кольцо,
            простукивание, прослушивание строки) не даёт увести голос
            ниже записи. */
-        уровниДорожек: (() => {
+        уровниДорожек: __раздел('уровниДорожек', () => {
           const былиУровни = { ...editor.mix };
           const былаГалка = editor.hearVocal;
           const панель = document.getElementById('step-3');
@@ -1439,7 +1658,7 @@ function createWindow() {
             if (пер) пер.checked = былаГалка;
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
         /* Режим простукивания. Проверяем не наличие кнопок, а само
            поведение: забирает ли режим экран себе и по каким правилам
            переписываются метки. Стучим не вызовами tapHit, а пробелом
@@ -1451,7 +1670,7 @@ function createWindow() {
              • строки, до которых не дошли, остаются как были;
              • «отменить последнюю» возвращает один удар;
              • Cmd+Z снимает весь заход целиком. */
-        простукивание: (() => {
+        простукивание: __раздел('простукивание', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -1553,7 +1772,7 @@ function createWindow() {
             clearHistory();
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
         /* Заход с середины, а дальше лежат метки ПОЗЖЕ простуканного —
            та самая ветка «дальше метки идут вспять, стереть их?».
 
@@ -1579,7 +1798,7 @@ function createWindow() {
            Строки размечены на 4, 8, 12, 16, 20 с. Заходим с третьей
            и бьём на 25-й секунде: следующая размеченная (четвёртая,
            16 с) оказывается РАНЬШЕ — ровно тот случай. */
-        простукиваниеВспять: (() => {
+        простукиваниеВспять: __раздел('простукиваниеВспять', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -1684,7 +1903,7 @@ function createWindow() {
             else localStorage.removeItem('karaoke-project');
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
         /* Клавиши редактора под открытым окном.
 
            Беда с живой машины: человек открывает «Как пользоваться»
@@ -1703,7 +1922,7 @@ function createWindow() {
            без окна, — что те же клавиши по-прежнему работают: иначе
            «ничего не поменялось» доказывало бы только сломанный
            обработчик. */
-        клавишиПодОкном: (() => {
+        клавишиПодОкном: __раздел('клавишиПодОкном', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -1842,7 +2061,7 @@ function createWindow() {
             else localStorage.removeItem('karaoke-news-version');
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
 
         /* Стёртый текст строки.
 
@@ -1857,7 +2076,7 @@ function createWindow() {
            пальца), но показывать отказ сразу, как из поля ушли.
            Меряем: текст в state цел, в поле он вернулся, а обычная
            правка по-прежнему проходит. */
-        стёртаяСтрока: (() => {
+        стёртаяСтрока: __раздел('стёртаяСтрока', () => {
           const былиСтроки = state.lines;
           const былоПоле = document.getElementById('lyrics-input').value;
           const былПроект = localStorage.getItem('karaoke-project');
@@ -1921,7 +2140,7 @@ function createWindow() {
             else localStorage.removeItem('karaoke-project');
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
 
         /* Сверхдлинное слово на сцене караоке.
 
@@ -1937,7 +2156,7 @@ function createWindow() {
            и на сколько рядов она разложилась. И тут же — что обычная
            длинная строка с пробелами переносится по-прежнему, короткая
            живёт в один ряд, а единый кегль не сломался. */
-        длинноеСлово: (() => {
+        длинноеСлово: __раздел('длинноеСлово', () => {
           const панель = document.getElementById('step-4');
           const былаАктивна = панель.classList.contains('active');
           const былиСтроки = state.lines;
@@ -1993,7 +2212,7 @@ function createWindow() {
             applyStyle();
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
 
         /* «Сбросить слова» и дорожка.
 
@@ -2008,7 +2227,7 @@ function createWindow() {
            после лишней отрисовки. Дорожка обязана поменяться на сбросе
            и НЕ поменяться от лишней отрисовки — то есть к концу сброса
            она уже показывает нынешнее положение дел. */
-        сбросСлов: (() => {
+        сбросСлов: __раздел('сбросСлов', () => {
           const былиСтроки = state.lines;
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
@@ -2091,7 +2310,7 @@ function createWindow() {
             else localStorage.removeItem('karaoke-project');
             if (!былаАктивна) панель.classList.remove('active');
           }
-        })(),
+        }),
 
         // Окно «Что нового»: в приложении показываем пункты про нейросети
         // и прячем сайтовую строку «а в приложении ещё…»
@@ -2108,7 +2327,7 @@ function createWindow() {
            букв чужого алфавита. Текст песни и содержимое поля сюда
            не входят — это данные человека, их не переводят.
            Язык в конце возвращаем каким был. */
-        язык: (() => {
+        язык: __раздел('язык', () => {
           const былЯзык = I18N.язык();
           const КИР = /[А-Яа-яЁё]/;
           const ключевые = () => ({
@@ -2187,14 +2406,14 @@ function createWindow() {
                  забыли положить перевод, — он молча отдавал бы русский. */
               && Object.keys(en).every((k) => en[k] !== ru[k]),
           };
-        })(),
+        }),
         /* Номер версии в окне «Что нового» и на кнопке в подвале.
            Он живёт в разметке (data-news-version у <html>), а не
            в словаре: раньше номер был вшит в перевод и отстал —
            по-английски окно объявляло 1.8.4, когда в разметке стояла
            уже 1.9.0. Проверяем, что оба языка называют одно число
            и что подстановка раскрылась. */
-        номерВерсии: (() => {
+        номерВерсии: __раздел('номерВерсии', () => {
           const версия = document.documentElement.dataset.newsVersion;
           const снять = () => ({
             заголовок: document.getElementById('whatsnew-title').textContent,
@@ -2211,11 +2430,11 @@ function createWindow() {
             версия, ru, en,
             вНорме: !!версия && везде.every((s) => s.includes(версия) && !/[{}]/.test(s)),
           };
-        })(),
+        }),
         /* Логотип в шапке и в подвале. Приложению нужна своя копия
            картинки: папка icons/ в сборку не едет, и без копии рядом
            с интерфейсом вместо логотипа оставался запасной значок. */
-        логотип: (() => {
+        логотип: __раздел('логотип', () => {
           const шапка = document.getElementById('logo-img');
           const подвал = document.getElementById('logo-img-footer');
           const запасной = document.getElementById('logo-fallback');
@@ -2228,23 +2447,23 @@ function createWindow() {
             вНорме: виден(шапка) && виден(подвал)
               && !!запасной && запасной.classList.contains('hidden'),
           };
-        })(),
+        }),
         /* Раздел «Для компьютера» в приложении удалён — приложение уже
            стоит. Проверяем после переключения языка: перевод абзацев
            кладётся через innerHTML и приносит ссылки на раздел обратно,
            поэтому разворачивать их приходится каждый раз заново.
            В меню шапки пункта не должно быть совсем: ключ перевода
            висел на самой ссылке и вместе с ней пропадал. */
-        разделДляКомпьютера: (() => {
+        разделДляКомпьютера: __раздел('разделДляКомпьютера', () => {
           const ссылок = document.querySelectorAll('a[href="#desktop"]').length;
           const вМеню = !!document.querySelector('.site-nav a[href="#desktop"]');
           return { ссылок, вМеню, разделЕсть: !!document.getElementById('desktop'),
             вНорме: ссылок === 0 && !вМеню && !document.getElementById('desktop') };
-        })(),
+        }),
         /* Модификатор в подписях: на Маке Cmd, на Windows и Linux Ctrl.
            Проверяем и текст под дорожкой, и подсказку кнопки отмены —
            они наполняются разными путями (span и data-mod-title). */
-        модификатор: (() => {
+        модификатор: __раздел('модификатор', () => {
           const ждём = ${JSON.stringify(process.platform === 'darwin' ? 'Cmd' : 'Ctrl')};
           const подпись = document.querySelector('.timeline-keys .mod-key');
           const кнопка = document.getElementById('tl-undo');
@@ -2257,12 +2476,12 @@ function createWindow() {
             неЗаполнено: пустых,
             вНорме: пустых === 0 && !!кнопка && кнопка.title.includes(ждём + '+Z'),
           };
-        })(),
+        }),
         /* Тема оформления: переключатель собрался, атрибут на <html>
            меняется по клику, выбор переживает перезагрузку (localStorage),
            и — самое важное — рамка выделения на дорожке (--sel-ring)
            у тем правда разного цвета, а не только имя атрибута другое. */
-        тема: (() => {
+        тема: __раздел('тема', () => {
           const T = window.THEME;
           if (!T) return { естьМодуль: false, вНорме: false };
           const studio = document.querySelector('.studio');
@@ -2292,7 +2511,7 @@ function createWindow() {
               && !!кольцоФирменная && !!кольцоНейтральная && кольцоФирменная !== кольцоНейтральная
               && кольцоСноваФирменная === кольцоФирменная && сохранилась,
           };
-        })()
+        })
       }))()`);
       /* Подсказки кнопок студии. Разом три вещи, которые ломались порознь.
 
@@ -2315,7 +2534,7 @@ function createWindow() {
          уезжали за край окна.
 
          Язык, открытость справки и активный шаг возвращаются в finally. */
-      report.подсказки = await win.webContents.executeJavaScript(`(async () => {
+      report.подсказки = await win.webContents.executeJavaScript(`__раздел('подсказки', async () => {
         const былЯзык = I18N.язык();
         const панели = [...document.querySelectorAll('.step-panel')];
         const былиАктивны = панели.map((п) => п.classList.contains('active'));
@@ -2399,7 +2618,7 @@ function createWindow() {
           справка.open = былаОткрыта;
           панели.forEach((п, i) => п.classList.toggle('active', былиАктивны[i]));
         }
-      })()`);
+      })`);
       /* Ошибки считаем снаружи: страница их нигде не копит, а window.__errors,
          который тут читался раньше, в проекте не создаётся вовсе — признак
          всегда показывал ноль, что бы на странице ни падало. */
@@ -2453,7 +2672,7 @@ function createWindow() {
          вместо audio.ctx: только так видно, что кусочек и правда
          доиграл и прибрал за собой. Всё подменённое возвращается
          в finally — следующие проверки мерят экран и хранилище. */
-      report.скраб = await win.webContents.executeJavaScript(`(async () => {
+      report.скраб = await win.webContents.executeJavaScript(`__раздел('скраб', async () => {
         const былБуфер = state.originalBuffer;
         const былМинус = state.instrumentalBuffer;
         const былКонтекст = audio.ctx;
@@ -2631,7 +2850,7 @@ function createWindow() {
           else localStorage.removeItem('karaoke-project');
           if (!былаАктивна) панель.classList.remove('active');
         }
-      })()`);
+      })`);
 
       /* Витрина сайта в приложении. Беда, которую это лечит:
          приложение показывало всю рекламную часть сайта — шапочное
@@ -2651,7 +2870,7 @@ function createWindow() {
          Окно в самопроверке не показано, поэтому меряем не пиксели
          экрана, а вычисленные стили и высоту студии относительно окна.
          Открытое руководство закрываем в finally. */
-      report.витрина = await win.webContents.executeJavaScript(`(async () => {
+      report.витрина = await win.webContents.executeJavaScript(`__раздел('витрина', async () => {
         const былоОткрыто = document.body.classList.contains('guide-open');
         try {
           const вид = (сел) => {
@@ -2697,7 +2916,7 @@ function createWindow() {
         } finally {
           document.body.classList.toggle('guide-open', былоОткрыто);
         }
-      })()`);
+      })`);
 
       /* Поиск по строкам. Беда: в песне сорок-шестьдесят строк, и нужную
          ищут глазами долго. Опасность у фильтра ровно одна и известна
@@ -2709,7 +2928,7 @@ function createWindow() {
          правится, а Esc и пустое поле возвращают весь список.
 
          Строки подставляем свои, в finally возвращаем прежние. */
-      report.поискСтрок = await win.webContents.executeJavaScript(`(async () => {
+      report.поискСтрок = await win.webContents.executeJavaScript(`__раздел('поискСтрок', async () => {
         const былиСтроки = state.lines;
         const былВыбор = editor.sel;
         const былПоиск = editor.поиск;
@@ -2786,7 +3005,7 @@ function createWindow() {
           else localStorage.removeItem('karaoke-project');
           if (!былаАктивна) панель.classList.remove('active');
         }
-      })()`);
+      })`);
 
       /* Скиммирование: звук под курсором при ПРОСТОМ НАВЕДЕНИИ, без
          нажатия, — так место в записи ищут в монтажных программах.
@@ -2803,7 +3022,7 @@ function createWindow() {
 
          Контекст подменяем на OfflineAudioContext, всё подменённое
          возвращаем в finally. */
-      report.скиммирование = await win.webContents.executeJavaScript(`(async () => {
+      report.скиммирование = await win.webContents.executeJavaScript(`__раздел('скиммирование', async () => {
         const былБуфер = state.originalBuffer;
         const былМинус = state.instrumentalBuffer;
         const былКонтекст = audio.ctx;
@@ -2894,7 +3113,7 @@ function createWindow() {
           скраб.конец = 0;
           if (!былаАктивна) панель.classList.remove('active');
         }
-      })()`);
+      })`);
 
       /* Сворачивание разделов инспектора. Беда: столбец в 210 px на
          ноутбуке не помещался в окно целиком и прокручивался, а числа
@@ -2906,7 +3125,7 @@ function createWindow() {
          в открытом окне.
 
          Раскрытость разделов и ключ хранилища возвращаем в finally. */
-      report.инспектор = await win.webContents.executeJavaScript(`(async () => {
+      report.инспектор = await win.webContents.executeJavaScript(`__раздел('инспектор', async () => {
         const слово = document.getElementById('insp-word');
         const строка = document.getElementById('insp-line');
         const былоСлово = слово.open;
@@ -2963,7 +3182,7 @@ function createWindow() {
           строка.open = былаСтрока;
           if (!былаАктивна) панель.classList.remove('active');
         }
-      })()`);
+      })`);
 
       /* Сетка долей: оценка темпа и притягивание к долям.
 
@@ -2989,7 +3208,7 @@ function createWindow() {
 
          Всё тронутое возвращается в finally, включая ключ
          karaoke-project: следующие разделы мерят экран и хранилище. */
-      report.сеткаДолей = await win.webContents.executeJavaScript(`(() => {
+      report.сеткаДолей = await win.webContents.executeJavaScript(`__раздел('сеткаДолей', () => {
         const былиСтроки = state.lines;
         const былБуфер = state.originalBuffer;
         const былМинус = state.instrumentalBuffer;
@@ -3223,7 +3442,7 @@ function createWindow() {
           else localStorage.removeItem('karaoke-project');
           if (!былаАктивна) панель.classList.remove('active');
         }
-      })()`);
+      })`);
 
 
       /* Смена тональности: движок, кэш и вся арифметика вокруг него.
@@ -3262,7 +3481,7 @@ function createWindow() {
 
          Всё тронутое возвращается в finally: следующие разделы мерят
          экран и звук. */
-      report.тональность = await win.webContents.executeJavaScript(`(async () => {
+      report.тональность = await win.webContents.executeJavaScript(`__раздел('тональность', async () => {
         const былБуфер = state.originalBuffer;
         const былМинус = state.instrumentalBuffer;
         const былиЧистые = тон.чистые;
@@ -3546,7 +3765,7 @@ function createWindow() {
           state.originalBuffer = былБуфер;
           state.instrumentalBuffer = былМинус;
         }
-      })()`);
+      })`);
 
       /* ============================================================
          ТОНАЛЬНОСТЬ В СТУДИИ: орган управления, отмена, сохранение
@@ -3582,7 +3801,7 @@ function createWindow() {
 
          Всё тронутое возвращается в finally: буферы, кэш, состояние,
          karaoke-project и активный шаг. */
-      report.тональностьВСтудии = await win.webContents.executeJavaScript(`(async () => {
+      report.тональностьВСтудии = await win.webContents.executeJavaScript(`__раздел('тональностьВСтудии', async () => {
         const былБуфер = state.originalBuffer;
         const былМинус = state.instrumentalBuffer;
         const былиЧистые = тон.чистые;
@@ -3978,7 +4197,7 @@ function createWindow() {
           goToStep(былШаг);
           state.maxStep = былМаксШаг;
         }
-      })()`);
+      })`);
 
       /* Подложка под текстом и точки отсчёта. Обе беды пришли с живой
          машины, снимками экрана:
@@ -4004,7 +4223,7 @@ function createWindow() {
          и умолчание слышимой перемотки: выключена.
 
          Всё тронутое возвращается в finally, включая karaoke-project. */
-      report.подложкаИОтсчёт = await win.webContents.executeJavaScript(`(() => {
+      report.подложкаИОтсчёт = await win.webContents.executeJavaScript(`__раздел('подложкаИОтсчёт', () => {
         const былиСтроки = state.lines;
         const былСтиль = JSON.parse(JSON.stringify(state.style));
         const былФон = state.bgImage;
@@ -4245,7 +4464,7 @@ function createWindow() {
           else localStorage.removeItem('karaoke-project');
           if (!былаАктивна) панель.classList.remove('active');
         }
-      })()`);
+      })`);
 
       /* Лишняя работа на каждом кадре редактора.
 
@@ -4271,7 +4490,7 @@ function createWindow() {
            ни одного узла.
 
          Всё тронутое возвращается в finally, включая karaoke-project. */
-      report.кадрыРедактора = await win.webContents.executeJavaScript(`(async () => {
+      report.кадрыРедактора = await win.webContents.executeJavaScript(`__раздел('кадрыРедактора', async () => {
         const былиСтроки = state.lines;
         const былБуфер = state.originalBuffer;
         const былаДлина = audio.duration;
@@ -4521,7 +4740,7 @@ function createWindow() {
               .forEach((p) => p.classList.toggle('active', p === активная));
           }
         }
-      })()`, true);
+      })`, true);
 
       console.log('SELFTEST', JSON.stringify(report));
 
