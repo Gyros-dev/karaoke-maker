@@ -37,6 +37,16 @@
       "preload.js",
       "renderer/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../THIRD-PARTY-NOTICES.txt",
+        "to": "THIRD-PARTY-NOTICES.txt"
+      }
+    ],
     "mac": {
       "target": [
         {

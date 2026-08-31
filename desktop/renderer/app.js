@@ -9297,7 +9297,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-/* ---------- Экспорт видео для YouTube ----------
+/* ---------- Экспорт видео ----------
    Рисуем караоке на canvas 1280×720, звук ведём в MediaStream,
    пишем всё вместе через MediaRecorder. Запись в реальном времени. */
 const videoExport = { active: false, cancelled: false };

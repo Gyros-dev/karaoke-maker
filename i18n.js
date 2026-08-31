@@ -310,7 +310,7 @@ I18N.EN = {
   'как.шаг3.приложение': '<b>Check what the network laid out.</b> Lines it barely made out are flagged with ≈ — start there. The rest usually just needs a loop and a nudge of the edges on the timeline.',
   'как.шаг3.дальше': 'Then polish: edit the text, drag blocks on the timeline, loop a line, time the words inside a line. More in the “Editor” block below.',
   'как.шаг4.заголовок': 'Sing and save',
-  'как.шаг4.текст': 'The “Karaoke” step is where you set up the look of the text, the background, the vocal level and the equaliser — and then save the song as a file: .lrc, a .wav instrumental or a video for YouTube. More in the “Look and what you can save” block below.',
+  'как.шаг4.текст': 'The “Karaoke” step is where you set up the look of the text, the background, the vocal level and the equaliser — and then save the song as a file: .lrc, a .wav instrumental or a finished video. More in the “Look and what you can save” block below.',
   'как.редактор.заголовок': 'Editor: timeline, snapping, original-audio stretches, words, tapping',
   'как.редактор.дорожка': '<b>Timeline.</b> Lines and words are drawn as blocks — you see length, not just a start point. Drag the edges, drag the whole block. Arrow keys nudge the selected line a little; with Alt held, a lot. <span class="mod-key">Cmd</span>+Z undoes, <span class="mod-key">Cmd</span>+Shift+Z redoes. The loop button plays the selected line round and round — the fastest way to tell whether the timing lands.',
   'как.редактор.магнит': '<b>Snapping.</b> While you drag an edge it sticks to neighbouring lines, to the playhead, to the edges of original-audio stretches and to real vocal onsets. Holding <b>Alt</b> suspends it for that drag — same as Logic Pro and Final Cut. <span class="only-desktop">In the app a vocal envelope is drawn on the timeline as well: you can see where the singing actually is.</span>',
@@ -321,7 +321,7 @@ I18N.EN = {
   'как.экспорт.оформление': '<b>Look.</b> Tabs down the left of the “Karaoke” step: font and size, colours, stage (where the lines sit, the scrim under the text, blur on the inactive lines, the three-dot count-in before a line) and sound (vocal level and equaliser). Everything shows up straight away in the preview on the right, and the F key blows it up full screen.',
   'как.экспорт.lrc': '<b>.lrc</b> is the standard synced-lyrics format: a line and its time. Plenty of players read it. Next to it, “.lrc with words” — the extended variant with a timestamp on every word.',
   'как.экспорт.wav': '<b>Instrumental .wav</b> — the audio without vocals as a single file, including the stretches where you kept the original.',
-  'как.экспорт.видео': '<b>Video for YouTube</b> — a finished clip with background, text and instrumental in HD, Full HD or 2K. It records in real time, so it takes exactly as long as the song; you can minimise the window and recording carries on.',
+  'как.экспорт.видео': '<b>Video</b> — a finished clip with background, text and instrumental in HD, Full HD or 2K, as a <b>.webm</b> file. It records in real time, so it takes exactly as long as the song; you can minimise the window and recording carries on.',
   'как.экспорт.сохранение': 'Lyrics, timings, word timing and the look are saved automatically and survive closing the <span class="only-web">tab</span><span class="only-desktop">app</span>. The only thing you have to pick again is the audio file itself.',
 
   /* ---------- Студия: шаги ---------- */
@@ -473,7 +473,7 @@ I18N.EN = {
   'караоке.выравнивание.низ': 'Bottom',
   'караоке.отсчёт': 'Count-in before a line',
   'караоке.отсчёт.подсказка': 'Three dots fade out over the three seconds before you come in — so you know when to start after a break',
-  'караоке.заметка.видео': 'The look carries over into the YouTube video',
+  'караоке.заметка.видео': 'The look carries over into the finished video',
   /* Тональность: орган управления на закладке «Звук».
      Key вместо pitch — это то слово, которым про песню и говорят. */
   'караоке.тональность': 'Key <small>higher or lower than recorded</small>',
@@ -507,14 +507,16 @@ I18N.EN = {
   'экспорт.wav': 'Instrumental .wav',
   'экспорт.wav.подсказка': 'Instrumental with the original on the stretches marked in the editor',
   'экспорт.качество': 'Quality',
-  'экспорт.видео': 'Video for YouTube',
+  /* Строка про права: одна на всю студию, под кнопками вывода */
+  'экспорт.права': 'The rights to the song stay with whoever holds them. Make karaoke out of what you have the rights to, and publishing the finished video is on you.',
+  'экспорт.видео': 'Save video',
   'экспорт.идёт': 'Recording the video…',
   'экспорт.подсказка': 'Recording runs in real time. You can minimise the window: the export carries on in the background. Don’t close the page before it finishes.',
   'экспорт.отменить': 'Cancel',
   'экспорт.назад.подсказка': 'Back to the editor to fix the timing',
   'экспорт.звук.подсказка': 'A short beep: check the sound is going where it should and can be heard',
   'экспорт.lrc.подсказка': 'Save the lyrics with line times (.lrc) — nearly every karaoke player reads it',
-  'экспорт.видео.подсказка': 'Record a video of the stage with the sound — a finished file for YouTube',
+  'экспорт.видео.подсказка': 'Record a video of the stage with the sound — a finished .webm file',
   'экспорт.отменить.подсказка': 'Stop recording the video. What has been recorded is not kept',
 
   /* ---------- Шаг 3: редактор ---------- */
@@ -636,13 +638,15 @@ I18N.EN = {
   'faq.6.вопрос': 'What is an .lrc file?',
   'faq.6.ответ1': 'It’s the standard format for synced lyrics: every line is tagged with a time. Plenty of players and karaoke programs read these files.',
   'faq.6.ответ2': 'The “⬇ .lrc with words” button saves the extended variant — with a timestamp on every word inside a line. Players that don’t understand it will still read the lyrics line by line; the ones that do will highlight word by word.',
-  'faq.7.вопрос': 'How do I upload the video to YouTube?',
-  'faq.7.ответ': 'The “Video for YouTube” button records a finished clip with background, text and instrumental — quality is chosen next to it: HD 1280×720, Full HD 1920×1080 or 2K 2560×1440. The whole stage look and the equaliser go into the recording. The file is WebM — YouTube takes it directly, no conversion. Recording runs in real time, so it takes as long as the song; you can minimise the window and the export carries on in the background.',
+  'faq.7.вопрос': 'What kind of file is the video saved as?',
+  'faq.7.ответ': 'The “Save video” button records a finished clip with background, text and instrumental — quality is chosen next to it: HD 1280×720, Full HD 1920×1080 or 2K 2560×1440. The whole stage look and the equaliser go into the recording. The file is WebM: browsers, editing suites and video sites all read it, so nothing needs converting. Recording runs in real time, so it takes as long as the song; you can minimise the window and the export carries on in the background.',
   'faq.8.вопрос': 'Will my project be saved?',
   'faq.8.ответ': 'Lyrics, line timings, word timing, the look, the equaliser and the background image are saved in the browser automatically. You’ll have to pick the audio file again next time — browsers don’t keep large files.',
 
   /* ---------- Подвал ---------- */
   'подвал.сделано': 'Made with love for music · runs without servers',
+  'подвал.лицензии': 'Licences',
+  'подвал.лицензии.подсказка': 'MIT for the studio itself and the list of third-party licences — on GitHub',
   'подвал.новости': 'What’s new in {версия}',
 };
 
