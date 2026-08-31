@@ -3242,6 +3242,163 @@ function createWindow() {
         }
       })`);
 
+      /* ---------- Курсор ввода и полосы прокрутки ----------
+
+         Две беды, которые видно только на Windows, и обе от одного:
+         страница молчала, а решала за неё система.
+
+         Курсор ввода. Без caret-color цвет выбирает браузер — обычно
+         берёт цвет текста, а на Windows отдаёт системе, и на тёмном
+         фоне поля курсора не видно. Когда-то это починили ровно
+         в одном месте (текст строки в сетке, .edit-text), а прочие
+         полтора десятка полей — текст песни, числа инспектора, поиск
+         по строкам, темп и смещение сетки долей — остались как были.
+         Раздел стережёт итог: у КАЖДОГО поля студии цвет курсора равен
+         акценту темы и заметно отличается от фона под ним, и так во
+         всех трёх темах — акцент у каждой свой.
+
+         Смотрим ВЫЧИСЛЕННЫЙ цвет, а не текст CSS: только он говорит,
+         что увидит человек, и только он ловит проигрыш в каскаде.
+         Акцент темы тоже не пишем числом, а спрашиваем у страницы —
+         пробным элементом с color: var(--accent-solid): так значение
+         приходит в том же написании, что и вычисленный caret-color,
+         и сравнение не спотыкается о «#34d399» против «rgb(52, ...)».
+         Фон берём не у самого поля (у половины он полупрозрачный,
+         rgba(255,255,255,0.05)), а у первого предка с непрозрачной
+         заливкой — иначе сравнивали бы курсор с пустотой.
+
+         Полосы прокрутки. Главное здесь — объявленная гамма
+         (color-scheme: dark): её одной хватает, чтобы система
+         нарисовала тёмные полосы на любой теме Windows. Цвета полос
+         заданы вдобавок своими, под каждую тему, — поэтому проверяем
+         и что полоса задана (не auto), и что желоб тёмный, и что
+         у трёх тем полосы РАЗНЫЕ: одинаковые означали бы, что
+         var() посчитался на :root и жёлтая с синей взяли фирменные.
+
+         Поля инспектора и текст строки живут только при открытом
+         редакторе, поэтому раздел его открывает — на двух выдуманных
+         строках, тем же способом, что и ползунокУровня, — и убирает
+         за собой. */
+      report.курсорИПолосы = await win.webContents.executeJavaScript(`__раздел('курсорИПолосы', async () => {
+        const T = window.THEME;
+        const исходная = T ? T.тема() : '';
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былаДлина = audio.duration;
+        const панель = document.getElementById('step-3');
+        const былаАктивна = панель.classList.contains('active');
+        const студия = document.getElementById('studio');
+        const проба = document.createElement('span');
+        проба.style.color = 'var(--accent-solid)';
+        try {
+          const SR = 8000, dur = 30;
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const buf = ctx.createBuffer(1, SR * dur, SR);
+          state.originalBuffer = buf;
+          state.instrumentalBuffer = buf;
+          audio.duration = dur;
+          state.lines = [
+            { text: 'Раз строка', time: 2, end: null, ручнойКонец: false, сомнительная: false },
+            { text: 'Два строка', time: 10, end: null, ручнойКонец: false, сомнительная: false },
+          ];
+          document.querySelectorAll('.step-panel.active')
+            .forEach((п) => п.classList.remove('active'));
+          панель.classList.add('active');
+          editor.peaks = null;
+          openEditor();
+          студия.appendChild(проба);
+
+          /* Поля, куда человек набирает текст. Ползунки, галки, выбор
+             цвета и файла отсеиваем: курсора в них не бывает. */
+          const поля = [...студия.querySelectorAll('input, textarea, [contenteditable]')]
+            .filter((э) => ['range', 'checkbox', 'color', 'file', 'radio', 'hidden'].indexOf(э.type) < 0);
+          const имена = поля.map((э) => (э.id ? '#' + э.id : '.' + String(э.className).split(' ')[0]));
+          const обязательные = ['#lyrics-input', '#line-search', '#sel-start', '#sel-end',
+            '#sel-word-start', '#sel-word-end', '#beat-bpm', '#beat-phase'];
+          const пропущенные = обязательные.filter((и) => имена.indexOf(и) < 0);
+          const естьТекстСтроки = имена.indexOf('.edit-text') >= 0;
+
+          const числа = (цвет) => String(цвет).replace(/[^0-9.,]/g, '').split(',').map(Number);
+          const яркость = (цвет) => {
+            const c = числа(цвет);
+            return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+          };
+          const непрозрачный = (цвет) => { const c = числа(цвет); return c.length < 4 || c[3] > 0.5; };
+          const фонПод = (эл) => {
+            let у = эл;
+            while (у) {
+              const ф = getComputedStyle(у).backgroundColor;
+              if (непрозрачный(ф)) return ф;
+              у = у.parentElement;
+            }
+            return 'rgb(0, 0, 0)';
+          };
+
+          const цвета = {};
+          const темы = T ? T.ТЕМЫ : ['signature'];
+          for (const код of темы) {
+            if (T) {
+              T.установить(код);
+              // Дольше перехода: у полей есть transition, и цвет ещё едет
+              await new Promise((r) => setTimeout(r, 320));
+            }
+            const акцент = getComputedStyle(проба).color;
+            const плохие = [];
+            поля.forEach((э, i) => {
+              const s = getComputedStyle(э);
+              const ф = фонПод(э);
+              const своё = s.caretColor === акцент;
+              const виден = Math.abs(яркость(s.caretColor) - яркость(ф)) > 0.15;
+              if (!своё || !виден) плохие.push({ что: имена[i], caret: s.caretColor, фон: ф, своё, виден });
+            });
+            /* Вычисленный scrollbar-color — это «ползунок желоб»; желоб
+               берём последним цветом, каждый из них кончается скобкой. */
+            const полосаСтудии = getComputedStyle(студия).scrollbarColor;
+            const полосаСтраницы = getComputedStyle(document.documentElement).scrollbarColor;
+            const желоб = String(полосаСтудии).split(') ').pop();
+            цвета[код] = {
+              акцент, плохие: плохие.slice(0, 5), плохих: плохие.length,
+              полосаСтудии, полосаСтраницы, желоб,
+              полосаЗадана: полосаСтудии !== 'auto' && полосаСтраницы !== 'auto',
+              желобТёмный: яркость(желоб) < 0.25,
+            };
+          }
+          if (T) {
+            T.установить(исходная);
+            await new Promise((r) => setTimeout(r, 320));
+          }
+
+          const гамма = getComputedStyle(document.documentElement).colorScheme;
+          const коды = Object.keys(цвета);
+          const полосы = коды.map((к) => цвета[к].полосаСтудии);
+          const полосыРазные = new Set(полосы).size === коды.length;
+          const акценты = коды.map((к) => цвета[к].акцент);
+          return {
+            полей: поля.length, имена, пропущенные, естьТекстСтроки, гамма, цвета, полосыРазные,
+            вНорме: поля.length >= 9                                  // все поля студии нашлись
+              && пропущенные.length === 0 && естьТекстСтроки          // и поимённо тоже
+              && коды.every((к) => цвета[к].плохих === 0)             // курсор виден в каждой теме
+              && new Set(акценты).size === коды.length                // и у каждой темы он свой
+              && гамма === 'dark'                                     // страница объявила тёмную гамму
+              && коды.every((к) => цвета[к].полосаЗадана && цвета[к].желобТёмный)
+              && полосыРазные                                         // полосы посчитались по теме
+              && (!T || T.тема() === исходная),
+          };
+        } finally {
+          проба.remove();
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          audio.duration = былаДлина;
+          editor.peaks = null;
+          editor.sel = -1;
+          editor.spansKey = '';
+          if (!былаАктивна) панель.classList.remove('active');
+          if (T && T.тема() !== исходная) T.установить(исходная);
+        }
+      })`);
+
       /* ---------- Высота дорожки на настоящих размерах окна ----------
 
          Жалоба была про ноутбук: «дорожка мелкая». Мерить её в
