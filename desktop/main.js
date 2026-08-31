@@ -3025,8 +3025,22 @@ function createWindow() {
           const кнопка = document.getElementById('tl-snap');
           кнопка.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
           const снялСразу = !кнопка.hasAttribute('title') && !!кнопка.dataset.tip;
-          await new Promise((r) => setTimeout(r, 300));
-          const всплывашка = document.querySelector('.tip');
+          /* Ждём появления, а не фиксированный срок. Подсказка выходит
+             через 180 мс, и «подождать 300» иногда не хватало: под
+             нагрузкой таймер страницы съезжает, признак краснел на
+             здоровом коде и приучал не верить красному. Ждём до секунды,
+             но выходим сразу, как показалась, — проверка от этого
+             не слабеет: подсказки нет вовсе — красное будет. */
+          const дождаться = async (сколько) => {
+            const край = Date.now() + сколько;
+            for (;;) {
+              const у = document.querySelector('.tip');
+              if (у && !у.classList.contains('hidden')) return у;
+              if (Date.now() > край) return у;
+              await new Promise((r) => setTimeout(r, 20));
+            }
+          };
+          const всплывашка = await дождаться(1000);
           const видна = !!всплывашка && !всплывашка.classList.contains('hidden');
           const текст = видна ? всплывашка.textContent.trim() : '';
           const титулСнят = !кнопка.hasAttribute('title');
