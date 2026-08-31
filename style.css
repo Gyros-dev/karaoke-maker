@@ -49,6 +49,15 @@
   --orange: #f97316;
   --grad: linear-gradient(90deg, #34d399, #2dd4bf);
   --grad-btn: linear-gradient(90deg, #047857, #10b981, #84cc16);
+  /* Тот же зелёный числами и сплошным цветом. Он был написан прямо
+     цветом в полутора десятках мест — подсветка активного шага,
+     текущая строка, закладки оформления, галки, полосы прогресса, —
+     и каждое такое место темы приходилось перекрашивать адресно
+     (а половину забывали). Теперь цвет один и берётся отсюда, а тема
+     переопределяет его у себя внутри .studio: rgb(var(--accent-rgb) / 0.1)
+     даёт любую прозрачность от нынешнего акцента. */
+  --accent-rgb: 16 185 129;
+  --accent-solid: #34d399;
   --radius: 16px;
 }
 
@@ -117,6 +126,20 @@ html[data-theme="neutral"] .studio {
   --sel-ring: #f0c419;
   --sel-ring-bg: rgba(240, 196, 25, 0.14);
   --sel-ring-glow: rgba(240, 196, 25, 0.5);
+  /* Зелёного в нейтральной теме не остаётся нигде: акцент у неё свой,
+     жёлтый. --violet и --pink здесь тоже переопределены (ими покрашены
+     рамка активного шага, наведение на кнопки редактора, ручка ползунка
+     и рамка поля текста), а --grad и --grad-btn красят главную кнопку
+     шага, кружок с номером активного шага, полосы прогресса и кнопку
+     простукивания. На жёлтом светлый текст не читается — для него
+     заведён --accent-ink. */
+  --violet: #f0c419;
+  --pink: #f7dd6b;
+  --grad: linear-gradient(90deg, #f0c419, #f7dd6b);
+  --grad-btn: linear-gradient(90deg, #d9a800, #f0c419, #f7dd6b);
+  --accent-rgb: 240 196 25;
+  --accent-solid: #f0c419;
+  --accent-ink: #17171a;
   --accent-btn-bg: #3a3a40;
   --accent-btn-glow: none;
   --accent-on-bg: rgba(255, 255, 255, 0.08);
@@ -142,6 +165,10 @@ html[data-theme="steel"] .studio {
   --pink: #7cc0ff;
   --ed-canvas-bg: #22262e;
   --tl-heads-bg: #191c22;
+  --grad: linear-gradient(90deg, #6fb2ff, #3f86e0);
+  --grad-btn: linear-gradient(180deg, #4f9bf0, #2f6fc4);
+  --accent-rgb: 77 159 255;
+  --accent-solid: #4d9fff;
   --sel-ring: #4d9fff;
   --sel-ring-bg: rgba(77, 159, 255, 0.16);
   --sel-ring-glow: rgba(77, 159, 255, 0.55);
@@ -152,24 +179,23 @@ html[data-theme="steel"] .studio {
   --accent-on-text: #cfe4ff;
   --accent-clock: #8fc2ff;
 }
-/* Четыре места, где зелёный написан прямо цветом, а не переменной:
-   они общие со всем сайтом, и переменной там взяться неоткуда.
-   В стальной теме они перекрашиваются адресно — иначе главная кнопка
-   шага и подсветка выбранного выдавали бы прежнюю тему. */
-html[data-theme="steel"] .studio .btn-primary {
-  background: linear-gradient(180deg, #4f9bf0, #2f6fc4);
-  box-shadow: 0 4px 18px rgba(47, 111, 196, 0.4);
-}
-html[data-theme="steel"] .studio .btn-primary:not(:disabled):hover {
-  box-shadow: 0 8px 26px rgba(47, 111, 196, 0.5);
-}
-html[data-theme="steel"] .studio .step-tab.active { background: rgba(77, 159, 255, 0.14); }
-html[data-theme="steel"] .studio .step-tab.active span,
-html[data-theme="steel"] .studio .dot {
-  background: linear-gradient(90deg, #6fb2ff, #3f86e0);
-  box-shadow: none;
-}
-html[data-theme="steel"] .studio .edit-row.current-row { background: rgba(77, 159, 255, 0.12); }
+/* Адресных правил для тем здесь больше нет. Раньше стальная тема
+   перекрашивала поимённо четыре места, где зелёный был написан прямо
+   цветом (главная кнопка шага, подсветка активного шага, его кружок
+   и текущая строка списка), — а нейтральная те же места не
+   перекрашивала, и в ней они оставались зелёными. Мест таких на деле
+   было не четыре, а полтора десятка: закладки оформления, галки,
+   полосы прогресса, кнопка простукивания, ручка ползунка.
+
+   Теперь цвет берётся из переменных (--grad, --grad-btn, --accent-rgb,
+   --accent-solid, --violet, --pink), и тема задаёт их у себя один раз.
+   Перечислять места не нужно вовсе — забыть их тоже больше нельзя.
+
+   Что нарочно НЕ идёт за темой: сцена караоке и её просмотр (их вид
+   человек настраивает сам, и он уходит в видео), значок слов `♪`
+   на дорожке (лаймовый — тем же цветом, что и слова на канвасе,
+   это цветовая азбука разметки, а не акцент оболочки) и окно
+   «Что нового» — оно вне .studio, как и весь остальной сайт. */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -221,9 +247,12 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
      проступала светлая полоска с конца градиента */
   background-origin: border-box;
   background-repeat: no-repeat;
-  box-shadow: 0 4px 24px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 4px 24px rgb(var(--accent-rgb) / 0.35);
+  /* На светлом акценте (жёлтый в нейтральной теме) светлый текст
+     не читается — там тема задаёт свой --accent-ink */
+  color: var(--accent-ink, var(--text));
 }
-.btn-primary:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(16, 185, 129, 0.5); }
+.btn-primary:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgb(var(--accent-rgb) / 0.5); }
 .btn-ghost {
   background: transparent;
   border: 1px solid var(--border);
@@ -288,63 +317,29 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   cursor: pointer;
 }
 
-/* ============ Переключатель языка ============
+/* ============ Переключатели языка и темы ============
 
-   Две кнопки в одной обойме, как закладки в панели оформления.
-   Без флагов: флаг обозначает страну, а не язык, и английским
-   пользуются далеко не только в одной из них.
+   Оба стоят в шапке, рядом, в одном flex-элементе (.header-switches) —
+   так пара держится вместе и не съезжает при разной длине подписей
+   на разных языках.
 
-   Место одно — шапка. Она липкая и видна с любого шага студии,
-   поэтому второй такой же переключатель в ряду шагов был лишним:
-   на экране они попадались на глаза оба сразу. */
-.lang-switch {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.lang-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  /* Ширина постоянная, поля только сверху и снизу: подписи «Рус» и
-     «Rus» разной длины, и при переключении языка обойма прыгала бы
-     вместе со всей шапкой. 4em с запасом хватает на обе. */
-  width: 4em;
-  padding: 0.35rem 0;
-  text-align: center;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s;
-}
-.lang-btn + .lang-btn { border-left: 1px solid var(--border); }
-.lang-btn:hover { color: var(--text); }
-.lang-btn.active { color: var(--text); background: rgba(16, 185, 129, 0.16); }
-/* В узком окне шапка набивается плотно — ужимаем обойму. Ширина
-   в em, поэтому вместе с кеглем сжимается и она. */
-@media (max-width: 1120px) {
-  .lang-btn { font-size: 0.74rem; padding: 0.3rem 0; }
-}
+   Устройство у них одно: кнопка со значком нынешнего выбора и уголком,
+   а по нажатию — список с названиями и галкой у выбранного. Раньше
+   язык был парой кнопок «Рус» и «Eng», а тема — списком: два соседних
+   органа управления делали одно и то же, а читались как разные.
+   Поэтому стили здесь общие (`pick-*`), а свои классы (`theme-*`,
+   `lang-*`) остались, чтобы переключатель можно было найти снаружи.
 
-/* Переключатель темы стоит рядом с языковым, в одном flex-элементе
-   шапки (см. .header-switches) — так пара держится вместе и не
-   съезжает при разной длине подписей на разных языках.
-
-   Тем стало три, и обойма из трёх кнопок в шапке уже перевешивала
-   языковой переключатель рядом. Поэтому здесь выпадающий список:
-   одна кнопка со значком нынешней темы, по нажатию — три пункта
-   с названиями. Языковой переключатель остаётся парой кнопок:
-   языков два, и обойма для них — самый короткий путь. */
+   Без флагов и цветных кружков: флаг обозначает страну, а не язык,
+   а образец темы точнее покажет сама студия. Значки — глобус и значок
+   нынешней темы (см. ЗНАЧОК_ТЕМЫ в app.js). */
 .header-switches { display: inline-flex; align-items: center; gap: 0.5rem; }
-.theme-switch {
+.pick-switch {
   /* Опорная точка для выпадающего списка: он встаёт под кнопкой */
   position: relative;
   display: inline-flex;
 }
-.theme-btn {
+.pick-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -357,22 +352,21 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   font-weight: 700;
   letter-spacing: 0.01em;
   white-space: nowrap;
-  /* Значок вместо подписи (см. ЗНАЧОК_ТЕМЫ в app.js): названия тем
-     занимали в шапке больше места, чем весь языковой переключатель
-     рядом, а читают их ровно один раз. Названия переехали в пункты
-     списка, в подсказку и в aria-label. */
+  /* Значок вместо подписи: названия занимали в шапке больше места,
+     чем оба переключателя вместе, а читают их ровно один раз.
+     Названия стоят в пунктах списка, в подсказке и в aria-label. */
   padding: 0.35rem 0.6rem;
   cursor: pointer;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
-.theme-btn .icon { width: 1.05em; height: 1.05em; margin: 0; }
-/* Уголок «здесь список»: вдвое мельче значка темы, чтобы не спорил с ним */
-.theme-btn .theme-caret { width: 0.6em; height: 0.6em; opacity: 0.7; }
-.theme-btn:hover { color: var(--text); }
-.theme-btn[aria-expanded="true"] { color: var(--text); background: rgba(255, 255, 255, 0.08); }
-/* Сам список. Стоит под кнопкой и прижат к правому краю: кнопка
-   последняя в шапке, и список, растущий вправо, вылезал бы за окно. */
-.theme-menu {
+.pick-btn .icon { width: 1.05em; height: 1.05em; margin: 0; }
+/* Уголок «здесь список»: вдвое мельче основного значка, чтобы не спорил с ним */
+.pick-btn .pick-caret { width: 0.6em; height: 0.6em; opacity: 0.7; }
+.pick-btn:hover { color: var(--text); }
+.pick-btn[aria-expanded="true"] { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+/* Сам список. Стоит под кнопкой и прижат к правому краю: обе кнопки
+   последние в шапке, и список, растущий вправо, вылезал бы за окно. */
+.pick-menu {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
@@ -386,7 +380,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   border-radius: 10px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
-.theme-item {
+.pick-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -402,15 +396,17 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   white-space: nowrap;
   cursor: pointer;
 }
-.theme-item .icon { flex: none; width: 1.05em; height: 1.05em; margin: 0; }
-/* Галка выбранной темы стоит справа и держит место у всех пунктов —
-   иначе подписи ездили бы по горизонтали при смене темы */
-.theme-item .theme-tick { margin-left: auto; opacity: 0; }
-.theme-item[aria-checked="true"] { color: var(--text); }
-.theme-item[aria-checked="true"] .theme-tick { opacity: 1; }
-.theme-item:hover, .theme-item:focus-visible { color: var(--text); background: rgba(255, 255, 255, 0.08); outline: none; }
+.pick-item .icon { flex: none; width: 1.05em; height: 1.05em; margin: 0; }
+/* Галка выбранного стоит справа и держит место у всех пунктов —
+   иначе подписи ездили бы по горизонтали при смене выбора */
+.pick-item .pick-tick { margin-left: auto; opacity: 0; }
+.pick-item[aria-checked="true"] { color: var(--text); }
+.pick-item[aria-checked="true"] .pick-tick { opacity: 1; }
+.pick-item:hover, .pick-item:focus-visible { color: var(--text); background: rgba(255, 255, 255, 0.08); outline: none; }
+/* В узком окне шапка набивается плотно — ужимаем кнопки. Размеры
+   в em, поэтому вместе с кеглем сжимаются и они. */
 @media (max-width: 1120px) {
-  .theme-btn { font-size: 0.74rem; padding: 0.3rem 0.5rem; }
+  .pick-btn { font-size: 0.74rem; padding: 0.3rem 0.5rem; }
 }
 /* На совсем узком окне меню и так прячется (см. ниже .site-nav) —
    темой можно пожертвовать раньше языка: язык важнее для чтения */
@@ -830,8 +826,8 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   background: var(--border);
   font-size: 0.75rem;
 }
-.step-tab.active { border-color: var(--violet); color: var(--text); background: rgba(16, 185, 129, 0.1); }
-.step-tab.active span { background: var(--grad); }
+.step-tab.active { border-color: var(--violet); color: var(--text); background: rgb(var(--accent-rgb) / 0.1); }
+.step-tab.active span { background: var(--grad); color: var(--accent-ink, inherit); }
 .step-tab:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .step-panel { display: none; max-width: 720px; width: 100%; margin: 0 auto; }
@@ -874,9 +870,11 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 }
 #step-1 .track-info > .track-row,
 #step-1 .track-info > .mono-warning,
+#step-1 .track-info > .voice-lost,
 #step-1 .track-info > .panel-actions { grid-column: 1 / -1; }
 /* Просветы задаёт сетка, свои отступы карточкам больше не нужны */
 #step-1 .track-info > .bg-upload,
+#step-1 .track-info > .voice-lost,
 #step-1 .track-info > .mono-warning { margin-top: 0; }
 #step-1 .track-info > .bg-upload { align-content: start; }
 
@@ -938,7 +936,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 }
-.dropzone:hover, .dropzone.dragover { border-color: var(--pink); background: rgba(16, 185, 129, 0.05); }
+.dropzone:hover, .dropzone.dragover { border-color: var(--pink); background: rgb(var(--accent-rgb) / 0.05); }
 .dropzone-icon { font-size: 3rem; margin-bottom: 1rem; }
 .dropzone-title { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.5rem; }
 .dropzone-hint { color: var(--text-dim); font-size: 0.9rem; }
@@ -982,6 +980,27 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .track-name { font-weight: 700; word-break: break-all; }
 .track-meta { color: var(--text-dim); font-size: 0.9rem; }
 .mono-warning { margin-top: 1rem; color: #fbbf24; font-size: 0.92rem; }
+/* Минусовка нейросети не пережила перезапуск (см. обновитьПотерюМинусовки
+   в app.js). Заметнее, чем предупреждение о моно: то говорит про
+   свойство файла, а это — про звук, который человек унесёт в караоке,
+   ничего не заметив. Отсюда рамка и подложка, а не одна цветная строка.
+   Тон всё равно спокойный: это не ошибка студии, а напоминание. */
+.voice-lost {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-left: 3px solid #fbbf24;
+  border-radius: var(--ed-radius);
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  text-align: left;
+}
+.voice-lost .icon { flex: none; margin-top: 0.15em; }
 
 .bg-upload {
   display: flex;
@@ -1156,13 +1175,43 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    оставить, когда дорожку тянут вверх) держит МИН_ОКОН в app.js —
    иначе окна упирались бы в свой минимум, а лишнее вылезало бы
    за нижний край подложки студии. */
+/* Ширина инспектора — не число в разметке, а доля рабочей ширины:
+   её ставит применитьШиринуИнспектора (см. «Ширина инспектора»
+   в app.js). Число здесь — запасное: столько инспектор занимал,
+   пока границу нельзя было двигать. */
 .editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) 210px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto var(--insp-w, 210px);
   gap: var(--ed-gap);
   flex: 1 1 0;
   min-height: 80px;
 }
+/* ---------- Разделитель просмотра и инспектора ----------
+   Тянется мышью, как граница окон и дорожки под ним. Полоска узкая,
+   а брать её удобно: сама колонка 8 px, а видимая черта внутри —
+   3 px посередине. */
+.ed-vsplitter {
+  width: 8px;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  /* Отменяем прокрутку страницы пальцем на самом разделителе: иначе
+     на ноутбуке с тачскрином тянущий жест уезжал бы в прокрутку */
+  touch-action: none;
+}
+.ed-vsplitter::before {
+  content: '';
+  height: 100%;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.15s;
+}
+.ed-vsplitter:hover::before, .ed-vsplitter.тянут::before { background: var(--sel-ring); }
+.ed-vsplitter:focus-visible { outline: none; }
+.ed-vsplitter:focus-visible::before { background: var(--sel-ring); width: 5px; }
 /* ---------- Разделитель окон и дорожки ----------
    Тянется мышью, как в Logic Pro и Final Cut: сколько высоты у верхних
    окон, столько и решает человек, а не наши числа в коде. Положение
@@ -1253,7 +1302,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   font-size: var(--ed-font);
 }
 .edit-row:last-child { border-bottom: none; }
-.edit-row.current-row { background: rgba(16, 185, 129, 0.1); }
+.edit-row.current-row { background: rgb(var(--accent-rgb) / 0.1); }
 /* Выбранная строка — та, которой слушаются клавиши, панель и дорожка.
    Рамка яркая и цветом совпадает с выделением на дорожке (тема
    решает, жёлтая она или зелёная — см. --sel-ring) */
@@ -1332,12 +1381,17 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    чаще, чем правят. */
 /* Ряд инспектора: подпись прижата к значению, значения выстроены
    в один столбец у правого края — как в инспекторах монтажных
-   программ, где числа сверяют глазами сверху вниз. */
+   программ, где числа сверяют глазами сверху вниз.
+
+   Ряды плотные нарочно: инспектор стоит рядом с выросшей дорожкой,
+   и на ноутбуке нижние поля обрезались. Просветы тут дороже, чем
+   кажется, а числа читаются и вплотную — им помогает не воздух,
+   а выравнивание по правому краю. */
 .insp-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 .sel-field { display: flex; align-items: center; gap: 0.25rem; }
 .sel-unit { color: var(--text-dim); font-size: 0.75rem; }
@@ -1346,7 +1400,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 /* Ширина под "-12.345" — тысячные добавили знак, поле стало чуть шире */
 .sel-num {
   width: 5.6rem;
-  padding: 0.2rem 0.35rem;
+  padding: 0.1rem 0.35rem;
   border: 1px solid transparent;
   border-radius: var(--ed-radius-ctl);
   background: rgba(255, 255, 255, 0.05);
@@ -1371,9 +1425,9 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .sel-num::-webkit-outer-spin-button,
 .sel-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .sel-num { -moz-appearance: textfield; appearance: textfield; }
-.insp-actions { display: flex; flex-direction: column; gap: 0.25rem; }
-.insp-actions .nudge-btn { display: flex; align-items: center; text-align: left; padding: 0.3rem 0.5rem; }
-.sel-panel .ed-pane-body { gap: 0.4rem; }
+.insp-actions { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.1rem; }
+.insp-actions .nudge-btn { display: flex; align-items: center; text-align: left; padding: 0.2rem 0.5rem; }
+.sel-panel .ed-pane-body { gap: 0.25rem; }
 .sel-label { color: var(--text-dim); font-size: 0.85em; text-align: right; }
 .sel-vocal {
   display: flex;
@@ -1384,7 +1438,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   cursor: pointer;
   user-select: none;
 }
-.sel-vocal input { accent-color: #10b981; cursor: pointer; }
+.sel-vocal input { accent-color: var(--accent-solid); cursor: pointer; }
 .sel-vocal:has(input:disabled) { opacity: 0.45; cursor: not-allowed; }
 #btn-sel-tap { border-color: var(--sel-ring); color: var(--sel-ring); }
 #btn-sel-words.marked { border-color: var(--sel-ring); color: var(--sel-ring); }
@@ -1398,10 +1452,26 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
    столбцов первым рядом стоит своё имя — «слово» и «строка». */
 .sel-line {
   margin-top: 0.15rem;
-  padding-top: 0.5rem;
+  padding-top: 0.4rem;
   border-top: 1px solid var(--border);
 }
-.sel-word.empty { opacity: 0.75; }
+
+/* --- Слово не выбрано — раздела «Слово» нет вовсе ---
+   Раньше он показывал «не выбрано» и четыре пустых поля: место
+   занимал всегда, а говорил только тогда, когда слово выбрано.
+   На ноутбуке рядом с выросшей дорожкой этих полутора десятков
+   пикселей как раз не хватало нижним полям раздела «Строка».
+
+   Класс `empty` ставит updateWordInfo — тот самый, которым раздел
+   и так приглушался; читаем его через :has, чтобы не заводить
+   второго признака одного и того же. Заодно снимаем черту у соседа:
+   без верхнего раздела она висела бы прямо под заголовком окна. */
+.insp-sec:has(> .sel-word.empty) { display: none; }
+.insp-sec:has(> .sel-word.empty) + .insp-sec {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
 
 /* --- Сворачиваемые разделы инспектора ---
    Как в инспекторе Final Cut: «Слово» и «Строка» открываются и
@@ -1412,8 +1482,8 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 
    Черта над «Строкой» теперь рисуется у самого раздела, а не у .sel-line:
    иначе у свёрнутого раздела она уезжала бы под заголовок. */
-.insp-sec + .insp-sec { margin-top: 0.15rem; padding-top: 0.4rem; border-top: 1px solid var(--border); }
-.insp-sec + .insp-sec > .sel-line { margin-top: 0; padding-top: 0.35rem; border-top: none; }
+.insp-sec + .insp-sec { margin-top: 0.1rem; padding-top: 0.3rem; border-top: 1px solid var(--border); }
+.insp-sec + .insp-sec > .sel-line { margin-top: 0; padding-top: 0.25rem; border-top: none; }
 .insp-sec > summary {
   display: flex;
   align-items: center;
@@ -1461,7 +1531,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   background-origin: border-box;
   border: none;
   border-radius: var(--radius);
-  color: #fff;
+  color: var(--accent-ink, #fff);
   font-family: inherit;
   text-align: center;
   cursor: pointer;
@@ -1497,11 +1567,11 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   color: var(--text-dim);
   font-size: 0.9rem;
 }
-.tap-count { font-weight: 600; color: #34d399; }
+.tap-count { font-weight: 600; color: var(--accent-solid); }
 .tap-actions { display: flex; gap: 0.8rem; justify-content: space-between; flex-wrap: wrap; }
 
 .word-tap {
-  border: 1px solid #34d399;
+  border: 1px solid var(--accent-solid);
   border-radius: var(--radius);
   background: var(--bg-card);
   padding: 0.9rem 1.1rem;
@@ -1540,10 +1610,10 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   border-radius: 6px;
   transition: color 0.15s, background 0.15s;
 }
-.wt-word.done { color: #34d399; }
+.wt-word.done { color: var(--accent-solid); }
 .wt-word.next {
   color: #0b0b10;
-  background: #34d399;
+  background: var(--accent-solid);
 }
 .word-tap-actions {
   display: flex;
@@ -1717,7 +1787,7 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
 .sel-line, .sel-word {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.22rem;
 }
 /* Включённый переключатель дорожки (по кругу, притягивание к голосу) —
    второе из четырёх мест акцента темы */
@@ -2240,7 +2310,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 16px; height: 16px;
   border-radius: 50%;
   background: var(--pink);
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 10px rgb(var(--accent-rgb) / 0.6);
 }
 input[type="range"]::-moz-range-thumb {
   width: 16px; height: 16px;
@@ -2450,7 +2520,7 @@ input[type="range"]::-moz-range-thumb {
 }
 .side-tabs button:hover { color: var(--text); }
 .side-tabs button.active {
-  background: rgba(16, 185, 129, 0.16);
+  background: rgb(var(--accent-rgb) / 0.16);
   border-color: var(--violet);
   color: var(--text);
 }
@@ -2583,7 +2653,7 @@ body.stage-full .site-header { z-index: 1; }
   background: var(--bg-soft);
   cursor: pointer;
 }
-.style-row input[type="checkbox"] { accent-color: #10b981; cursor: pointer; }
+.style-row input[type="checkbox"] { accent-color: var(--accent-solid); cursor: pointer; }
 .style-row .mini-label { color: var(--text-dim); font-size: 0.8rem; }
 .seg {
   display: inline-flex;
@@ -2603,10 +2673,10 @@ body.stage-full .site-header { z-index: 1; }
 }
 .seg.row-wide button { flex: 1; padding: 0.35rem 0.4rem; }
 .seg button.active {
-  background: rgba(16, 185, 129, 0.18);
+  background: rgb(var(--accent-rgb) / 0.18);
   color: var(--text);
 }
-.inst-status { color: #34d399; font-size: 0.85rem; font-weight: 600; }
+.inst-status { color: var(--accent-solid); font-size: 0.85rem; font-weight: 600; }
 
 /* --- Строка-проигрыш ---
    Кегль свой: обычно он равен песенному (--st-fs), но если пять нот
@@ -2852,7 +2922,7 @@ body.is-desktop .site-header .footer-link { font-size: 0.85rem; white-space: now
   #step-3 .panel-actions .btn { padding: 0.5rem 1rem; font-size: 0.9rem; }
   /* Просмотр на низком экране ограничен высотой, а не шириной:
      лишнюю ширину отдаём списку строк — там она нужнее */
-  #step-3 .editor-grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 210px; }
+  #step-3 .editor-grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto var(--insp-w, 210px); }
 }
 
 /* ============ Адаптив ============ */
@@ -2888,8 +2958,9 @@ body.is-desktop .site-header .footer-link { font-size: 0.85rem; white-space: now
   #step-3 .editor-grid { grid-template-columns: minmax(0, 1fr); }
   /* Делить между окнами и дорожкой здесь нечего: студия перестала быть
      высотой в окно, всё идёт своей высотой и прокручивается страницей.
-     Разделитель без общего запаса высоты только мешал бы. */
-  .ed-splitter { display: none; }
+     Разделители без общего запаса места только мешали бы — и тот, что
+     делит высоту, и тот, что делит ширину: колонка здесь одна. */
+  .ed-splitter, .ed-vsplitter { display: none; }
   .ed-lines .edit-list { max-height: 40vh; }
   .edit-stage-wrap { container-type: normal; display: block; }
   .edit-stage { width: 100%; }

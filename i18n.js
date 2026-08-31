@@ -343,6 +343,7 @@ I18N.EN = {
   'шаг1.форматы': 'MP3 · WAV · OGG · M4A',
   'шаг1.обработка': 'Processing the song…',
   'шаг1.моно': 'The file is mono — vocals can’t be ducked, but lyric timing and karaoke will work.',
+  'шаг1.минусовкаПотеряна': 'The instrumental made by the neural network is not kept between launches: what you hear now is the built-in ducking, and the vocals come through it. Remove the vocals again — or load your own instrumental from a file.',
   'шаг1.фон.заголовок': 'Karaoke background',
   'шаг1.фон.текст': 'Optional: the picture sits under the text while you sing',
   'шаг1.фон.alt': 'Karaoke background',
@@ -577,6 +578,8 @@ I18N.EN = {
   'ред.окно.просмотр': 'Preview',
   'ред.разделитель': 'Border between the windows and the timeline',
   'ред.разделитель.подсказка': 'Drag up or down: the timeline gets taller or shorter, the windows above it the other way round. The ↑ and ↓ keys move the border from the keyboard, a double click puts it back. The position is remembered',
+  'ред.разделительВбок': 'Border between the preview and the inspector',
+  'ред.разделительВбок.подсказка': 'Drag left or right: the inspector gets wider or narrower, the preview next to it the other way round. The ← and → keys move the border from the keyboard, a double click puts it back. The width is remembered',
   'ред.начало': 'start',
   'ред.начало.подсказка': 'Line start as minutes:seconds, the way the timeline reads it (plain seconds work too). Enter applies, Esc puts it back',
   'ред.конец': 'end',
@@ -647,11 +650,36 @@ I18N.EN = {
    СЛОВАРЬ 2. Строки, которые собираются в коде.
    ============================================================ */
 I18N.СТРОКИ = {
-  /* ---------- Переключатель языка ---------- */
+  /* ---------- Переключатель языка ----------
+     Устроен выпадающим списком, как переключатель темы рядом: кнопка
+     со значком-глобусом, а по нажатию — пункты с названиями языков.
+     Отсюда три вида надписи у каждого языка: короткая («Рус») осталась
+     на случай, если она где-то понадобится числом, самоназвание стоит
+     в пункте списка, а объяснение — в его подсказке.
+
+     САМОНАЗВАНИЯ НЕ ПЕРЕВОДЯТСЯ, и это нарочно: обе стороны у них
+     одинаковые. Языковой переключатель существует ровно для того, кто
+     НЕ читает на нынешнем языке. Переведи их — и англичанин, попавший
+     на русскую студию, увидит «Русский» и «Английский» и не поймёт,
+     куда нажимать; а по-русски «Russian» и «English» были бы такой же
+     загадкой для того, кто английского не знает. Поэтому каждый язык
+     подписан так, как он называет себя сам, — «Русский» и «English», —
+     и подпись одна на оба словаря. Так делают все, кто делает
+     переключатель языка всерьёз.
+
+     Подсказка при наведении переводится по-прежнему: она объясняет
+     ДЕЙСТВИЕ («Русский язык интерфейса» / «Russian interface»),
+     а не называет язык. */
   'язык.ru': { ru: 'Рус', en: 'Rus' },
   'язык.en': { ru: 'Eng', en: 'Eng' },
+  'язык.ru.имя': { ru: 'Русский', en: 'Русский' },
+  'язык.en.имя': { ru: 'English', en: 'English' },
   'язык.ru.полно': { ru: 'Русский язык интерфейса', en: 'Russian interface' },
   'язык.en.полно': { ru: 'Английский язык интерфейса', en: 'English interface' },
+  'язык.выбрать': {
+    ru: 'Язык интерфейса: {имя}. Нажми, чтобы выбрать другой',
+    en: 'Interface language: {имя}. Click to pick another',
+  },
 
   /* ---------- Переключатель темы ----------
      Три темы, все — монтажная плотность (см. style.css): «нейтральная»
