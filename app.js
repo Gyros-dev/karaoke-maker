@@ -2120,6 +2120,12 @@ function собратьПроект() {
     // Концы, выставленные руками: только они переживают пересчёт разметки
     handEnds: state.lines.length ? state.lines.map((l) => !!l.ручнойКонец)
       : (keepPrev && prev.handEnds) || [],
+    /* Начала, поставленные руками: их подтяжка к голосу не трогает.
+       В проектах постарше списка нет вовсе — там все начала считаются
+       машинными, и подтяжка работает как работала. Это верно: руками
+       их тогда и правда никто не помечал. */
+    handStarts: state.lines.length ? state.lines.map((l) => !!l.ручноеНачало)
+      : (keepPrev && prev.handStarts) || [],
     // Ручная разметка слов: [{text, time, end}] или null для строк без неё
     words: state.lines.length ? state.lines.map((l) => l.words || null)
       : (keepPrev && prev.words) || [],
@@ -2884,6 +2890,7 @@ function linesFromProject(saved) {
   const times = по(saved.times);
   const ends = по(saved.ends);
   const hands = по(saved.handEnds);
+  const handStarts = по(saved.handStarts);
   const guess = по(saved.guess);
   const words = по(saved.words);
   return texts.map((text, i) => {
@@ -2892,6 +2899,7 @@ function linesFromProject(saved) {
       time: times ? times[i] : null,
       end: ends ? ends[i] : null,
       ручнойКонец: !!(hands && hands[i]),
+      ручноеНачало: !!(handStarts && handStarts[i]),
       сомнительная: !!(guess && guess[i]),
     };
     const w = words ? words[i] : null;
@@ -2968,6 +2976,8 @@ function расставитьНовыеСтроки(lines, новые) {
       line.time = начало + m * слот;
       line.end = null;
       line.ручнойКонец = false;
+      // Время выдумано делением промежутка — пусть голос его поправит
+      line.ручноеНачало = false;
       line.сомнительная = true;   // время выдумано — на дорожке это видно
     }
     i = j - 1;
@@ -3025,6 +3035,10 @@ $('btn-to-editor').addEventListener('click', () => {
          В проектах постарше пометки нет — там концы пришли от распознавания,
          и пересчитать их заново будет только лучше. */
       line.ручнойКонец = !!(src && src.ручнойКонец);
+      /* То же самое с началом: правка текста не отменяет того, что
+         человек уже расставил руками (см. lineStart). В проектах
+         постарше пометки нет — там начала машинные. */
+      line.ручноеНачало = !!(src && src.ручноеНачало);
       // Метки слов годятся, пока число слов в строке то же самое:
       // поправленную орфографию переживают, переписанную строку — нет
       const chunks = splitWords(text);
@@ -3065,6 +3079,8 @@ function applyRecognized(lines) {
     line.time = r.time;
     line.end = r.end;
     line.ручнойКонец = false;
+    // Время пришло от нейросети — подтяжка к голосу для него и заведена
+    line.ручноеНачало = false;
     line.сомнительная = !!r.сомнительная;
     if (r.words && r.words.length) line.words = r.words.map((w) => ({ ...w }));
   });
@@ -3112,13 +3128,23 @@ function setLineTime(i, t) {
   line.time = Math.min(Math.max(t, prev), Math.max(prev, next));
   // Метку поправили руками — сомнений в ней больше нет
   line.сомнительная = false;
+  /* И подтяжка к голосу её больше не трогает: человек сказал своё
+     слово, как и с ручным концом (см. lineStart и setLineEnd).
+     Сюда приходят все ручные способы сдвинуть начало: блок и край
+     на дорожке, стрелки, поле инспектора. */
+  line.ручноеНачало = true;
   if (was != null) shiftWords(line, line.time - was);
 }
 
 function nudgeLine(i, delta) {
   const line = state.lines[i];
   if (!line || line.time == null) return;
-  setLineTime(i, line.time + delta);
+  /* Считаем от того начала, которое человек ВИДИТ на дорожке: строку
+     мог держать голос, и шаг от line.time сдвинул бы блок не на столько,
+     на сколько просили (та же причина, что у nudgeLineEnd ниже). */
+  const synced = syncedLines();
+  const j = synced.indexOf(line);
+  setLineTime(i, (j >= 0 ? lineStart(synced, j) : line.time) + delta);
   refreshTimes();
   saveProject();
 }
@@ -3148,6 +3174,9 @@ function shiftAllLines(delta) {
     if (l.time != null) {
       const was = l.time;
       l.time = Math.min(Math.max(l.time + delta, 0), audio.duration);
+      // Кнопки сдвига — тоже рука человека: дальше начало держит он,
+      // а не голос (см. lineStart)
+      l.ручноеНачало = true;
       shiftWords(l, l.time - was);
     }
   });
@@ -3228,10 +3257,19 @@ const VOICE_HOLD = 0.35;   // пауза, в которую голос ещё с
    время бывает раньше, чем певец открыл рот, и подсветка убегает вперёд.
    Окно намеренно узкое — строка поправляется, но никуда не уезжает.
    Строке со знаком «≈» окно шире: подгонка сама призналась, что её время
-   подобрано на глазок, и ошибаться она там может куда сильнее. */
+   подобрано на глазок, и ошибаться она там может куда сильнее.
+
+   Но начало, поставленное ЧЕЛОВЕКОМ (line.ручноеНачало — тот же приём,
+   что line.ручнойКонец у конца строки), важнее автоматики: подтяжка
+   его не трогает. Иначе выходила поломка, которую и снимали на видео:
+   тянешь блок внутри окна подтяжки — метка едет за мышью, а блок стоит
+   на вступлении голоса, будто не слушается. Подтяжка остаётся там, ради
+   чего она есть, — на временах, которые расставил не человек: подгонка
+   текста, распознавание, простукивание. */
 function lineStart(lines, index) {
   const line = lines[index];
   const t = line.time;
+  if (line.ручноеНачало) return t;
   if (!voiceReady()) return t;
   const prev = index > 0 ? lines[index - 1].time : -Infinity;
   const next = index + 1 < lines.length ? lines[index + 1].time : Infinity;
@@ -4999,6 +5037,10 @@ function spansKey(lines) {
   let k = `${lines.length}|${voiceReady() ? 1 : 0}|${(audio.duration || 0).toFixed(2)}`;
   for (const l of lines) {
     k += `;${l.time.toFixed(3)}`;
+    /* Признак ручного начала входит в ключ: он меняет размах строки,
+       не меняя её времени (подтяжка к голосу выключается), — а отмена
+       умеет вернуть его обратно при том же самом времени. */
+    if (l.ручноеНачало) k += '!';
     if (l.ручнойКонец && l.end != null) k += `>${l.end.toFixed(3)}`;
     if (l.words && l.words.length) {
       const last = l.words[l.words.length - 1];
@@ -5147,6 +5189,9 @@ function разложитьДиапазон(снимок, якорь, k, сдв�
     const l = state.lines[s.row];
     if (!l) return;
     l.time = f(s.time);
+    // Двигали и растягивали руками — подтяжка к голосу сюда больше
+    // не вмешивается (см. lineStart)
+    l.ручноеНачало = true;
     if (s.ручной && s.end != null) l.end = f(s.end);
     if (s.words && l.words) {
       l.words = s.words.map((w, i) => ({
@@ -5268,6 +5313,9 @@ function snapshotTimings() {
     time: l.time,
     end: l.end != null ? l.end : null,
     hand: !!l.ручнойКонец,
+    // Признак ручного начала переживает отмену наравне с ручным концом:
+    // без него откат вернул бы время, но не вернул бы подтяжку к голосу
+    handStart: !!l.ручноеНачало,
     guess: !!l.сомнительная,
     /* Ключ признака в снимке тот же, что и в самой метке: снимок
        разворачивается обратно спредом ({...w}), и переименование
@@ -5295,6 +5343,7 @@ function snapshotEqual(a, b) {
     const x = a[i];
     const y = b[i];
     if (x.time !== y.time || x.end !== y.end || x.hand !== y.hand || x.guess !== y.guess) return false;
+    if (!!x.handStart !== !!y.handStart) return false;
     const xw = x.words;
     const yw = y.words;
     if (!!xw !== !!yw) return false;
@@ -5363,6 +5412,7 @@ function applySnapshot(snap) {
         time: s.time,
         end: s.end,
         ручнойКонец: s.hand,
+        ручноеНачало: !!s.handStart,
         сомнительная: s.guess,
       };
       if (s.words) l.words = s.words.map((w) => ({ ...w }));
@@ -5379,6 +5429,7 @@ function applySnapshot(snap) {
       l.time = s.time;
       l.end = s.end;
       l.ручнойКонец = s.hand;
+      l.ручноеНачало = !!s.handStart;
       l.сомнительная = s.guess;
       if (s.words) l.words = s.words.map((w) => ({ ...w }));
       else delete l.words;
@@ -6296,6 +6347,7 @@ function tapHit() {
     time: line.time,
     end: line.end,
     hand: !!line.ручнойКонец,
+    handStart: !!line.ручноеНачало,
     guess: !!line.сомнительная,
     words: line.words ? line.words.map((w) => ({ ...w })) : null,
   });
@@ -6303,6 +6355,10 @@ function tapHit() {
   const was = line.time;
   line.time = t;
   line.сомнительная = false;
+  /* Удар — не ручная расстановка начала: по строке попадают на слух,
+     с задержкой, и подтяжка к голосу для таких времён и заведена
+     (см. lineStart). Прежний ручной признак заход снимает. */
+  line.ручноеНачало = false;
   // Метки слов заданы абсолютным временем — двигаются вместе со строкой
   if (was != null) shiftWords(line, t - was);
   // Ручной конец переживает удар, пока он всё ещё позже начала
@@ -6329,6 +6385,7 @@ function undoLastTap() {
     line.time = last.time;
     line.end = last.end;
     line.ручнойКонец = last.hand;
+    line.ручноеНачало = last.handStart;
     line.сомнительная = last.guess;
     if (last.words) line.words = last.words.map((w) => ({ ...w }));
     else delete line.words;
@@ -6391,6 +6448,7 @@ function проверитьПорядокПослеЗахода() {
   for (let i = k; i < state.lines.length; i++) {
     const l = state.lines[i];
     l.time = null; l.end = null; l.ручнойКонец = false; l.сомнительная = false;
+    l.ручноеНачало = false;
     delete l.words;
   }
 }
@@ -8442,7 +8500,10 @@ function beginDrag(hit, t) {
     k: hit.k,
     grabT: t,
     стыкWas,
-    startWas: sp.line.time,
+    /* Тянем от того начала, которое ВИДНО, а не от line.time: строку
+       мог держать голос (см. lineStart), и блок дёрнулся бы к своей
+       метке в первый же миг перетаскивания. */
+    startWas: sp.start,
     endWas: lineEnd(syncedLines(), syncedLines().indexOf(sp.line)),
     words: hasWords(sp.line) ? sp.line.words.map((w) => ({ ...w })) : null,
     moved: false,
@@ -9147,6 +9208,32 @@ function keyCode(e) {
   if (e.code) return e.code;
   const k = e.key || '';
   return KEY_ALIASES[k.toLowerCase()] || k;
+}
+
+/* Набирают ли прямо сейчас текст. Нужно там, где режимы забирают себе
+   пробел, Enter и Esc: в поле ввода пробел означает пробел, и отбирать
+   его у набора нельзя — курсор стоял в тексте строки, человек жал
+   пробел, а вместо пробела уезжало время строки.
+
+   КНОПКА сюда не попадает нарочно. Простукивание забирает пробел в том
+   числе с кнопки, на которой остался фокус после щелчка: иначе браузер
+   засчитал бы удар дважды — нам и кнопке. Кнопка — не поле ввода,
+   и различить их несложно.
+
+   Список нетекстовых типов нужен потому, что <input> бывает и кнопкой,
+   и галкой, и ползунком: там пробел — тоже не текст. */
+const НЕ_ТЕКСТОВЫЕ_ПОЛЯ = new Set([
+  'button', 'submit', 'reset', 'image', 'checkbox', 'radio',
+  'range', 'color', 'file',
+]);
+
+function наборТекста(el) {
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  if (tag === 'TEXTAREA') return true;
+  if (tag !== 'INPUT') return false;
+  return !НЕ_ТЕКСТОВЫЕ_ПОЛЯ.has(String(el.type || 'text').toLowerCase());
 }
 
 function editorStep(e) {
@@ -9911,10 +9998,16 @@ document.addEventListener('pointerdown', () => {
 
 /* ---------- Клавиатура ---------- */
 document.addEventListener('keydown', (e) => {
-  // Разметка слов забирает и пробел, и Esc — даже из полей ввода:
-  // иначе пробел уедет в текст строки вместо отметки
   const code = keyCode(e);
-  if (wordTap.active) {
+  /* Набор текста главнее любого режима: пока курсор стоит в поле ввода
+     или в редактируемом тексте, пробел, Enter и Esc достаются полю.
+     Раньше режимы проверялись РАНЬШЕ фокуса — и пробел, набранный
+     в тексте строки, уезжал в удар по строке (см. наборТекста: кнопка
+     полем ввода не считается, пробел с неё режим забирает по-прежнему). */
+  const набор = наборТекста(document.activeElement);
+  // Разметка слов забирает и пробел, и Esc — даже с кнопок:
+  // иначе пробел уедет мимо отметки
+  if (wordTap.active && !набор) {
     if (code === 'Space') { e.preventDefault(); tapWord(); return; }
     if (code === 'Escape') { e.preventDefault(); finishWordTap(false); return; }
     if (code === 'Enter') { e.preventDefault(); finishWordTap(true); return; }
@@ -9922,7 +10015,7 @@ document.addEventListener('keydown', (e) => {
   /* Простукивание забирает пробел себе — в том числе с кнопки, на
      которой остался фокус после клика: иначе удар прошёл бы дважды.
      Escape и Enter заканчивают заход, Backspace отменяет последний удар. */
-  if (tap.active) {
+  if (tap.active && !набор) {
     if (code === 'Space') { e.preventDefault(); tapHit(); return; }
     if (code === 'Escape' || code === 'Enter') { e.preventDefault(); finishTapMode(); return; }
     if (code === 'Backspace') { e.preventDefault(); undoLastTap(); return; }

@@ -1904,6 +1904,336 @@ function createWindow() {
             if (!былаАктивна) панель.classList.remove('active');
           }
         }),
+        /* Начало, поставленное руками, и подтяжка к голосу.
+
+           Беда с живой машины, снятая на видео: тянешь блок строки,
+           а он стоит на месте. Начало строки подтягивается к настоящему
+           вступлению голоса (lineStart, окно 0,7 с), и пока
+           перетаскивание идёт внутри этого окна, метка едет за мышью,
+           а нарисованный блок держится вступления. Числа до правки —
+           вступление голоса в 20,1 с, строка в 20,0 с, магнит выключен:
+
+             сдвиг   line.time   spanOfRow().start
+             +0,2      20,2            20,1
+             +0,5      20,5            20,1
+             −0,3      19,7            20,1
+             +1,0      21,0            21,0  (вырвался из окна)
+
+           Лечится тем же приёмом, что уже есть у конца строки
+           (line.ручнойКонец): признак line.ручноеНачало, и подтяжка
+           строк с этим признаком не трогает. Ставится он там, где
+           начало двигает ЧЕЛОВЕК: блоком и краем на дорожке, стрелками,
+           полем инспектора, кнопками сдвига.
+
+           Меряем в одном разделе оба конца правила:
+             • блок идёт за мышью — после настоящего перетаскивания
+               (PointerEvent, а не вызов applyDrag) нарисованное начало
+               совпадает с line.time, и блок сдвинулся ровно на столько,
+               на сколько уехала мышь: тянем от того начала, которое
+               ВИДНО, поэтому 20,1 + сдвиг;
+             • строку, которую человек не трогал, подтяжка держит
+               по-прежнему — иначе правка «вылечила» бы жалобу тем,
+               что выключила подтяжку всем и везде;
+             • простукивание — не рука человека: удар снимает признак,
+               и подтяжка возвращается;
+             • признак переживает сохранение проекта, черновик и отмену;
+             • проект постарше, где признака нет вовсе, читается без
+               сбоя, и подтяжка в нём работает как работала. */
+        ручноеНачало: __раздел('ручноеНачало', () => {
+          const панель = document.getElementById('step-3');
+          const былаАктивна = панель.classList.contains('active');
+          try {
+            const SR = 8000, dur = 40;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            state.originalBuffer = ctx.createBuffer(1, SR * dur, SR);
+            audio.duration = dur;
+            state.lines = [
+              { text: 'Первая', time: 8, end: null, ручнойКонец: false, сомнительная: false },
+              { text: 'Вторая', time: 20, end: null, ручнойКонец: false, сомнительная: false },
+              { text: 'Третья', time: 32, end: null, ручнойКонец: false, сомнительная: false },
+            ];
+            // Огибающая голоса: вступление ровно в 20,1 — на 0,1 позже метки
+            voice.level = new Uint8Array(dur * 100);
+            voice.runs = [{ start: 20.1, end: 23 }];
+            editor.snap = false;          // магнит выключен: мерим одну подтяжку
+            editor.безМагнита = true;
+            editor.scrollT = 16;
+            editor.pxPerSec = 40;
+            editor.peaks = null;
+            панель.classList.add('active');
+            openEditor();
+            editor.scrollT = 16;
+            clearHistory();
+            drawTimeline();
+
+            const tl = document.getElementById('timeline');
+            const снимок = (row) => ({
+              time: +state.lines[row].time.toFixed(3),
+              нарисовано: +spanOfRow(row).start.toFixed(3),
+              ручное: !!state.lines[row].ручноеНачало,
+            });
+            const сброс = () => {
+              state.lines[1].time = 20;
+              state.lines[1].end = null;
+              state.lines[1].ручнойКонец = false;
+              state.lines[1].ручноеНачало = false;
+              state.lines[1].сомнительная = false;
+              editor.spansKey = '';
+              clearHistory();
+            };
+            /* Настоящее перетаскивание мышью: pointerdown на середине
+               блока, pointermove на сдвиг, pointerup. Именно так его
+               и делает человек — вызов applyDrag прошёл бы мимо
+               beginDrag, где и берётся точка, от которой тянут. */
+            const тащить = (row, сдвиг) => {
+              const rect = tl.getBoundingClientRect();
+              const lane = timelineLanes().lines;
+              const sp = spanOfRow(row);
+              const y = rect.top + lane.y + lane.h / 2;
+              const x0 = rect.left
+                + (Math.min(sp.end, sp.start + 2) + sp.start) / 2 * editor.pxPerSec
+                - editor.scrollT * editor.pxPerSec;
+              const x1 = x0 + сдвиг * editor.pxPerSec;
+              const о = (x, b) => ({
+                clientX: x, clientY: y, bubbles: true, pointerId: 1,
+                button: 0, buttons: b, isPrimary: true, pointerType: 'mouse',
+              });
+              tl.dispatchEvent(new PointerEvent('pointerdown', о(x0, 1)));
+              const вид = editor.drag ? editor.drag.kind : null;
+              tl.dispatchEvent(new PointerEvent('pointermove', о(x1, 1)));
+              tl.dispatchEvent(new PointerEvent('pointerup', о(x1, 0)));
+              return { сдвиг, вид, ...снимок(row) };
+            };
+
+            // ---- 1. Блок идёт за мышью ----
+            const доТяги = снимок(1);
+            const тяги = [0.2, 0.5, -0.3, 1].map((d) => { сброс(); return тащить(1, d); });
+            const блокИдётЗаМышью = тяги.every((р) => р.вид === 'line-move'
+              && Math.abs(р.нарисовано - р.time) < 0.001
+              && Math.abs(р.нарисовано - (доТяги.нарисовано + р.сдвиг)) < 0.001);
+
+            // ---- 2. Чужую строку подтяжка держит по-прежнему ----
+            сброс();
+            const третьюТащим = тащить(2, 0.4);
+            const втораяЦела = снимок(1);
+            const подтяжкаОсталась = втораяЦела.time === 20
+              && втораяЦела.нарисовано === 20.1 && !втораяЦела.ручное;
+
+            // ---- 3. Стрелка и поле инспектора тоже ставят признак ----
+            сброс();
+            editor.wordSel = -1;
+            selectLine(1, {});
+            if (document.activeElement) document.activeElement.blur();
+            document.dispatchEvent(new KeyboardEvent('keydown',
+              { code: 'ArrowRight', key: 'ArrowRight', bubbles: true }));
+            const послеСтрелки = снимок(1);
+            сброс();
+            selectLine(1, {});
+            updateSelInfo();
+            const поле = document.getElementById('sel-start');
+            поле.value = '0:21.00';
+            поле.dispatchEvent(new Event('change', { bubbles: true }));
+            const послеПоля = снимок(1);
+            /* Стрелка двигает то, что видно: было 20,1 — стало 20,2.
+               Поле ставит ровно набранное число. */
+            const клавишиИПоле = послеСтрелки.ручное && послеПоля.ручное
+              && Math.abs(послеСтрелки.нарисовано - 20.2) < 0.001
+              && Math.abs(послеСтрелки.time - послеСтрелки.нарисовано) < 0.001
+              && Math.abs(послеПоля.time - 21) < 0.001
+              && Math.abs(послеПоля.нарисовано - 21) < 0.001;
+
+            // ---- 4. Удар простукиванием признак снимает ----
+            сброс();
+            state.lines[1].ручноеНачало = true;
+            editor.spansKey = '';
+            const былConfirm = window.confirm;
+            window.confirm = () => false;
+            startTapMode(1);
+            audio.pause();
+            audio.offset = 20;
+            tapHit();
+            finishTapMode();
+            window.confirm = былConfirm;
+            const послеУдара = снимок(1);
+            // Ударили в 20,0 — подтяжка снова вправе поднять до 20,1
+            const ударСнимаетПризнак = !послеУдара.ручное
+              && Math.abs(послеУдара.time - 20) < 0.001
+              && Math.abs(послеУдара.нарисовано - 20.1) < 0.001;
+
+            // ---- 5. Отмена возвращает и время, и подтяжку ----
+            сброс();
+            const доОтмены = тащить(1, 0.5);
+            undoEdit();
+            const послеОтмены = снимок(1);
+            redoEdit();
+            const послеПовтора = снимок(1);
+            const отменаВозвращает = доОтмены.ручное && !послеОтмены.ручное
+              && послеОтмены.time === 20 && послеОтмены.нарисовано === 20.1
+              && послеПовтора.ручное
+              && Math.abs(послеПовтора.time - доОтмены.time) < 0.001;
+
+            // ---- 6. Сохранение и черновик ----
+            document.getElementById('lyrics-input').value =
+              state.lines.map((l) => l.text).join('\\n');
+            saveProject();
+            const черновик = JSON.parse(localStorage.getItem('karaoke-project'));
+            const изЧерновика = linesFromProject(loadProject())
+              .map((l) => !!l.ручноеНачало);
+            const вЧерновике = черновик.handStarts;
+            const признакПережил = Array.isArray(вЧерновике)
+              && вЧерновике.length === 3 && вЧерновике[1] === true
+              && вЧерновике[0] === false && изЧерновика[1] === true;
+
+            /* ---- 7. Проект постарше: признака в нём нет вовсе ----
+               Подтяжка обязана продолжить работать как раньше, и ничто
+               не должно упасть на отсутствующем списке. */
+            delete черновик.handStarts;
+            localStorage.setItem('karaoke-project', JSON.stringify(черновик));
+            let староеПало = null;
+            let старыеНачала = null;
+            try {
+              старыеНачала = linesFromProject(loadProject())
+                .map((l) => !!l.ручноеНачало);
+            } catch (e) { староеПало = String((e && e.message) || e); }
+            const староеЧитается = !староеПало && !!старыеНачала
+              && старыеНачала.length === 3 && старыеНачала.every((v) => v === false);
+
+            return {
+              доТяги, тяги, третьюТащим, втораяЦела,
+              послеСтрелки, послеПоля, послеУдара,
+              доОтмены, послеОтмены, послеПовтора,
+              вЧерновике, изЧерновика, старыеНачала, староеПало,
+              блокИдётЗаМышью, подтяжкаОсталась, клавишиИПоле,
+              ударСнимаетПризнак, отменаВозвращает, признакПережил,
+              староеЧитается,
+              вНорме: блокИдётЗаМышью && подтяжкаОсталась && клавишиИПоле
+                && ударСнимаетПризнак && отменаВозвращает && признакПережил
+                && староеЧитается,
+            };
+          } finally {
+            if (!былаАктивна) панель.classList.remove('active');
+          }
+        }),
+        /* Пробел в поле ввода при включённом простукивании.
+
+           Беда: курсор стоит в тексте строки в сетке, человек жмёт
+           пробел — вместо пробела уезжает время строки. Общий
+           обработчик клавиш проверял tap.active и wordTap.active
+           РАНЬШЕ, чем смотрел, не набирают ли текст в поле; то же
+           с Enter и Esc в разметке слов.
+
+           Набор текста главнее режима. Но исключение, ради которого
+           режим и забирает пробел, остаётся: пробел с КНОПКИ, на
+           которой остался фокус после щелчка, режим берёт себе —
+           иначе браузер засчитал бы удар дважды, нам и кнопке.
+
+           Разметка слов проверяется на НАСТОЯЩЕМ поле студии: её
+           панель сетку строк не прячет, и курсор в тексте строки —
+           обычное дело. Простукивание сетку прячет, поэтому поле для
+           него ставится в панель захода нарочно: правило живёт в общем
+           обработчике, и проверяем именно правило. */
+        пробелВПоле: __раздел('пробелВПоле', () => {
+          const панель = document.getElementById('step-3');
+          const былаАктивна = панель.classList.contains('active');
+          const проба = document.createElement('input');
+          try {
+            const SR = 8000, dur = 40;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            state.originalBuffer = ctx.createBuffer(1, SR * dur, SR);
+            audio.duration = dur;
+            state.lines = [1, 2, 3].map((n) => ({
+              text: 'Строка ' + n, time: n * 8, end: null,
+              ручнойКонец: false, сомнительная: false,
+            }));
+            voice.runs = null;
+            voice.level = null;
+            editor.peaks = null;
+            панель.classList.add('active');
+            openEditor();
+            clearHistory();
+
+            const клавиша = (code, key) => {
+              const e = new KeyboardEvent('keydown',
+                { code, key: key || ' ', bubbles: true, cancelable: true });
+              document.activeElement.dispatchEvent(e);
+              return e.defaultPrevented;
+            };
+
+            // ---- 1. Простукивание + поле ввода ----
+            проба.type = 'text';
+            document.getElementById('tap-mode').appendChild(проба);
+            startTapMode(1);
+            audio.pause();
+            audio.offset = 25;
+            проба.focus();
+            const вПоле = {
+              фокус: document.activeElement === проба,
+              было: state.lines[1].time,
+            };
+            вПоле.пробелПерехвачен = клавиша('Space');
+            вПоле.стало = state.lines[1].time;
+            вПоле.времяСтрокиУехало = вПоле.стало !== вПоле.было;
+            клавиша('Enter', 'Enter');
+            клавиша('Escape', 'Escape');
+            вПоле.режимЖив = tap.active;
+            вПоле.ударовНет = tap.done.length === 0;
+            клавиша('Backspace', 'Backspace');
+            вПоле.индексНеПоехал = tap.index === 1;
+
+            // ---- 2. Пробел с кнопки — по-прежнему удар ----
+            const кнопка = document.getElementById('btn-tap-done');
+            кнопка.focus();
+            const сКнопки = {
+              фокус: document.activeElement === кнопка,
+              было: state.lines[1].time,
+            };
+            сКнопки.пробелПерехвачен = клавиша('Space');
+            сКнопки.стало = +state.lines[1].time.toFixed(2);
+            сКнопки.ударЗасчитан = сКнопки.стало !== сКнопки.было;
+            finishTapMode();
+
+            // ---- 3. Разметка слов + настоящий текст строки в сетке ----
+            renderEditList();
+            startWordTap(1);
+            audio.pause();
+            const текст = document.querySelector('#edit-list .edit-row .edit-text');
+            текст.focus();
+            const вТексте = {
+              фокус: document.activeElement === текст,
+              редактируемый: !!текст.isContentEditable,
+            };
+            вТексте.пробелПерехвачен = клавиша('Space');
+            вТексте.метокПослеПробела = wordTap.marks.length;
+            вТексте.enterПерехвачен = клавиша('Enter', 'Enter');
+            вТексте.escПерехвачен = клавиша('Escape', 'Escape');
+            вТексте.режимЖив = wordTap.active;
+            // А с кнопки разметка слов пробел по-прежнему берёт себе
+            document.getElementById('btn-word-done').focus();
+            вТексте.сКнопкиПерехвачен = клавиша('Space');
+            вТексте.метокСКнопки = wordTap.marks.length;
+            if (wordTap.active) finishWordTap(false);
+
+            const полюПробел = вПоле.фокус && !вПоле.пробелПерехвачен
+              && !вПоле.времяСтрокиУехало && вПоле.режимЖив && вПоле.ударовНет
+              && вПоле.индексНеПоехал;
+            const кнопкаБьёт = сКнопки.фокус && сКнопки.пробелПерехвачен
+              && сКнопки.ударЗасчитан;
+            const текстуПробел = вТексте.фокус && вТексте.редактируемый
+              && !вТексте.пробелПерехвачен && !вТексте.enterПерехвачен
+              && !вТексте.escПерехвачен && вТексте.метокПослеПробела === 0
+              && вТексте.режимЖив
+              && вТексте.сКнопкиПерехвачен && вТексте.метокСКнопки === 1;
+
+            return {
+              вПоле, сКнопки, вТексте,
+              полюПробел, кнопкаБьёт, текстуПробел,
+              вНорме: полюПробел && кнопкаБьёт && текстуПробел,
+            };
+          } finally {
+            проба.remove();
+            if (!былаАктивна) панель.classList.remove('active');
+          }
+        }),
         /* Клавиши редактора под открытым окном.
 
            Беда с живой машины: человек открывает «Как пользоваться»
@@ -3040,7 +3370,18 @@ function createWindow() {
               await new Promise((r) => setTimeout(r, 20));
             }
           };
-          const всплывашка = await дождаться(1000);
+          /* Пробуем несколько раз, а не один. Подсказка прячется по blur
+             окна, а окно самопроверки скрыто, и пересборка меню при смене
+             языка роняет фокус ЗАПОЗДАЛО — иногда ровно в те 180 мс, пока
+             подсказка собирается выйти. Признак краснел на здоровом коде
+             и приучал не верить красному. Механизма это не ослабляет:
+             подсказки нет вовсе — не появится и с трёх попыток. */
+          let всплывашка = null;
+          for (let попытка = 0; попытка < 3 && !всплывашка; попытка++) {
+            кнопка.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+            const у = await дождаться(1000);
+            if (у && !у.classList.contains('hidden')) всплывашка = у;
+          }
           const видна = !!всплывашка && !всплывашка.classList.contains('hidden');
           const текст = видна ? всплывашка.textContent.trim() : '';
           const титулСнят = !кнопка.hasAttribute('title');
