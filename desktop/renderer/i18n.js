@@ -294,7 +294,7 @@ I18N.EN = {
   'настольная.локально': 'Your computer does all the work; nothing goes to the internet.',
   'настольная.мак': '🍎 Download for macOS',
   'настольная.виндоус': '🪟 Download for Windows',
-  'настольная.заметка': 'Free and open source. Each model downloads once, on first use — after that you don’t need the internet: vocal removal is 64 MB, speech recognition a few dozen megabytes. A 3-minute song is cleaned in about 3.5 minutes.<br>macOS — Apple Silicon; Windows — x64 and ARM. <a href="https://github.com/Gyros-dev/karaoke-maker/releases/latest">All releases and release notes</a>',
+  'настольная.заметка': 'Free and open source. Each model downloads once, on first use — after that you don’t need the internet: vocal removal is 64 MB, lyric timing 242 MB. A 3-minute song is cleaned in about 3.5 minutes.<br>macOS — Apple Silicon; Windows — x64 and ARM. <a href="https://github.com/Gyros-dev/karaoke-maker/releases/latest">All releases and release notes</a>',
   'настольная.первыйЗапуск': 'First launch: your system will ask for confirmation',
   'настольная.подпись': 'The app is self-signed but not notarised by Apple: a developer certificate costs money. So the system refuses the first launch — you allow it by hand, once.',
   'настольная.мак.как': '<b>macOS — step by step:</b>',
@@ -396,9 +396,6 @@ I18N.EN = {
   'asr.язык.fr': 'French',
   'asr.язык.es': 'Spanish',
   'asr.язык.it': 'Italian',
-  'asr.ещё': 'More options',
-  'asr.модель': 'Model',
-  'asr.модель.пояснение': 'The large model is the default — it makes out singing better than anything else we have, but takes about twice as long as the regular one and weighs three times as much. The regular one is worth taking if you’re in a hurry: for fitting your own lyrics it is usually enough, since all you need from the network there is timing, not letters.',
   'asr.готовим': 'Preparing the model…',
   'asr.локально': 'Worked out on your computer; nothing is sent to the internet.',
   'asr.отменить': 'Cancel',
@@ -1337,16 +1334,9 @@ I18N.СТРОКИ = {
 
   /* ---------- Распознавание и подгонка текста ---------- */
   'asr.чистыйВокал': { ru: '✓ слушаем чистый вокал', en: '✓ listening to the clean vocal' },
-  'asr.модель.small': { ru: 'Крупная, 242 МБ — слышит лучше всех', en: 'Large, 242 MB — hears best of all' },
-  'asr.модель.base': { ru: 'Обычная, 78 МБ — вдвое быстрее, но хуже', en: 'Regular, 78 MB — twice as fast, but worse' },
-  'asr.модель.скачана': { ru: '{label} · скачана', en: '{label} · downloaded' },
-  'asr.хвост.обычная': {
-    ru: 'Выбрана обычная модель: примерно вдвое быстрее крупной, но и слышит хуже.',
-    en: 'The regular model is selected: about twice as fast as the large one, and it hears worse.',
-  },
   'asr.хвост.крупная': {
-    ru: 'Стоит крупная модель — она разбирает пение лучше всех, что у нас есть, но считает примерно вдвое дольше обычной.',
-    en: 'The large model is selected — it makes out singing better than anything else we have, but takes about twice as long as the regular one.',
+    ru: 'Считает крупная модель — она разбирает пение лучше всех, что у нас есть.',
+    en: 'A large model does the work — it makes out singing better than anything else we have.',
   },
   'asr.хвост.вокал': {
     ru: ' Слушаем чистый вокал: по нему точнее, но дольше, чем по миксу.',

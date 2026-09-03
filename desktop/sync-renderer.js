@@ -135,19 +135,6 @@ const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
           title="Нейросеть послушает песню и расставит времена по твоему тексту">Подогнать мой текст</button>
       </div>
       <p class="asr-eta" id="asr-eta"></p>
-      <details class="asr-more">
-        <summary data-i18n="asr.ещё">Ещё варианты</summary>
-        <div class="asr-more-body">
-          <label class="btn btn-ghost btn-small export-quality" for="asr-model"><span data-i18n="asr.модель">Модель</span>
-            <select id="asr-model"></select>
-          </label>
-          <p data-i18n="asr.модель.пояснение">По умолчанию стоит крупная модель — она разбирает пение лучше всех,
-            что у нас есть, но считает примерно вдвое дольше обычной и весит втрое
-            больше. Обычную имеет смысл взять, если ждать некогда: для подгонки
-            своего текста ей чаще всего хватает, ведь от нейросети там нужны только
-            времена, а не буквы.</p>
-        </div>
-      </details>
     </div>
 `;
 
