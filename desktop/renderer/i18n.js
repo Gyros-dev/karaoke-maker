@@ -294,7 +294,7 @@ I18N.EN = {
   'настольная.локально': 'Your computer does all the work; nothing goes to the internet.',
   'настольная.мак': '🍎 Download for macOS',
   'настольная.виндоус': '🪟 Download for Windows',
-  'настольная.заметка': 'Free and open source. Each model downloads once, on first use — after that you don’t need the internet: vocal removal is 64 MB, lyric timing 242 MB. A 3-minute song is cleaned in about 3.5 minutes.<br>macOS — Apple Silicon; Windows — x64 and ARM. <a href="https://github.com/Gyros-dev/karaoke-maker/releases/latest">All releases and release notes</a>',
+  'настольная.заметка': 'Free and open source. Each model downloads once, on first use — after that you don’t need the internet: vocal removal is 64 MB, lyric timing 242 MB. A 3-minute song is cleaned in about a minute on a graphics card, and three and a half without one.<br>macOS — Apple Silicon; Windows — x64 and ARM. <a href="https://github.com/Gyros-dev/karaoke-maker/releases/latest">All releases and release notes</a>',
   'настольная.первыйЗапуск': 'First launch: your system will ask for confirmation',
   'настольная.подпись': 'The app is self-signed but not notarised by Apple: a developer certificate costs money. So the system refuses the first launch — you allow it by hand, once.',
   'настольная.мак.как': '<b>macOS — step by step:</b>',

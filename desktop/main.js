@@ -672,8 +672,12 @@ function createWindow() {
             строкаРазделения: document.getElementById('ai-eta').textContent,
             строкаРаспознавания: document.getElementById('asr-eta').textContent,
             своиЗамерыБыли: !!былиЗамеры,
-            вНорме: в(o.разделениеБыстро, 100, 240)
-              && в(o.разделениеЛучшее, 320, 700)
+            /* Вилки разные для двух движков: видеокарта считает
+               разделение вчетверо быстрее процессора, и одна вилка
+               на оба врала бы всегда — на какой машине ни запусти. */
+            вНорме: (o.движок === 'webgpu'
+              ? в(o.разделениеБыстро, 30, 80) && в(o.разделениеЛучшее, 90, 220)
+              : в(o.разделениеБыстро, 100, 240) && в(o.разделениеЛучшее, 320, 700))
               && в(o.распознаваниеКрупная, 130, 290)
               && в(o.распознаваниеПоВокалу, 240, 480)
               && /(минут|minute)/.test(o.словами)
@@ -6685,9 +6689,15 @@ function createWindow() {
               L[i] = bass + chord*0.9 + voice; R[i] = bass + chord*1.1 + voice;
             }
             const bytes = await window.desktop.modelBytes();
+            /* Замер по обоим движкам: сначала процессор, потом видеокарта.
+               Иначе «стало быстрее» — слова, а не число. Веса, граф и
+               точность одни и те же, поэтому сравниваем и время, и сам
+               звук: разойдись они заметно — это уже не ускорение. */
+            const силой = ${JSON.stringify(process.env.KARAOKE_SEP_EP || null)};
             const t0 = Date.now();
-            const res = await window.__runSeparationTest(new Uint8Array(bytes), L, R, выбор);
+            const res = await window.__runSeparationTest(new Uint8Array(bytes), L, R, выбор, силой);
             if (!res.ok) return { ok: false, error: res.error };
+            const движок = res.движок || 'неизвестно';
             const out = new Float32Array(res.left);
             let bad = 0, e = 0;
             for (const v of out) { if (!Number.isFinite(v)) bad++; e += v*v; }
@@ -6696,7 +6706,7 @@ function createWindow() {
             const voc = res.vocal ? new Float32Array(res.vocal) : null;
             let ev = 0, badV = 0;
             if (voc) for (const v of voc) { if (!Number.isFinite(v)) badV++; ev += v*v; }
-            return { ok: true,
+            return { ok: true, движок,
               проходов: выбор,
               секунд: ((Date.now()-t0)/1000).toFixed(1),
               звукаСек: (n/SR).toFixed(0),

@@ -41,23 +41,62 @@ const OVERLAP = 0.25;
 const STEP = Math.floor((1 - OVERLAP) * CHUNK);
 
 let session = null;
+let движок = null;      // чем считали: 'webgpu' или 'wasm'
 let cancelled = false;
 
 function post(msg, transfer) {
   self.postMessage(msg, transfer || []);
 }
 
+/* Есть ли под нами видеокарта, готовая считать. Спрашиваем адаптер,
+   а не просто наличие navigator.gpu: браузер может знать про WebGPU,
+   а рабочего устройства не иметь — на виртуальной машине, на старом
+   драйвере, на сервере без экрана. */
+async function естьВидеокарта() {
+  try {
+    if (!navigator.gpu) return false;
+    return !!(await navigator.gpu.requestAdapter());
+  } catch (e) {
+    return false;
+  }
+}
+
+/* Считаем видеокартой, если она есть, и процессором, если нет.
+
+   Веса, граф и точность те же самые — меняется только исполнитель,
+   поэтому качество не при чём: это чистое ускорение. Порядок в списке
+   onnxruntime не спасает (не сумел завестись — падает вся сборка
+   сессии), поэтому пробуем сами и молча откатываемся на процессор.
+
+   Байты модели копируем: неудачная попытка может забрать буфер себе,
+   и второй попытке достался бы пустой. */
 async function ensureSession(modelBytes) {
   if (session) return session;
   ort.env.wasm.wasmPaths = new URL('ort/', location.href).href;
   ort.env.wasm.numThreads = Math.max(1, Math.min(8, navigator.hardwareConcurrency || 4));
   ort.env.wasm.simd = true;
-  session = await ort.InferenceSession.create(modelBytes, {
-    executionProviders: ['wasm'],
-    graphOptimizationLevel: 'all',
-  });
+  const общие = { graphOptimizationLevel: 'all' };
+
+  if (принудительныйДвижок !== 'wasm' && await естьВидеокарта()) {
+    try {
+      session = await ort.InferenceSession.create(new Uint8Array(modelBytes),
+        { ...общие, executionProviders: ['webgpu'] });
+      движок = 'webgpu';
+      return session;
+    } catch (e) {
+      // Видеокарта не потянула — считаем процессором, как раньше
+      session = null;
+    }
+  }
+  session = await ort.InferenceSession.create(new Uint8Array(modelBytes),
+    { ...общие, executionProviders: ['wasm'] });
+  движок = 'wasm';
   return session;
 }
+
+/* Самопроверке нужно уметь сравнить один движок с другим — иначе
+   «стало быстрее» не измерить. В приложении не задаётся никогда. */
+let принудительныйДвижок = null;
 
 /* Спектр пары каналов (re, im) обратно в волну куска.
    Модель видит только DIM_F полос из BINS — верхние достраиваем нулями,
@@ -173,8 +212,9 @@ async function separatePass(L, R, total, session, onChunk) {
   return { outL, outR, outV };
 }
 
-async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
+async function separate({ modelBytes, left, right, sampleRate, shifts = 1, движокСилой = null }) {
   cancelled = false;
+  принудительныйДвижок = движокСилой;
   const L = new Float32Array(left);
   const R = new Float32Array(right);
   const total = L.length;
@@ -254,7 +294,7 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
     outR[i] = sumR[i] / passes;
     voc[i] = sumV[i] / passes;
   }
-  return { left: outL, right: outR, vocal: voc, sampleRate };
+  return { left: outL, right: outR, vocal: voc, sampleRate, движок };
 }
 
 /* Отпустить движок ДО того, как поток убьют.
@@ -288,7 +328,7 @@ self.onmessage = (e) => {
   separate(msg)
     .then(async ({ left, right, vocal, sampleRate }) => {
       await отпуститьДвижок();
-      post({ type: 'done', left: left.buffer, right: right.buffer, vocal: vocal.buffer, sampleRate },
+      post({ type: 'done', left: left.buffer, right: right.buffer, vocal: vocal.buffer, sampleRate, движок },
         [left.buffer, right.buffer, vocal.buffer]);
     })
     .catch(async (err) => {
