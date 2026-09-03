@@ -19,6 +19,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 
 const РЕПО = 'Gyros-dev/karaoke-maker';
 const версия = process.argv[2];
@@ -27,9 +28,30 @@ if (!версия) {
   process.exit(2);
 }
 
+/* Токен нужен не для прав, а ради предела запросов: без него GitHub
+   даёт шестьдесят обращений в час на адрес, и проверка после выпуска —
+   когда обращений уже наделано — упирается в 403. Берём из окружения,
+   а если там пусто — у самого git, тем же путём, каким выкладывается
+   релиз. На диск он при этом не попадает. */
+function токен() {
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
+  if (process.env.GH_TOKEN) return process.env.GH_TOKEN;
+  try {
+    const ответ = execFileSync('git', ['credential', 'fill'],
+      { input: 'protocol=https\nhost=github.com\n\n', encoding: 'utf8' });
+    const m = /^password=(.*)$/m.exec(ответ);
+    return m ? m[1] : null;
+  } catch (e) {
+    return null;
+  }
+}
+const ТОКЕН = токен();
+
 function получить(url) {
+  const заголовки = { 'User-Agent': 'karaoke-punch-release-check' };
+  if (ТОКЕН) заголовки.Authorization = 'Bearer ' + ТОКЕН;
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'karaoke-punch-release-check' } }, (res) => {
+    https.get(url, { headers: заголовки }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
         return получить(res.headers.location).then(resolve, reject);
@@ -49,6 +71,16 @@ function получить(url) {
   };
 
   const r = await получить(`https://api.github.com/repos/${РЕПО}/releases/tags/v${версия}`);
+  /* Предел запросов — это НЕ «релиза нет». Разница важная: на 403
+     проверку надо повторить, а на 404 — бежать доделывать выпуск.
+     Один раз перепутав, я уже сказал «релиза нет» про выложенный
+     релиз, и это худший вид вранья — уверенный. */
+  if (r.код === 403 || r.код === 429) {
+    console.error('GitHub не отвечает по пределу запросов'
+      + (ТОКЕН ? '' : ' (токена нет — возьми его из GITHUB_TOKEN или git credential)')
+      + '. Это не значит, что с релизом что-то не так: повтори позже.');
+    process.exit(2);
+  }
   if (r.код !== 200) {
     console.error(`Релиза v${версия} на GitHub нет (${r.код})`);
     process.exit(1);
