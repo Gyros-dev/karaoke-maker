@@ -780,14 +780,26 @@
         data-i18n-title="проект.открыть.подсказка" data-i18n-aria="проект.открыть"
         title="Открыть проект из папки — со звуком, минусовкой и разметкой (Cmd+O)"
         aria-label="Открыть проект"><svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg></button>
-      <button class="steps-tool" id="btn-draft-save"
-        data-i18n-title="черновик.сохранить.подсказка" data-i18n-aria="черновик.сохранить"
-        title="Сохранить черновик файлом: текст, разметка, отрезки оригинала и оформление"
-        aria-label="Сохранить черновик"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></button>
-      <button class="steps-tool" id="btn-draft-open"
-        data-i18n-title="черновик.открыть.подсказка" data-i18n-aria="черновик.открыть"
-        title="Открыть черновик из файла"
-        aria-label="Открыть черновик"><svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg></button>
+      <!-- Файл разметки (.kpunch) — отдельной парой, за чертой.
+
+           На сайте это единственный способ сохраниться, и называется он
+           «черновик». В приложении «сохранить» — это проект папкой, а
+           файл разметки делает другое дело: уносит ОДНИ времена, без
+           звука, — на другой компьютер или тому, у кого эта песня уже
+           есть. Четыре одинаковых кружка подряд читались как четыре
+           равных способа сохраниться, и было непонятно, какой главный;
+           поэтому в приложении пара отделена чертой и подписана иначе
+           (см. обновитьПодписиЧерновика в app.js). -->
+      <span class="steps-tool-group" id="draft-tools">
+        <button class="steps-tool" id="btn-draft-save"
+          data-i18n-title="черновик.сохранить.подсказка" data-i18n-aria="черновик.сохранить"
+          title="Сохранить черновик файлом: текст, разметка, отрезки оригинала и оформление"
+          aria-label="Сохранить черновик"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg></button>
+        <button class="steps-tool" id="btn-draft-open"
+          data-i18n-title="черновик.открыть.подсказка" data-i18n-aria="черновик.открыть"
+          title="Открыть черновик из файла"
+          aria-label="Открыть черновик"><svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg></button>
+      </span>
       <input type="file" id="draft-input" accept=".kpunch,.json,application/json" hidden>
     </div>
     <a class="steps-help" href="#how" aria-label="Как пользоваться"

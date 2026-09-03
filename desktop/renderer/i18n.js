@@ -866,6 +866,31 @@ I18N.СТРОКИ = {
     ru: 'Проект: {путь}',
     en: 'Project: {путь}',
   },
+  /* Подписи файла разметки В ПРИЛОЖЕНИИ. Ставит их код (см.
+     обновитьПодписиЧерновика), поэтому обе стороны лежат здесь,
+     а не в словаре разметки. На сайте у тех же кнопок свои подписи —
+     там .kpunch и есть единственный способ сохраниться, и зовётся
+     он черновиком. */
+  'черновик.разметка': {
+    ru: 'Сохранить разметку файлом',
+    en: 'Save the timing to a file',
+  },
+  'черновик.разметка.подсказка': {
+    ru: 'Файл .kpunch — только текст и времена, без звука. Работа целиком '
+      + 'сохраняется проектом (папка слева); этот файл нужен, чтобы унести '
+      + 'разметку на другой компьютер или отдать её тому, у кого эта песня уже есть',
+    en: 'A .kpunch file — the lyrics and the timing only, no audio. The whole job '
+      + 'is saved by the project folder next to it; this file is for carrying the '
+      + 'timing to another computer, or handing it to someone who already has this song',
+  },
+  'черновик.разметкаОткрыть': {
+    ru: 'Открыть разметку из файла',
+    en: 'Open timing from a file',
+  },
+  'черновик.разметкаОткрыть.подсказка': {
+    ru: 'Взять времена из файла .kpunch и положить их на открытую песню',
+    en: 'Take the timing out of a .kpunch file and lay it on the song that is open',
+  },
   'черновик.нечего': {
     ru: 'Пока нечего сохранять: нет ни текста, ни разметки.',
     en: 'Nothing to save yet: no lyrics and no timing.',
@@ -893,8 +918,8 @@ I18N.СТРОКИ = {
       + 'The timing may not match the audio. Open it anyway?',
   },
   'черновик.открыт': {
-    ru: 'Черновик открыт: строк {всего}, из них размечено {n}.',
-    en: 'Draft opened: {всего} lines, {n} of them timed.',
+    ru: 'Разметка открыта: строк {всего}, из них размечено {n}.',
+    en: 'Timing opened: {всего} lines, {n} of them timed.',
   },
   'песня.читаем': { ru: 'Читаем файл…', en: 'Reading the file…' },
   'песня.декодируем': { ru: 'Декодируем аудио…', en: 'Decoding the audio…' },

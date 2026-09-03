@@ -6586,6 +6586,57 @@ function createWindow() {
         return итог;
       })`, true);
 
+      /* Проект и файл разметки — не два равных способа сохраниться.
+
+         В приложении «сохранить» — это проект папкой; .kpunch делает
+         другое дело: уносит одни времена, без звука. Четыре одинаковых
+         кружка подряд читались как четыре равных способа, и главный
+         был неотличим. Сторожим то, чем их развели: порядок (проект
+         первым), черта перед парой разметки и СВОИ подписи у неё —
+         не сайтовые, и переживающие смену языка. */
+      report.двеПарыСохранения = await win.webContents.executeJavaScript(`__раздел('двеПарыСохранения', async () => {
+        const был = I18N.язык();
+        const снимок = () => ({
+          сохранить: document.getElementById('btn-draft-save').getAttribute('aria-label'),
+          открыть: document.getElementById('btn-draft-open').getAttribute('aria-label'),
+          подсказка: document.getElementById('btn-draft-save').title,
+        });
+        try {
+          const коробка = document.querySelector('.proj-box');
+          const кнопки = [...коробка.querySelectorAll('button')].map((b) => b.id);
+          const группа = document.getElementById('draft-tools');
+          const черта = getComputedStyle(группа).borderLeftWidth;
+          const видны = ['btn-proj-save', 'btn-proj-open'].every((id) =>
+            getComputedStyle(document.getElementById(id)).display !== 'none');
+
+          I18N.установить('ru');
+          const ru = снимок();
+          I18N.установить('en');
+          const en = снимок();
+
+          const итог = { кнопки, черта, видныКнопкиПроекта: видны, ru, en };
+          итог.вНорме =
+            // Проект первым, файл разметки следом
+            String(кнопки) === String(['btn-proj-save', 'btn-proj-open', 'btn-draft-save', 'btn-draft-open'])
+            && видны
+            // Черта, которой пара отделена от кнопок проекта
+            && parseFloat(черта) >= 1
+            // Подписи свои, а не сайтовые «черновик»
+            && ru.сохранить === t.call(null, 'черновик.разметка')
+            && ru.открыть === t.call(null, 'черновик.разметкаОткрыть')
+            && !/[Чч]ерновик/.test(ru.сохранить) && !/[Чч]ерновик/.test(ru.открыть)
+            // Перевод разметки не возвращает сайтовые подписи на место
+            && en.сохранить === 'Save the timing to a file'
+            && en.открыть === 'Open timing from a file'
+            && !/[А-Яа-яЁё]/.test(en.сохранить) && !/[А-Яа-яЁё]/.test(en.открыть)
+            // В подсказке сказано главное: работа целиком — это проект
+            && /проект/i.test(ru.подсказка) && /project/i.test(en.подсказка);
+          return итог;
+        } finally {
+          I18N.установить(был);
+        }
+      })`, true);
+
       console.log('SELFTEST', JSON.stringify(report));
 
       /* Звук: проверка считает, а не слушает. Гоняет поддельную песню
