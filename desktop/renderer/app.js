@@ -22,7 +22,7 @@ function значокSVG(имя, cls) {
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.17.0';
+const APP_VERSION = '1.18.0';
 
 /* ---------- Модификатор в подписях горячих клавиш ----------
    Сами клавиши код ловит одинаково (metaKey || ctrlKey), а вот подписи
@@ -2180,6 +2180,11 @@ function собратьПроект() {
     // Строки, чьё время нейросеть подобрала на глазок при подгонке текста
     guess: state.lines.length ? state.lines.map((l) => !!l.сомнительная)
       : (keepPrev && prev.guess) || [],
+    /* Партии дуэта: 0 — ничья, 1 и 2 — голоса, 3 — вместе. В проектах
+       постарше списка нет вовсе, и тогда все строки ничьи — ровно так
+       песня и выглядела до того, как дуэты появились. */
+    parts: state.lines.length ? state.lines.map((l) => партияСтроки(l))
+      : (keepPrev && prev.parts) || [],
     /* Отрезки, где вместо минусовки звучит оригинал. Умолчание — пустой
        список, так что переносить между поколениями оформления (STYLE_GEN)
        тут нечего: старый проект просто приходит без отрезков.
@@ -3319,6 +3324,7 @@ function linesFromProject(saved) {
   const hands = по(saved.handEnds);
   const handStarts = по(saved.handStarts);
   const guess = по(saved.guess);
+  const parts = по(saved.parts);
   const words = по(saved.words);
   return texts.map((text, i) => {
     const l = {
@@ -3328,11 +3334,64 @@ function linesFromProject(saved) {
       ручнойКонец: !!(hands && hands[i]),
       ручноеНачало: !!(handStarts && handStarts[i]),
       сомнительная: !!(guess && guess[i]),
+      партия: parts ? (ПАРТИИ.includes(parts[i]) ? parts[i] : 0) : 0,
     };
     const w = words ? words[i] : null;
     if (w && w.length) l.words = w.map((x) => ({ ...x }));
     return l;
   });
+}
+
+/* ============================================================
+   ДУЭТЫ: чья это строка
+
+   Как это устроено в караоке-программах, на которые принято равняться
+   (KaraFun, Karaoke Version): у каждой строки есть ПАРТИЯ, и певец
+   узнаёт свою по цвету. Партий три: первый голос, второй голос и
+   «вместе» — припев, который поют оба. Строка без пометки — обычная,
+   она ничья и красится как всегда.
+
+   Цвет — единственный способ, который работает на расстоянии двух
+   метров от экрана: подписи «партия 1» никто читать не будет, а цвет
+   виден сразу и заранее, ещё пока строка ждёт своей очереди.
+
+   Вторая половина дуэта — строки, которые звучат ОДНОВРЕМЕННО: голоса
+   расходятся, и на экране обе строки обязаны гореть разом, а не
+   сменять друг друга. Это решается не пометкой, а временем: если
+   следующая строка чужой партии начинается раньше, чем кончилась
+   нынешняя, обе становятся текущими (см. stagePhase).
+
+   Партия живёт в строке числом и переживает всё: сохранение, черновик,
+   отмену, правку текста. Ноль — «ничья», и старые проекты, где о
+   партиях не знали, читаются как были. */
+const ПАРТИИ = [0, 1, 2, 3];        // 0 — ничья, 1 — первый, 2 — второй, 3 — вместе
+const ПАРТИЯ_КЛАСС = { 1: 'part-1', 2: 'part-2', 3: 'part-both' };
+/* Те же цвета, что в style.css: холст переменных не читает, поэтому
+   числа приходится держать в двух местах. Сторожит их самопроверка. */
+const ЦВЕТ_ПАРТИИ = { 1: '#38bdf8', 2: '#fb7185', 3: '#fbbf24' };
+
+function партияСтроки(line) {
+  const n = line && line.партия;
+  return ПАРТИИ.includes(n) ? n : 0;
+}
+
+/* Разные голоса. Обычные строки (ничьи) сюда не попадают: у них нет
+   партий, а «две строки разом» без дуэта — это просто налезающая
+   разметка, и показывать её как дуэт нельзя. */
+function партииРазные(lines, i, j) {
+  const a = lines[i];
+  const b = lines[j];
+  if (!a || !b) return false;
+  const pa = партияСтроки(a);
+  const pb = партияСтроки(b);
+  return !!pa && !!pb && pa !== pb;
+}
+
+/* Строки звучат вместе, если они разных партий и вторая вступает
+   раньше, чем кончилась первая. */
+function поютсяВместе(lines, i) {
+  if (!партииРазные(lines, i, i + 1)) return false;
+  return lineStart(lines, i + 1) < lineSpan(lines, i).end - 0.05;
 }
 
 /* ---------- Место на дорожке для только что дописанных строк ----------
@@ -3466,6 +3525,9 @@ $('btn-to-editor').addEventListener('click', () => {
          человек уже расставил руками (см. lineStart). В проектах
          постарше пометки нет — там начала машинные. */
       line.ручноеНачало = !!(src && src.ручноеНачало);
+      /* Партия дуэта переживает правку текста: поправили опечатку —
+         строка не должна становиться ничьей. */
+      line.партия = партияСтроки(src);
       // Метки слов годятся, пока число слов в строке то же самое:
       // поправленную орфографию переживают, переписанную строку — нет
       const chunks = splitWords(text);
@@ -3733,7 +3795,21 @@ function lineSpan(lines, index) {
   const line = lines[index];
   const start = lineStart(lines, index);
   const next = index + 1 < lines.length ? lineStart(lines, index + 1) : null;
-  const limit = next != null ? next - 0.02 : (audio.duration || start + SING_DUR);
+  /* Докуда строке позволено тянуться. Обычно — до следующей строки:
+     две строки на сцене не должны налезать друг на друга.
+
+     Но у ДУЭТА в этом весь смысл. Пока строка обрезалась соседкой,
+     дуэт был невозможен в принципе: строка первого голоса кончалась
+     ровно там, где вступает второй, и «звучат вместе» не наступало
+     никогда. Поэтому соседка ЧУЖОЙ партии эту строку не обрезает —
+     обрезает следующая своя (или конец песни). */
+  let докуда = next;
+  if (next != null && партииРазные(lines, index, index + 1)) {
+    let j = index + 2;
+    while (j < lines.length && партииРазные(lines, index, j)) j++;
+    докуда = j < lines.length ? lineStart(lines, j) : null;
+  }
+  const limit = докуда != null ? докуда - 0.02 : (audio.duration || start + SING_DUR);
   const fit = (t) => Math.max(start + 0.05, Math.min(t, Math.max(start + 0.05, limit)));
 
   /* Конец, выставленный руками в редакторе, важнее любой автоматики.
@@ -3781,14 +3857,14 @@ function lineEnd(lines, index) {
 
 function stagePhase(pos) {
   const lines = syncedLines();
-  if (!lines.length) return { mode: 'empty', cur: -1 };
+  if (!lines.length) return { mode: 'empty', cur: -1, вместе: -1 };
   const cur = currentLineIndex(pos);
 
   if (cur === -1) {
     // Вступление до первой строки
     const first = lineStart(lines, 0);
-    if (first >= BREAK_MIN) return { mode: 'break', cur, start: 0, until: first };
-    return { mode: 'intro', cur, next: first };
+    if (first >= BREAK_MIN) return { mode: 'break', cur, start: 0, until: first, вместе: -1 };
+    return { mode: 'intro', cur, next: first, вместе: -1 };
   }
 
   const sp = lineSpan(lines, cur);
@@ -3797,9 +3873,24 @@ function stagePhase(pos) {
      остаётся за текущей строкой: она просто стоит допетая, а о вступлении
      следующей предупреждает отсчёт. */
   if (next != null && next - sp.end >= BREAK_MIN && pos >= sp.end) {
-    return { mode: 'break', cur, start: sp.end, until: next };
+    return { mode: 'break', cur, start: sp.end, until: next, вместе: -1 };
   }
-  return { mode: 'line', cur, start: sp.start, core: sp.core, end: sp.end, next };
+  /* Дуэт: следующая строка чужой партии началась раньше, чем кончилась
+     эта. Голоса расходятся — значит, на экране обе строки обязаны
+     гореть разом, а не сменять друг друга. Отдаём номер напарницы;
+     всё, что рисует строки (сцена, предпросмотр, видео), красит и
+     закрашивает её наравне с текущей. */
+  let вместе = -1;
+  if (поютсяВместе(lines, cur) && pos >= lineStart(lines, cur + 1)) {
+    вместе = cur + 1;
+  } else if (cur > 0 && поютсяВместе(lines, cur - 1)
+    && pos <= lineSpan(lines, cur - 1).end) {
+    /* Обычный случай: указатель уже перевалил за вступление второго
+       голоса, и currentLineIndex отдал именно его — а первый ещё поёт.
+       Смотрим назад, иначе напарница гасла бы, едва вступив. */
+    вместе = cur - 1;
+  }
+  return { mode: 'line', cur, start: sp.start, core: sp.core, end: sp.end, next, вместе };
 }
 
 /* ---------- Отсчёт перед вступлением строки ----------
@@ -4513,14 +4604,22 @@ function fixedSlotItems(lines, ph) {
     } else if (slot === activeSlot) {
       index = cur;
       active = ph.mode !== 'break';
+    } else if (ph.вместе >= 0 && ph.mode === 'line') {
+      /* Дуэт: соседнее место занимает НАПАРНИЦА, а не следующая строка.
+         Иначе строка второго голоса просто не попадала бы на экран:
+         мест всего два, и оба были заняты текущей и будущей. */
+      index = ph.вместе;
     } else {
       index = nextIndex;
     }
     if (index >= lines.length) continue;
 
     let cls = 'slot';
-    if (active) cls += ' current';
+    // Дуэт: напарница горит наравне с текущей, а не ждёт своей очереди
+    if (active || (index === ph.вместе && ph.mode === 'line')) cls += ' current';
     else if (index === nextIndex) cls += ' near';
+    const кл = ПАРТИЯ_КЛАСС[партияСтроки(lines[index])];
+    if (кл) cls += ' ' + кл;
     items.push({
       key: `slot${slot}`, text: lines[index].text, cls, index,
       top: slot === 0 ? s.posCurrent : s.posNext,
@@ -4546,14 +4645,22 @@ function scrollingItems(lines, ph) {
   // Окно строк вокруг текущей: сколько показывать — из настроек
   const total = state.style.lines;
   const before = Math.min(2, Math.floor((total - 1) / 2));
-  const from = Math.max(0, cur - before);
-  const to = Math.min(lines.length, from + total);
+  let from = Math.max(0, cur - before);
+  /* Дуэт: напарница может стоять выше окна (обычно она предыдущая),
+     и тогда второй голос на экран не попадал бы вовсе. Опускаем
+     нижнюю границу окна ровно настолько, чтобы она вошла. */
+  if (ph.вместе >= 0 && ph.вместе < from) from = ph.вместе;
+  const to = Math.min(lines.length, Math.max(from + total, ph.вместе + 1));
   for (let i = from; i < to; i++) {
     let cls = '';
     if (i === cur && ph.mode === 'line') cls = 'current';
     else if (i === cur + 1) cls = 'near';
     // Песня ещё не дошла до первой строки — подсвечиваем её как ближайшую
     else if (i === 0 && cur === -1 && ph.mode !== 'break') cls = 'near';
+    // Дуэт: напарница горит наравне с текущей
+    if (i === ph.вместе && ph.mode === 'line') cls = 'current';
+    const кл = ПАРТИЯ_КЛАСС[партияСтроки(lines[i])];
+    if (кл) cls += (cls ? ' ' : '') + кл;
     items.push({ key: `l${i}`, text: lines[i].text, cls, index: i });
     if (i === cur && ph.mode === 'break') {
       items.push({ key: 'break', text: BREAK_TEXT, cls: 'current break-line' });
@@ -4576,9 +4683,9 @@ function renderStage() {
   if (stage.querySelector('.stage-empty')) stage.innerHTML = '';
   const pos = audio.position();
   const ph = stagePhase(pos);
-  player.stageKey = state.style.swapLines
+  player.stageKey = (state.style.swapLines
     ? `${ph.mode}:${ph.cur}`
-    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
+    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`) + `:${ph.вместе}`;
 
   /* Режим закреплённых мест: две строки стоят каждая на своём месте
      и не съезжают вверх. Чётные строки живут на первом месте, нечётные
@@ -4598,12 +4705,23 @@ function updateStageFill() {
   const pos = audio.position();
   const ph = stagePhase(pos);
   // В режиме закреплённых мест перерисовываем и при смене активного места
-  const key = state.style.swapLines
+  const key = (state.style.swapLines
     ? `${ph.mode}:${ph.cur}`
-    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
+    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`) + `:${ph.вместе}`;
   if (key !== player.stageKey) renderStage();
   const stage = $('lyrics-stage');
   updateCountdown(stage, countdownState(pos, ph));
+  /* Горящих строк может быть две: в дуэте голоса расходятся, и обе
+     закрашиваются каждая по своей строке. Раньше брали первую попавшуюся
+     и красили её временами текущей — напарница стояла бы мёртвой. */
+  if (ph.mode === 'line') {
+    stage.querySelectorAll('.stage-line.current').forEach((узел) => {
+      const i = +узел.dataset.index;
+      if (!Number.isFinite(i) || !lines[i]) return;
+      applyWordFill(узел, lines[i], i === ph.cur ? ph : lineSpan(lines, i), pos);
+    });
+    return;
+  }
   const el = stage.querySelector(
     ph.mode === 'break' ? '.break-line' : '.stage-line.current');
   if (!el) return;
@@ -5760,6 +5878,7 @@ function snapshotTimings() {
     // без него откат вернул бы время, но не вернул бы подтяжку к голосу
     handStart: !!l.ручноеНачало,
     guess: !!l.сомнительная,
+    партия: партияСтроки(l),
     /* Ключ признака в снимке тот же, что и в самой метке: снимок
        разворачивается обратно спредом ({...w}), и переименование
        потеряло бы ручной конец последнего слова. */
@@ -5791,6 +5910,9 @@ function snapshotEqual(a, b) {
     const y = b[i];
     if (x.time !== y.time || x.end !== y.end || x.hand !== y.hand || x.guess !== y.guess) return false;
     if (!!x.handStart !== !!y.handStart) return false;
+    // Партия — такая же правка, как время: без этой строчки смена
+    // партии не ложилась бы в стек и отменить её было бы нечем
+    if ((x.партия || 0) !== (y.партия || 0)) return false;
     const xw = x.words;
     const yw = y.words;
     if (!!xw !== !!yw) return false;
@@ -5878,6 +6000,7 @@ function applySnapshot(snap) {
       l.ручнойКонец = s.hand;
       l.ручноеНачало = !!s.handStart;
       l.сомнительная = s.guess;
+      l.партия = s.партия || 0;
       if (s.words) l.words = s.words.map((w) => ({ ...w }));
       else delete l.words;
     });
@@ -6208,6 +6331,10 @@ function renderEditList() {
     // Строка попала в выделенный диапазон — двигается и растягивается
     // вместе с ним; в сетке это тихая пометка, стиль в style.css
     if (вДиапазоне.has(i)) li.classList.add('in-range');
+    // Партия дуэта — полоской слева: цвет тот же, каким строка горит
+    // на сцене, и по списку сразу видно, как песня поделена на голоса
+    const кл = ПАРТИЯ_КЛАСС[партияСтроки(line)];
+    if (кл) li.classList.add(кл);
     li.dataset.row = i;
 
     const num = document.createElement('span');
@@ -6481,6 +6608,30 @@ $('btn-sel-words').addEventListener('click', () => {
 $('btn-sel-words-reset').addEventListener('click', () => {
   if (editor.sel >= 0) resetWords(editor.sel);
 });
+/* Партия — строке, а при выделенном диапазоне всем его строкам разом:
+   куплет одного голоса помечают целиком, а не по строчке. */
+function поставитьПартию(n) {
+  const строки = editor.range
+    ? строкиДиапазона()
+    : (editor.sel >= 0 && state.lines[editor.sel] ? [editor.sel] : []);
+  if (!строки.length) return;
+  const было = строки.map((i) => партияСтроки(state.lines[i]));
+  if (было.every((p) => p === n)) return;
+  pushHistory();
+  строки.forEach((i) => { state.lines[i].партия = n; });
+  editor.spansKey = '';
+  editor.stageKey = '';
+  saveProject();
+  refreshTimes();
+  renderEditList();
+  renderEditStage();
+  drawTimeline();
+}
+
+document.querySelectorAll('#sel-parts .part-btn').forEach((кнопка) => {
+  кнопка.addEventListener('click', () => поставитьПартию(+кнопка.dataset.part));
+});
+
 $('btn-sel-del').addEventListener('click', () => deleteLine(editor.sel));
 /* «Оригинал» у строки и у слова: отрезок ровно по выбранному куску.
    Дальше громкость крутится в панели «Оригинал» — и уходит в .wav
@@ -7038,9 +7189,9 @@ function renderEditStage() {
      список — и строки в нём подменяли друг друга, съезжая вверх,
      тогда как на сцене они стоят на закреплённых местах. Человек
      видел в редакторе не то, что получит. */
-  editor.stageKey = state.style.swapLines
+  editor.stageKey = (state.style.swapLines
     ? `${ph.mode}:${ph.cur}`
-    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
+    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`) + `:${ph.вместе}`;
   const cur = ph.cur;
 
   const items = state.style.swapLines
@@ -7085,9 +7236,9 @@ function updateEditStage() {
   const ph = stagePhase(pos);
   // Ключ считается так же, как в renderEditStage: в режиме закреплённых
   // мест в него входит чётность строки, иначе места не поменяются местами
-  const key = state.style.swapLines
+  const key = (state.style.swapLines
     ? `${ph.mode}:${ph.cur}`
-    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`;
+    : `${ph.mode}:${ph.cur}:${ph.cur % 2}`) + `:${ph.вместе}`;
   if (key !== editor.stageKey) renderEditStage();
   const el = $('edit-stage').querySelector(
     ph.mode === 'break' ? '.break-line' : '.stage-line.current');
@@ -7861,8 +8012,15 @@ function drawLineBlocks(g, lane, W) {
     const w = Math.max(2, x1 - x0);
     const sel = sp.row === editor.sel;
     const guess = !!sp.line.сомнительная;
-    const y = lane.y + 3;
-    const h = lane.h - 6;
+    /* Голоса дуэта — на разных этажах полосы: первый сверху, второй
+       снизу. Пока они рисовались во всю высоту, налезающие строки
+       накладывались текстом друг на друга и не читались ни одна.
+       «Вместе» и обычные строки занимают полосу целиком: делить их
+       не с кем. */
+    const п = партияСтроки(sp.line);
+    const этаж = п === 1 ? 0 : п === 2 ? 1 : -1;
+    const y = этаж < 0 ? lane.y + 3 : lane.y + 3 + этаж * (lane.h - 6) / 2;
+    const h = этаж < 0 ? lane.h - 6 : (lane.h - 6) / 2 - 1;
 
     roundRect(g, x0, y, w, h, 4);
     g.fillStyle = sel ? 'rgba(132, 204, 22, 0.34)'
@@ -7898,6 +8056,16 @@ function drawLineBlocks(g, lane, W) {
         g.lineTo(xc, y + h - 2);
         g.stroke();
       }
+    }
+
+    /* Партия дуэта — полоской по верху блока. Не заливкой: заливка уже
+       занята (выбранная строка, «на глазок», диапазон), а голос — это
+       ещё одно измерение, и оно обязано читаться вместе с ними, а не
+       вместо них. */
+    const цветП = ЦВЕТ_ПАРТИИ[партияСтроки(sp.line)];
+    if (цветП) {
+      g.fillStyle = цветП;
+      g.fillRect(x0 + 2, y, Math.max(0, w - 4), 2);
     }
 
     // Ручки по краям — чтобы было видно, за что тянуть
@@ -8462,6 +8630,20 @@ function updateSelInfo() {
   $('btn-sel-words').disabled = !sp;
   // Отрезок оригинала делается по строке — значит, нужна выбранная строка
   $('btn-sel-orig').disabled = !sp;
+
+  /* Партия. При выделенном диапазоне показываем общую, а если строки
+     в нём помечены по-разному — не показываем никакую: врать, будто
+     весь кусок одной партии, нельзя. */
+  const рядыП = editor.range ? строкиДиапазона()
+    : (sp ? [sp.row] : []);
+  const партии = рядыП.map((i) => партияСтроки(state.lines[i]));
+  const общая = партии.length && партии.every((p) => p === партии[0]) ? партии[0] : null;
+  document.querySelectorAll('#sel-parts .part-btn').forEach((кнопка) => {
+    const мой = +кнопка.dataset.part === общая;
+    if (кнопка.classList.contains('on') !== мой) кнопка.classList.toggle('on', мой);
+    const нельзя = !рядыП.length;
+    if (кнопка.disabled !== нельзя) кнопка.disabled = нельзя;
+  });
   $('btn-sel-del').disabled = !state.lines.length;
   const marked = !!(line && hasWords(line));
   // Подпись не меняется, меняется только галочка справа от неё (CSS,
@@ -10205,8 +10387,13 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
      и со своей долей закраски. Длинная строка занимает несколько рядов,
      они расходятся вверх и вниз от середины строки. Возвращает высоту,
      которую строка заняла, — по ней считается раскладка. */
-  const drawLineAt = (text, cy, kind, line, кегль) => {
+  const drawLineAt = (text, cy, kind, line, кегль, партия) => {
     const fs = кегль || size;
+    /* Цвет партии подменяет «активный» — тот, которым написано ещё
+       не спетое. Закраска спетого по-прежнему идёт акцентом, поэтому
+       в кадре выходит ровно то же, что на экране (в style.css так же
+       подменяется --st-active). */
+    const свой = ЦВЕТ_ПАРТИИ[партия || 0] || st.active;
     g2d.font = font(fs);
     g2d.letterSpacing = `${st.letter}px`;
     const chunks = chunksFor(text, kind, line);
@@ -10225,10 +10412,10 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       row.forEach((c, i) => {
         strokeIfNeeded(c.text, x, y);
         if (kind !== 'cur' || c.p == null) {
-          g2d.fillStyle = kind === 'off' ? st.inactive : st.active;
+          g2d.fillStyle = kind === 'off' && !партия ? st.inactive : свой;
           g2d.fillText(c.text, x, y);
         } else if (st.effect === 'fill') {
-          g2d.fillStyle = st.active;
+          g2d.fillStyle = свой;
           g2d.fillText(c.text, x, y);
           if (c.p > 0) {
             g2d.save();
@@ -10240,7 +10427,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
             g2d.restore();
           }
         } else {
-          g2d.fillStyle = (st.effect === 'highlight' && c.p >= 0.5) ? st.accent : st.active;
+          g2d.fillStyle = (st.effect === 'highlight' && c.p >= 0.5) ? st.accent : свой;
           g2d.fillText(c.text, x, y);
         }
         x += widths[i];
@@ -10299,8 +10486,11 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       else if (slot === activeSlot) { index = cur; if (ph.mode !== 'break') kind = 'cur'; }
       else index = nextIndex;
       if (index >= lines.length) continue;
+      // Дуэт: напарница горит наравне с текущей, а не ждёт очереди
+      if (index === ph.вместе && ph.mode === 'line') kind = 'cur';
       if (kind !== 'cur' && index === nextIndex) kind = 'near';
-      drawLineAt(lines[index].text, место(top), kind, kind === 'cur' ? lines[index] : null);
+      drawLineAt(lines[index].text, место(top), kind,
+        kind === 'cur' ? lines[index] : null, null, партияСтроки(lines[index]));
     }
     const breakTop = breakSlot === 0 ? st.posCurrent : st.posNext;
     /* Точки отсчёта: щель между настоящими коробками строк, а не
@@ -10331,8 +10521,11 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
      поэтому налезть друг на друга они не могут. */
   const blocks = [];
   const push = (text, kind, index = null) => {
+    // Дуэт: напарница горит наравне с текущей
+    if (index != null && index === ph.вместе && ph.mode === 'line') kind = 'cur';
     const line = kind === 'cur' && index != null ? lines[index] : null;
-    blocks.push({ text, kind, line, height: heightOf(text, kind, line) });
+    blocks.push({ text, kind, line, height: heightOf(text, kind, line),
+      партия: index != null && lines[index] ? партияСтроки(lines[index]) : 0 });
   };
   const total = st.lines;
   const before = Math.min(2, Math.floor((total - 1) / 2));
@@ -10380,7 +10573,7 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   for (const b of blocks) {
     // Пока идут точки, ноты скрыты — вместо них отсчёт
     if (b === ноты && точки != null) continue;
-    drawLineAt(b.text, b.cy, b.kind, b.line, b === ноты ? кегльНот() : null);
+    drawLineAt(b.text, b.cy, b.kind, b.line, b === ноты ? кегльНот() : null, b.партия);
   }
   g2d.letterSpacing = '0px';
   if (точки != null) drawCountdown(точки);

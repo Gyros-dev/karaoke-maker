@@ -56,6 +56,15 @@
      (а половину забывали). Теперь цвет один и берётся отсюда, а тема
      переопределяет его у себя внутри .studio: rgb(var(--accent-rgb) / 0.1)
      даёт любую прозрачность от нынешнего акцента. */
+  /* ---- Дуэт: цвета партий ----
+     Одни и те же во всех трёх темах: это не оформление, а роль.
+     Певец узнаёт свою строку по цвету за два метра от экрана, и цвет
+     не должен меняться от того, какую тему он выбрал. Голубой против
+     розового — самая читаемая пара и при дальтонизме: они расходятся
+     и по светлоте, а не только по тону. */
+  --part-1: #38bdf8;
+  --part-2: #fb7185;
+  --part-both: #fbbf24;
   --accent-rgb: 16 185 129;
   --accent-solid: #34d399;
   --radius: 16px;
@@ -847,6 +856,62 @@ body.is-desktop .steps-tool-group {
 /* Короткий ответ на «сохранить»: кнопка на секунду становится галочкой
    в цвете темы. Окошком «сохранено» отвечать нельзя — Cmd+S жмут часто,
    и закрывать окно пришлось бы каждый раз. */
+/* ============ Дуэт ============
+   Партия строки видна в трёх местах сразу: в списке строк (полоска
+   слева), на дорожке (цвет блока) и на сцене (цвет текста). Выбирается
+   она кнопками в инспекторе, и цвет кнопки — тот же самый. */
+.part-picker { display: inline-flex; gap: 2px; }
+.part-btn {
+  width: 26px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font: 600 11px/1 var(--font-num, inherit);
+  cursor: pointer;
+  border-radius: var(--ed-radius, 5px);
+}
+.part-btn .icon { width: 12px; height: 12px; margin: 0; }
+.part-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.part-btn.p1 { color: var(--part-1); }
+.part-btn.p2 { color: var(--part-2); }
+.part-btn.pb { color: var(--part-both); }
+.part-btn.on { border-color: currentColor; background: color-mix(in srgb, currentColor 18%, transparent); }
+.part-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.insp-parts .sel-label { flex: 1; }
+
+/* Полоска партии слева от строки в списке.
+
+   Отдельным слоем, а не box-shadow: тенью помечены и выбранная строка,
+   и попавшая в выделенный диапазон, — и у выбранной полоска партии
+   просто исчезала. Голос строки не должен пропадать оттого, что на неё
+   нажали. */
+.edit-row.part-1, .edit-row.part-2, .edit-row.part-both { position: relative; }
+.edit-row.part-1::after, .edit-row.part-2::after, .edit-row.part-both::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  pointer-events: none;
+}
+.edit-row.part-1::after { background: var(--part-1); }
+.edit-row.part-2::after { background: var(--part-2); }
+.edit-row.part-both::after { background: var(--part-both); }
+
+/* Текст на сцене, в предпросмотре и в видео. Подменяем не сам цвет,
+   а переменную --st-active, которой строка красится: тогда работают
+   все три способа подсветки (заливка, подсветка, без эффекта), а
+   закраска спетого по-прежнему идёт акцентом. Цвет виден и у ждущей
+   строки — певец должен узнать свою ЗАРАНЕЕ, а не когда уже петь. */
+.stage-line.part-1 { --st-active: var(--part-1); }
+.stage-line.part-2 { --st-active: var(--part-2); }
+.stage-line.part-both { --st-active: var(--part-both); }
+
 .steps-tool.saved {
   color: var(--accent-solid);
   border-color: var(--accent-solid);

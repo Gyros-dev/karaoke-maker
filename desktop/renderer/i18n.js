@@ -205,6 +205,9 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.дуэты': '<b>\u{1F3A4} Duets.</b> A line now has a part: first voice, second, or “both sing”. The singer knows theirs by its colour — in advance, while the line is still waiting its turn. The colour shows in the line list, on the track and on stage, and goes into the video. And if the second voice comes in before the first voice’s line has ended, both light up and both fill in — the way it is actually sung.',
+  'новости.пропускПроигрышей': '<b>Lyric timing no longer listens to the instrumental breaks.</b> The network used to listen to the song straight through, including the parts where there is nothing to sing. But we know where the singing is: vocal removal shows us. Now only the sung stretches are listened to — on a song with long breaks that is twice as fast, and more accurate: on pure music the model is prone to inventing words.',
+  'новости.зеркало': '<b>The recognition model lives with us.</b> The weights were downloaded from someone else’s server, and without them lyric timing does not work at all. They are now in our own storage and are fetched from there first; the original source remains the fallback.',
   'новости.фокус': '<b>Editing lyrics works again on Windows.</b> Switch to another window and back, and letters stopped going in: the window got the focus, the page inside it did not. The mouse kept working as if nothing were wrong, text still selected — and from the outside it looked like the editor had broken. The keyboard now comes back to the page by itself.',
   'новости.видеокарта': '<b>\u26A1 Vocal removal runs on the graphics card — four times faster.</b> It used to run on the CPU while the graphics card sat idle next to it. The model, the graph and the precision are the same; only the performer changes: on a 25-second measurement, 38.8 seconds against 10.2 — with results identical to four decimal places. No graphics card, or it won’t start? We compute on the CPU, as before.',
   'новости.однаМодель': '<b>Lyric timing is down to one model.</b> The second one, twice as fast and noticeably worse, is gone: making out singing is its whole job, and a choice between “fast and wrong” and “slower and right” is no choice at all when the first has to be redone anyway. The model list and the “More options” fold went with it.',
@@ -605,6 +608,11 @@ I18N.EN = {
   'ред.распределить.подсказка': 'Spaces the line’s words out in time in proportion to their syllable count: a long word is sung longer than a short one. This stands in for tapping the words out by hand — good while the words have not been timed by hand',
   'ред.простучать': 'tap again',
   'ред.простучать.подсказка': 'Tap this line and the ones after it again (with the spacebar)',
+  'ред.инсп.партия': 'part',
+  'ред.партия.нет.подсказка': 'An ordinary line — nobody’s in particular',
+  'ред.партия.1.подсказка': 'First voice. The line is coloured on stage and in the video so the singer sees it is theirs — in advance, while it is still waiting',
+  'ред.партия.2.подсказка': 'Second voice. Same, in the other colour',
+  'ред.партия.оба.подсказка': 'Both sing — a chorus. If a range of lines is selected, the part goes to all of them at once',
   'ред.удалить': 'delete',
   'ред.удалить.подсказка': 'Remove this line from the karaoke',
   'ред.оригиналКнопка': 'original',
