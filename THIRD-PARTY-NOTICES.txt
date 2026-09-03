@@ -80,6 +80,25 @@ onnxruntime-web 1.27.0 — MIT — [18]
   чем у разделения вокала (см. desktop/setup-transformers.js). Лицензия
   та же, MIT, [18].
 
+pitchy 4.1.0 — MIT — [21]
+  https://github.com/ianprime0509/pitchy
+  Определение высоты звука методом Маклауда. Ею считается тональность
+  песни по чистому вокалу (renderer/key-worker.js). Едет файлом
+  renderer/pitchy.js. ЧТО ИЗМЕНЕНО: один адрес импорта — голое имя
+  пакета «fft.js» заменено на «./fft-indutny.js», потому что браузер
+  голых имён разрешать не умеет, а сборщика у нас нет. Больше
+  не тронуто ничего; это записано и в шапке самого файла.
+
+fft.js 4.0.4 — MIT — [22]
+  https://github.com/indutny/fft.js
+  Быстрое преобразование Фурье; им pitchy считает автокорреляцию.
+  Едет файлом renderer/fft-indutny.js. ЧТО ИЗМЕНЕНО: пакет отдаётся
+  как CommonJS, поэтому строка «module.exports = FFT;» убрана,
+  а в конце дописано «export default FFT;» — в браузере он подключается
+  модулем. Сам счёт не тронут. Своего файла лицензии в пакете npm нет:
+  лицензия объявлена в package.json, канонический текст MIT с этим
+  правообладателем — под [22].
+
 Bungee и Bungee Shade — SIL Open Font License 1.1 — [20]
   https://github.com/djrrb/Bungee
   Шрифты названия студии. Едут файлами renderer/fonts/bungee.woff2
@@ -1716,3 +1735,53 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+
+
+--------------------------------------------------------------------------------
+[21] pitchy — MIT
+--------------------------------------------------------------------------------
+
+Copyright 2018-2021 Ian Johnson
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+--------------------------------------------------------------------------------
+[22] fft.js — MIT
+--------------------------------------------------------------------------------
+
+Copyright (c) 2017 Fedor Indutny
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
