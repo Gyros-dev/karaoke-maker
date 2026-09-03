@@ -33,6 +33,15 @@ contextBridge.exposeInMainWorld('desktop', {
 
   saveFile: (name, data) => ipcRenderer.invoke('save-file', { name, data }),
 
+  /* Проект папкой: выбрать место, записать файлы, выбрать папку,
+     прочитать из неё файл. Больше о диске страница ничего не умеет —
+     и путь внутри папки она не задаёт: только имена файлов, а главный
+     процесс их проверяет (см. имяВПапкеЧистое в main.js). */
+  projectPick: (name) => ipcRenderer.invoke('project-pick', name),
+  projectWrite: (dir, files) => ipcRenderer.invoke('project-write', { dir, files }),
+  projectOpenPick: () => ipcRenderer.invoke('project-open-pick'),
+  projectRead: (dir, name) => ipcRenderer.invoke('project-read', { dir, name }),
+
   /* Язык интерфейса. Меню приложения собирается в главном процессе,
      и о выборе, который живёт в хранилище страницы, он узнаёт только
      отсюда: страница говорит язык при запуске и при каждой смене. */

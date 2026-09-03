@@ -233,6 +233,8 @@ I18N.EN = {
   'новости.словаНастройки': '<b>Words now have settings of their own.</b> Precise editing used to stop at the line — a word could only be dragged. A selected word now has numeric start, end and length fields, the same keys as a line, loop playback and snapping. Next to them: “spread”, which lays the words out across the line by syllable count.',
   'новости.тема': '<b>The studio now looks like an editing suite.</b> Tighter layout, proper icons instead of mismatched emoji, times down to the millisecond, a column of track names, and the exact time under the cursor while you drag. There is a theme picker too — the green signature look or a neutral grey one, right in the header.',
   'новости.закрыть': 'Close',
+  'новости.раньше': 'Earlier releases',
+  'новости.версияСлово': 'Version',
   'новости.значок': 'Update',
   'новости.заголовок': 'What’s new in {версия}',
   'новости.язык': '<b>\u{1F30D} The interface speaks English now.</b> The language switch sits in the header \u2014 in reach from every step of the studio. Everything you see is translated \u2014 labels, hints, questions, the guide and messages. Your lyrics, of course, stay yours.',
@@ -243,7 +245,7 @@ I18N.EN = {
   'новости.оригинал': '<b>🎤 Bring the original back where you want it.</b> Sometimes the opening should stay as it is — someone is talking, or another voice is singing — and you take over after that. On the editor timeline you mark the stretches where the original plays instead of the instrumental: drag to create, pull the edges, delete what you don’t need. Works the same in karaoke, in the exported instrumental and in the video.',
   'новости.магнит': '<b>🧲 Edges snap.</b> While you drag a line edge it sticks to neighbouring lines, to the playhead, to the edges of original-audio stretches and to real vocal onsets. Holding Alt suspends the snap for that drag — same as Logic Pro and Final Cut.',
   'новости.шаги': '<b>🎯 Four steps now, and tapping moved into the editor.</b> There is no separate “Sync” step any more: tapping the spacebar is a mode inside the editor. While it runs, the line list and the preview step aside, leaving the current line large on screen, the next one below it, a counter, and the timeline where marks appear as you go. You can start tapping anywhere: earlier marks are left alone, every hit undoes on its own, and the whole run undoes with the usual <span class="mod-key">Cmd</span>+Z.',
-  'новости.разметка': '<b>🗣 The network times your own lyrics.</b> Paste the lyrics and the Whisper model listens to the singing, finds where each word is sung, and lays your lines out on those marks. Line and word timings appear by themselves — no tapping needed. The words stay yours: only the timing comes from the network, and it gets timing wrong far less often than letters. Lines it barely made out are flagged with ≈ — worth a check. If you don’t have the lyrics at hand you can have them transcribed from scratch, but that’s a draft: singing transcribes much worse than speech, and some lines will need fixing by hand. Both work better if you remove the vocals first — then the network hears a clean voice instead of a mix.',
+  'новости.разметка': '<b>🗣 The network times your own lyrics.</b> Paste the lyrics and the Whisper model listens to the singing, finds where each word is sung, and lays your lines out on those marks. Line and word timings appear by themselves — no tapping needed. The words stay yours: only the timing comes from the network, and it gets timing wrong far less often than letters. Lines it barely made out are flagged with ≈ — worth a check. It comes out better if you remove the vocals first: then the network hears a clean voice instead of a mix.',
   'новости.редактор': '<b>🎚 A real timeline in the editor.</b> Lines and words are drawn as blocks — you see length, not just a start point. Drag the edges, drag the whole block, undo and redo (<span class="mod-key">Cmd</span>+Z), loop a line, and keys for everything else. And in the <span class="only-web">desktop version</span><span class="only-desktop">app</span> a vocal envelope is laid over the timeline: you can see where the singing actually is, and edges pull towards the real onset instead of a guess.',
   'новости.слова': '<b>✨ Highlighting follows the words.</b> The fill no longer crawls through a line at a constant speed — it steps at word boundaries, the way modern karaoke players do. Same on stage, in the editor preview and in the video.',
   'новости.разметкаСлов': '<b>♪ Word timing by hand.</b> The selected-line panel has a “♪ words” button: the passage plays with vocals and you tap the spacebar on each word. Next to it a new export — “.lrc with words”, the extended format with a timestamp on every word.',
@@ -308,7 +310,7 @@ I18N.EN = {
   'как.шаг1.сайт': 'If you already have a clean instrumental — from UVR5, say — drop it into the “Your own instrumental” field: it sounds much better than the built-in ducking.',
   'как.шаг2.заголовок': 'Paste the lyrics',
   'как.шаг2.текст': 'One non-empty line is one karaoke line. Finding the lyrics and copying them takes half a minute; timing them by hand takes far longer.',
-  'как.шаг2.приложение': '<b>Then press “Fit my lyrics”.</b> The network listens to the singing, finds where each word is sung, and lays your lines out on those marks: the words stay yours, only the timing comes from the network. Line and word timings appear by themselves — no tapping needed. No lyrics at hand? There’s a “Transcribe from scratch” button, but it’s a draft: singing transcribes much worse than speech.',
+  'как.шаг2.приложение': '<b>Then press “Fit my lyrics”.</b> The network listens to the singing, finds where each word is sung, and lays your lines out on those marks: the words stay yours, only the timing comes from the network. Line and word timings appear by themselves — no tapping needed.',
   'как.шаг3.заголовок': 'Time it in the editor',
   'как.шаг3.сайт': '<b>Tap the song out with the spacebar.</b> The editor has a tapping mode: the song plays and you hit the spacebar at the start of each line. You can start anywhere — earlier marks are left alone.',
   'как.шаг3.приложение': '<b>Check what the network laid out.</b> Lines it barely made out are flagged with ≈ — start there. The rest usually just needs a loop and a nudge of the edges on the timeline.',
@@ -380,9 +382,7 @@ I18N.EN = {
 
   'asr.заголовок': '🗣 Lyric timing by neural network',
   'asr.подгонка': '<b>The lyrics are in place — the network will time them.</b> It listens to the song, finds where each word is sung, and lays your lines out on those marks: the words stay yours, only the timing comes from the network. That is more reliable than transcribing from scratch — the model gets timing wrong far less often than letters. It comes out better still if you remove the vocals on step one first: then it hears a clean voice instead of a mix.',
-  'asr.сНуля': '<b>No lyrics at hand?</b> The network will write them out itself. Honestly: transcribing <b>singing</b> works noticeably worse than transcribing speech — vowels are stretched, backing vocals and music get in the way, and the model doesn’t know the rhymes, so this is a draft that saves you typing, not a finished result. The usual route is different: find the lyrics, paste them into the field below — and all the network has to do is the timing.',
   'asr.язык': 'Language',
-  'asr.язык.сам': 'Detect it',
   'asr.язык.ru': 'Russian',
   'asr.язык.en': 'English',
   'asr.язык.uk': 'Ukrainian',
@@ -390,8 +390,6 @@ I18N.EN = {
   'asr.язык.fr': 'French',
   'asr.язык.es': 'Spanish',
   'asr.язык.it': 'Italian',
-  'asr.сНуля.кнопка': 'Transcribe from scratch',
-  'asr.сНуля.подсказка': 'The network writes the lyrics itself and replaces whatever is in the field',
   'asr.ещё': 'More options',
   'asr.модель': 'Model',
   'asr.модель.пояснение': 'The large model is the default — it makes out singing better than anything else we have, but takes about twice as long as the regular one and weighs three times as much. The regular one is worth taking if you’re in a hurry: for fitting your own lyrics it is usually enough, since all you need from the network there is timing, not letters.',
@@ -613,6 +611,10 @@ I18N.EN = {
   'ред.началоСлова.подсказка': 'Word start as minutes:seconds, the way the timeline reads it (plain seconds work too). The first word has a start of its own: push it later and a pause appears before it — a singer does not always come in at once',
   'ред.конецСлова.подсказка': 'Word end as minutes:seconds, the way the timeline reads it (plain seconds work too). The last word’s end stretches to the end of the line by itself — that is the melisma; set it by hand and the tail stays with the line, bring it back flush and it stretches again',
   'ред.слово.поКругу.подсказка': 'Play this word round and round, with a short run-up and tail (key L)',
+  'проект.сохранить': 'Save the project',
+  'проект.сохранить.подсказка': 'Save the project as a folder: the song, the instrumental, the background and all the timing (Cmd+S; Shift+Cmd+S to save a copy)',
+  'проект.открыть': 'Open a project',
+  'проект.открыть.подсказка': 'Open a project folder — with the audio, the instrumental and the timing (Cmd+O)',
   'черновик.сохранить': 'Save a draft',
   'черновик.сохранить.подсказка': 'Save a draft file: the lyrics, the timing, the original stretches and the look',
   'черновик.открыть': 'Open a draft',
@@ -638,7 +640,7 @@ I18N.EN = {
   'faq.5.вопрос': 'Where do I get the lyrics?',
   'faq.5.ответ1': 'On the website you paste the lyrics yourself — copy them from anywhere and drop them into the field on step two.',
   'faq.5.ответ2': 'The lyrics to any song take half a minute to find — timing them by hand takes far longer. That’s what the <a href="#desktop">desktop version</a> does: you paste your own lyrics, the Whisper model listens to the singing and lays your lines out on the marks it found. The words stay yours, only the timing comes from the network — and it gets timing wrong far less often than letters. Lines it barely made out are flagged with ≈: worth a check.',
-  'faq.5.ответ3': 'If you really don’t have the lyrics at hand, the same place can transcribe them from scratch. But honestly: that’s a draft. Singing transcribes much worse than speech — vowels are stretched, backing vocals and music get in the way, and the model doesn’t know the rhymes — so some lines will need fixing by hand. Either way it comes out noticeably better if you remove the vocals first: then the network hears a clean voice instead of a mix.',
+  'faq.5.ответ3': 'It comes out noticeably better if you remove the vocals first: then the network hears a clean voice instead of a mix. The lyrics themselves have to be yours — the studio doesn’t write them for you: singing transcribes much worse than speech, and a draft like that would have to be rewritten from end to end anyway.',
   'faq.6.вопрос': 'What is an .lrc file?',
   'faq.6.ответ1': 'It’s the standard format for synced lyrics: every line is tagged with a time. Plenty of players and karaoke programs read these files.',
   'faq.6.ответ2': 'The “⬇ .lrc with words” button saves the extended variant — with a timestamp on every word inside a line. Players that don’t understand it will still read the lyrics line by line; the ones that do will highlight word by word.',
@@ -823,6 +825,36 @@ I18N.СТРОКИ = {
      кладём: песня и так есть у человека, а файл вышел бы в десятки
      мегабайт. Поэтому в черновике записано имя песни, и при открытии
      оно сверяется с тем, что загружено. */
+  /* ---------- Проект папкой ----------
+     Черновик — разметка без звука; проект — папка, в которой лежит вся
+     работа: песня, минусовка нейросети, фон и разметка. Открыл папку —
+     студия встала туда, где её оставили, без единого пересчёта. */
+  'проект.нечего': {
+    ru: 'Пока нечего сохранять: нет ни песни, ни текста, ни разметки.',
+    en: 'Nothing to save yet: no song, no lyrics and no timing.',
+  },
+  'проект.неЗаписался': {
+    ru: 'Не удалось записать проект. {причина}',
+    en: 'Couldn’t write the project. {причина}',
+  },
+  'проект.неПрочитался': {
+    ru: 'Не удалось открыть эту папку как проект Karaoke Punch.',
+    en: 'Couldn’t open this folder as a Karaoke Punch project.',
+  },
+  'проект.нетПесни': {
+    ru: 'В папке проекта не нашлось файла песни. Открой её как обычно, '
+      + 'а разметку подтяни черновиком.',
+    en: 'The project folder has no song file. Load the song as usual '
+      + 'and bring the timing in with a draft.',
+  },
+  'проект.открыт': {
+    ru: 'Проект открыт: строк {всего}, из них размечено {n}.',
+    en: 'Project opened: {всего} lines, {n} of them timed.',
+  },
+  'проект.чип': {
+    ru: 'Проект: {путь}',
+    en: 'Project: {путь}',
+  },
   'черновик.нечего': {
     ru: 'Пока нечего сохранять: нет ни текста, ни разметки.',
     en: 'Nothing to save yet: no lyrics and no timing.',
@@ -1297,57 +1329,6 @@ I18N.СТРОКИ = {
   'asr.готовимЗвук': { ru: 'Готовим звук…', en: 'Preparing the audio…' },
   'asr.сначалаПесня': { ru: 'Сначала загрузи песню.', en: 'Load a song first.' },
   'asr.сначалаТекст': { ru: 'Сначала вставь текст песни в поле ниже.', en: 'Paste the lyrics into the field below first.' },
-  'asr.неРаспозналось': { ru: 'Не получилось распознать текст: ', en: 'Couldn’t transcribe the lyrics: ' },
-  'asr.ничегоНеРазобрало': {
-    ru: 'Распознавание ничего не разобрало.\n\n'
-      + 'Попробуй сначала убрать вокал нейросетью на первом шаге — '
-      + 'по чистому голосу получается заметно лучше. Ещё помогает выбрать язык вручную.',
-    en: 'Transcription made out nothing at all.\n\n'
-      + 'Try removing the vocals on step one first — it comes out noticeably better '
-      + 'on a clean voice. Choosing the language by hand helps too.',
-  },
-  /* Число строк стоит внутри фразы, поэтому формы заданы по правилам
-     каждого языка: «1 строка», «3 строки», «5 строк» — иначе получалось
-     «Текст распознан: 3 строк». */
-  'asr.меткаРаспознано': {
-    ru: {
-      one: 'Текст распознан: {n} строка.',
-      few: 'Текст распознан: {n} строки.',
-      many: 'Текст распознан: {n} строк.',
-      other: 'Текст распознан: {n} строк.',
-    },
-    en: {
-      one: 'Lyrics transcribed: {n} line.',
-      other: 'Lyrics transcribed: {n} lines.',
-    },
-  },
-  'asr.меткаРаспознаноХвост': {
-    ru: ' Времена строк и слов проставлены. Это черновик: строки стоит вычитать.',
-    en: ' Line and word timings are in place. It’s a draft: the lines are worth proofreading.',
-  },
-  'asr.итогРаспознано': {
-    ru: 'Распознано строк: {n}.\n\n'
-      + 'Это черновик: пение распознаётся хуже речи, часть строк наверняка '
-      + 'придётся поправить прямо в поле текста. Времена строк и слов уже проставлены — '
-      + 'если текст не менять, простукивать в редакторе ничего не придётся.',
-    en: '{n} lines transcribed.\n\n'
-      + 'It’s a draft: singing transcribes worse than speech, and some lines will '
-      + 'certainly need fixing right in the text field. Line and word timings are already '
-      + 'in place — leave the text alone and you won’t have to tap anything in the editor.',
-  },
-  'asr.ошибка': { ru: 'Ошибка при распознавании: ', en: 'Error during transcription: ' },
-  'asr.неПослушалось': { ru: 'Не получилось послушать песню: ', en: 'Couldn’t listen to the song: ' },
-  'asr.раскладываем': { ru: 'Раскладываем твой текст по песне…', en: 'Laying your lyrics out over the song…' },
-  'asr.неПодогналось': {
-    ru: 'Не получилось подогнать текст: {ошибка}.\n\n'
-      + 'Чаще всего дело в звуке: попробуй сначала убрать вокал нейросетью '
-      + 'на первом шаге и выбрать язык вручную. Ещё проверь, что в поле — '
-      + 'текст именно этой песни.',
-    en: 'Couldn’t fit the lyrics: {ошибка}.\n\n'
-      + 'Usually it’s the audio: try removing the vocals on step one first and '
-      + 'choosing the language by hand. Also check that the field really holds '
-      + 'the lyrics to this song.',
-  },
   'asr.меткаВремена': {
     ru: 'Времена проставлены. Строк: {строк}, слов: {слов}.',
     en: 'Timings are in place. Lines: {строк}, words: {слов}.',
@@ -1386,26 +1367,9 @@ I18N.СТРОКИ = {
   },
   'asr.ошибкаПодгонки': { ru: 'Ошибка при подгонке текста: ', en: 'Error while fitting the lyrics: ' },
   'asr.кнопка.подогнать': { ru: 'Подогнать мой текст', en: 'Fit my lyrics' },
-  'asr.кнопка.распознать': { ru: 'Распознать текст', en: 'Transcribe the lyrics' },
   'asr.кнопка.подогнать.подсказка': {
     ru: 'Нейросеть послушает пение и расставит время строкам и словам по ТВОЕМУ тексту — сам текст останется как есть',
     en: 'The neural network listens to the singing and times the lines and words of YOUR lyrics — the text itself stays as it is',
-  },
-  'asr.кнопка.распознать.подсказка': {
-    ru: 'Нейросеть напишет текст песни сама и сразу разметит его по времени. Всё считается на этом компьютере',
-    en: 'The neural network writes the lyrics itself and times them at once. All of it is worked out on this computer',
-  },
-  'asr.сНуляВопрос': {
-    ru: 'Распознать текст с нуля?\n\n'
-      + 'Нейросеть напишет текст сама и заменит им то, что сейчас в поле. '
-      + 'Пение распознаётся хуже речи, так что это черновик — он нужен, '
-      + 'когда текста песни нет под рукой.\n\n'
-      + 'Твой текст будет потерян. Продолжить?',
-    en: 'Transcribe the lyrics from scratch?\n\n'
-      + 'The network will write the lyrics itself and replace whatever is in the field. '
-      + 'Singing transcribes worse than speech, so this is a draft — it’s for when '
-      + 'you don’t have the lyrics at hand.\n\n'
-      + 'Your text will be lost. Continue?',
   },
 
   /* ---------- Ошибки подгонки (align.js) ---------- */

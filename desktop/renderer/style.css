@@ -830,6 +830,17 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   transition: color 0.15s, border-color 0.15s;
 }
 .steps-tool:hover { color: var(--text); border-color: var(--violet); }
+/* Кнопки проекта есть только в приложении. Общее правило прячет
+   .only-desktop через display: revert, а кнопке этого мало: revert
+   отбрасывает и наш inline-flex, на котором держится значок внутри. */
+body.is-desktop .steps-tool.only-desktop { display: inline-flex; }
+/* Короткий ответ на «сохранить»: кнопка на секунду становится галочкой
+   в цвете темы. Окошком «сохранено» отвечать нельзя — Cmd+S жмут часто,
+   и закрывать окно пришлось бы каждый раз. */
+.steps-tool.saved {
+  color: var(--accent-solid);
+  border-color: var(--accent-solid);
+}
 .steps-tool .icon { margin: 0; }
 /* В узком окне ряд шагов подбирается к чипу вплотную: сперва прячем
    имя песни (оно есть в подсказке), потом весь чип — кнопки черновика
@@ -2911,6 +2922,30 @@ body.is-desktop .site-header .footer-link { font-size: 0.85rem; white-space: now
   letter-spacing: -0.02em;
 }
 .whatsnew-list { list-style: none; display: grid; gap: 0.9rem; }
+
+/* ---- Что было раньше ----
+   Список новостей рос от выпуска к выпуску и дорос до сорока с лишним
+   пунктов: свежее тонуло среди прошлогоднего, и человек, открывший окно
+   после обновления, читал в основном то, что уже видел. Наверху осталось
+   только новое, всё прежнее сложено сюда и разложено по версиям. */
+.whatsnew-old { margin-top: 1rem; }
+.whatsnew-old > summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 0.4rem 0;
+  list-style: none;
+}
+.whatsnew-old > summary::-webkit-details-marker { display: none; }
+.whatsnew-old > summary::before { content: '▸ '; }
+.whatsnew-old[open] > summary::before { content: '▾ '; }
+.whatsnew-old > summary:hover { color: var(--text); }
+.whatsnew-ver {
+  margin: 1.1rem 0 0.4rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
 .whatsnew-list li {
   border: 1px solid var(--border);
   border-radius: 12px;

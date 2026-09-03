@@ -575,15 +575,17 @@ function createWindow() {
         распознаваниеВидно: !document.getElementById('asr-block').classList.contains('hidden'),
         кнопкаРаспознавания: !!document.getElementById('btn-asr-run'),
         моделейРаспознавания: document.getElementById('asr-model').options.length,
-        /* Два режима разметки текста: поле пустое — распознаём с нуля,
-           текст вставлен — подгоняем его под песню. Проверяем сам
-           переключатель: подпись кнопки, вторая кнопка и пояснения. */
+        /* Разметка текста делает ровно одно дело: расставляет времена
+           по ГОТОВОМУ тексту. Распознавание с нуля убрано насовсем —
+           пение оно разбирало плохо. Сторожим, чтобы оно не вернулось
+           случайно: подпись кнопки одна при любом поле, второй кнопки
+           нет, пояснение про подгонку видно всегда, а в списке языков
+           нет пункта «определить сам» — на пении определение
+           промахивалось, а промах по языку бьёт по всем словам разом. */
         разметкаТекста: __раздел('разметкаТекста', () => {
           const поле = document.getElementById('lyrics-input');
-          const было = поле.value;
           const снимок = () => ({
             кнопка: document.getElementById('btn-asr-run').textContent,
-            сНуля: !document.getElementById('btn-asr-fresh').classList.contains('hidden'),
             проПодгонку: !document.getElementById('asr-about-fit').classList.contains('hidden'),
           });
           поле.value = '';
@@ -592,9 +594,20 @@ function createWindow() {
           поле.value = 'строка раз\\nстрока два';
           поле.dispatchEvent(new Event('input'));
           const сТекстом = снимок();
-          поле.value = было;
-          поле.dispatchEvent(new Event('input'));
-          return { пусто, сТекстом };
+          const языки = [...document.getElementById('asr-lang').options]
+            .map((o) => o.value);
+          return {
+            пусто, сТекстом, языки,
+            второйКнопкиНет: !document.getElementById('btn-asr-fresh'),
+            пояснениеСНуляУбрано: !document.getElementById('asr-about-fresh'),
+            вНорме: пусто.кнопка === сТекстом.кнопка
+              && пусто.кнопка === t('asr.кнопка.подогнать')
+              && пусто.проПодгонку && сТекстом.проПодгонку
+              && !document.getElementById('btn-asr-fresh')
+              && !document.getElementById('asr-about-fresh')
+              // Пустое значение — это и есть «определить сам»
+              && языки.length >= 7 && языки.every((v) => !!v),
+          };
         }),
         /* Умолчания качества. Разделение — один проход: лишние проходы
            на качество не влияют, это замерено, и три прохода означали
@@ -2750,17 +2763,7 @@ function createWindow() {
            Язык в конце возвращаем каким был. */
         язык: __раздел('язык', () => {
           const былЯзык = I18N.язык();
-          /* Поле текста опустошаем: подпись главной кнопки разметки
-             зависит от него («Распознать текст» против «Подогнать мой
-             текст»), а проверяем мы здесь ПЕРЕВОД, а не режим. Текст
-             мог остаться в профиле от прошлого прогона — студия кладёт
-             его в поле при запуске, — и раздел краснел из-за чужой
-             работы. Поле вернёт __раздел. */
-          const полеТекста = document.getElementById('lyrics-input');
-          if (полеТекста.value) {
-            полеТекста.value = '';
-            полеТекста.dispatchEvent(new Event('input'));
-          }
+
           const КИР = /[А-Яа-яЁё]/;
           const ключевые = () => ({
             шаг3: document.querySelector('.step-tab[data-step="3"]').textContent.trim(),
@@ -2899,8 +2902,8 @@ function createWindow() {
               && чужих(ru, true) === 0
               && en.шаг3.includes('Editor') && ru.шаг3.includes('Редактор')
               && en.вокал === 'Remove vocals' && ru.вокал === 'Убрать вокал'
-              && en.разметка === 'Transcribe the lyrics'
-              && ru.разметка === 'Распознать текст'
+              && en.разметка === 'Fit my lyrics'
+              && ru.разметка === 'Подогнать мой текст'
               && en.минусовка === 'Choose' && ru.минусовка === 'Выбрать'
               /* Ни одна ключевая надпись не осталась той же самой:
                  так ловится ключ, который есть в разметке, но которому
@@ -6335,6 +6338,140 @@ function createWindow() {
         }
       })`, true);
 
+      /* Проект папкой: круг целиком, через настоящий диск.
+
+         Проверяем не «функция вызвалась», а то, ради чего проект заведён:
+         открыл папку — студия встала туда, где её оставили. Со звуком,
+         со СВОЕЙ минусовкой (её-то и теряли при перезапуске) и с фоном.
+         Диалоги выбора папки подменяем — всё остальное настоящее:
+         и запись, и чтение, и разбор WAV. */
+      {
+        const папкаПроекта = path.join(require('os').tmpdir(),
+          'karaoke-проба-' + Date.now() + '.karaokeproj');
+        const путьJS = JSON.stringify(папкаПроекта).replace(/\\/g, '\\\\');
+        report.проектПапкой = await win.webContents.executeJavaScript(`__раздел('проектПапкой', async () => {
+          const папка = ${путьJS};
+          try {
+            window.alert = () => {};
+            window.confirm = () => true;
+            /* Окна выбора папки подменяем, запись и чтение оставляем
+               настоящими: проверяем диск, а не заглушки. Подменить одну
+               функцию внутри window.desktop нельзя — contextBridge отдаёт
+               его только на чтение, поэтому кладём свой мостик целиком. */
+            window.__мостПроекта = {
+              projectPick: async () => ({ ok: true, path: папка }),
+              projectOpenPick: async () => ({ ok: true, path: папка, name: 'проба' }),
+              projectWrite: (d, f) => window.desktop.projectWrite(d, f),
+              projectRead: (d, n) => window.desktop.projectRead(d, n),
+            };
+
+            // Песня: двенадцать секунд синуса в WAV — их читает настоящий декодер
+            const рейт = 8000;
+            const кадров = рейт * 12;
+            const ab = new ArrayBuffer(44 + кадров * 2);
+            const dv = new DataView(ab);
+            const стр = (o, t) => { for (let i = 0; i < t.length; i++) dv.setUint8(o + i, t.charCodeAt(i)); };
+            стр(0, 'RIFF'); dv.setUint32(4, 36 + кадров * 2, true); стр(8, 'WAVEfmt ');
+            dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+            dv.setUint32(24, рейт, true); dv.setUint32(28, рейт * 2, true);
+            dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+            стр(36, 'data'); dv.setUint32(40, кадров * 2, true);
+            for (let i = 0; i < кадров; i++) dv.setInt16(44 + i * 2, Math.sin(i / 18) * 8000, true);
+
+            await handleFile(new File([ab], 'проба.wav', { type: 'audio/wav' }));
+            document.getElementById('lyrics-input').value = 'раз\\nдва';
+            state.lines = [
+              { text: 'раз', time: 1, end: 3, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+              { text: 'два', time: 5, end: 7, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+            ];
+            // Своя минусовка — то самое, что не переживало перезапуск
+            state.instrumentalBuffer = state.originalBuffer;
+            state.customInst = true;
+            state.instName = 'Минусовка нейросети';
+            state.bgImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+            const сохранено = await сохранитьПроект(true);
+            const описьСырец = await window.desktop.projectRead(папка, 'проект.json');
+            const опись = описьСырец && описьСырец.ok
+              ? JSON.parse(new TextDecoder().decode(описьСырец.data)) : null;
+
+            // Работа потеряна начисто: как после перезапуска на голом месте
+            state.lines = [];
+            state.fileName = null;
+            state.songBytes = null;
+            state.originalBuffer = null;
+            state.instrumentalBuffer = null;
+            state.customInst = false;
+            state.instName = null;
+            state.bgImage = null;
+            clearVoiceTrack();
+            document.getElementById('lyrics-input').value = '';
+            localStorage.removeItem('karaoke-project');
+            проектНаДиске.путь = null;
+
+            await открытьПроект();
+
+            const длит = state.originalBuffer ? state.originalBuffer.duration : 0;
+            const итог = {
+              сохранено,
+              опись: опись && {
+                формат: опись.формат,
+                песня: опись.песня && опись.песня.файл,
+                исходноеИмя: опись.песня && опись.песня.исходноеИмя,
+                минусовка: опись.минусовка && опись.минусовка.файл,
+                имяМинусовки: опись.минусовка && опись.минусовка.имя,
+                фон: опись.фон && опись.фон.файл,
+                вОписиНетКартинки: !('bg' in (опись.проект || {})),
+                строк: (опись.проект && опись.проект.times || []).length,
+              },
+              имя: state.fileName,
+              длит: +длит.toFixed(2),
+              времена: state.lines.map((l) => l.time),
+              концы: state.lines.map((l) => l.end),
+              текст: document.getElementById('lyrics-input').value,
+              своя: state.customInst,
+              имяМинусовки: state.instName,
+              фонВернулся: String(state.bgImage || '').slice(0, 15),
+              путьПомнится: проектНаДиске.путь === папка,
+            };
+            итог.вНорме = сохранено
+              && !!опись && опись.формат === 'karaoke-punch-проект'
+              && итог.опись.песня === 'песня.wav'
+              && итог.опись.минусовка === 'минусовка.wav'
+              && итог.опись.имяМинусовки === 'Минусовка нейросети'
+              && итог.опись.фон === 'фон.png'
+              && итог.опись.вОписиНетКартинки
+              && итог.имя === 'проба.wav'
+              && Math.abs(итог.длит - 12) < 0.5
+              && итог.времена.length === 2
+              && итог.времена[0] === 1 && итог.времена[1] === 5
+              && итог.концы[0] === 3 && итог.концы[1] === 7
+              && итог.текст === 'раз\\nдва'
+              && итог.своя && итог.имяМинусовки === 'Минусовка нейросети'
+              && итог.фонВернулся === 'data:image/png;'
+              && итог.путьПомнится;
+            return итог;
+          } finally {
+            window.__мостПроекта = null;
+            проектНаДиске.путь = null;
+            проектНаДиске.имя = null;
+          }
+        })`, true);
+        /* Что реально легло на диск: страница об этом знает только
+           с наших же слов, а папку читает главный процесс. */
+        try {
+          report.проектПапкой.файлыНаДиске = fs.readdirSync(папкаПроекта).sort();
+        } catch (e) {
+          report.проектПапкой.файлыНаДиске = ['не прочиталась: ' + ((e && e.message) || e)];
+          report.проектПапкой.вНорме = false;
+        }
+        const ждём = ['минусовка.wav', 'песня.wav', 'проект.json', 'фон.png'];
+        if (String(report.проектПапкой.файлыНаДиске) !== String(ждём)) {
+          report.проектПапкой.вНорме = false;
+        }
+        try { fs.rmSync(папкаПроекта, { recursive: true, force: true }); } catch (e) { /* и ладно */ }
+      }
+
       console.log('SELFTEST', JSON.stringify(report));
 
       /* Звук: проверка считает, а не слушает. Гоняет поддельную песню
@@ -6970,4 +7107,98 @@ ipcMain.handle('save-file', async (_evt, { name, data }) => {
   if (canceled || !filePath) return { ok: false };
   fs.writeFileSync(filePath, Buffer.from(data));
   return { ok: true, path: filePath };
+});
+
+/* ---------- Проект папкой ----------
+
+   Проект — это папка на диске, в которой лежит вся работа сразу:
+   песня, минусовка, фон и разметка (см. «Проект папкой» в app.js).
+   Здесь только диск: выбрать место, записать, прочитать.
+
+   Страница НЕ задаёт путей внутри папки — только имена файлов, и каждое
+   проверяется. Без этого «имя» вроде ../../.ssh/id_rsa унесло бы запись
+   куда угодно по диску: страница у нас своя, но правило дешёвое,
+   а цена ошибки — чужие файлы. */
+const ЗАПРЕЩЕНО_В_ИМЕНИ = /[/\\:*?"<>|]/;
+const НАШИ_ФАЙЛЫ = /^(песня|минусовка|фон)\./;
+const ОПИСЬ_ПРОЕКТА = 'проект.json';
+
+function имяВПапкеЧистое(имя) {
+  return typeof имя === 'string'
+    && имя.length > 0 && имя.length < 200
+    && имя !== '.' && имя !== '..'
+    && !ЗАПРЕЩЕНО_В_ИМЕНИ.test(имя);
+}
+
+ipcMain.handle('project-pick', async (_evt, defaultName) => {
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: языкМеню === 'ru' ? 'Сохранить проект' : 'Save the project',
+    defaultPath: typeof defaultName === 'string' ? defaultName : 'проект.karaokeproj',
+    buttonLabel: языкМеню === 'ru' ? 'Сохранить' : 'Save',
+  });
+  if (canceled || !filePath) return { ok: false };
+  return { ok: true, path: filePath };
+});
+
+ipcMain.handle('project-write', async (_evt, { dir, files }) => {
+  if (typeof dir !== 'string' || !dir || !Array.isArray(files)) {
+    return { ok: false, error: 'плохой вызов' };
+  }
+  for (const ф of files) {
+    if (!ф || !имяВПапкеЧистое(ф.имя)) return { ok: false, error: 'плохое имя файла' };
+  }
+  try {
+    /* Место занято чем-то посторонним — не трогаем. Диалог сохранения
+       уже спросил «заменить?», но заменить он предлагает ЛЮБУЮ папку,
+       в том числе полную чужих файлов; поверх своего же проекта пишем
+       спокойно (это обычное «сохранить»). */
+    if (fs.existsSync(dir)) {
+      const с = fs.statSync(dir);
+      if (!с.isDirectory()) return { ok: false, error: 'по этому пути лежит файл' };
+      const внутри = fs.readdirSync(dir);
+      const свой = внутри.includes(ОПИСЬ_ПРОЕКТА);
+      if (внутри.length && !свой) return { ok: false, error: 'папка занята чужими файлами' };
+    } else {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    for (const ф of files) {
+      fs.writeFileSync(path.join(dir, ф.имя), Buffer.from(ф.данные));
+    }
+
+    /* Прежние наши файлы, которых в этом сохранении нет: песня сменила
+       формат, минусовку убрали, фон сняли. Убираем только СВОИ имена —
+       всё, что человек положил в папку сам, остаётся на месте. */
+    const оставляем = new Set(files.map((ф) => ф.имя));
+    for (const имя of fs.readdirSync(dir)) {
+      if (!оставляем.has(имя) && НАШИ_ФАЙЛЫ.test(имя)) {
+        try { fs.unlinkSync(path.join(dir, имя)); } catch (e) { /* и ладно */ }
+      }
+    }
+    return { ok: true, path: dir, name: path.basename(dir).replace(/\.[^.]+$/, '') };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+});
+
+ipcMain.handle('project-open-pick', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: языкМеню === 'ru' ? 'Открыть проект' : 'Open a project',
+    properties: ['openDirectory'],
+    buttonLabel: языкМеню === 'ru' ? 'Открыть' : 'Open',
+  });
+  if (canceled || !filePaths || !filePaths[0]) return { ok: false };
+  const п = filePaths[0];
+  return { ok: true, path: п, name: path.basename(п).replace(/\.[^.]+$/, '') };
+});
+
+ipcMain.handle('project-read', async (_evt, { dir, name }) => {
+  if (typeof dir !== 'string' || !имяВПапкеЧистое(name)) {
+    return { ok: false, error: 'плохой вызов' };
+  }
+  try {
+    return { ok: true, data: fs.readFileSync(path.join(dir, name)) };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
 });

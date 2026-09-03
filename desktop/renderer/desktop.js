@@ -798,48 +798,13 @@
     if (заголовок && !безПрокрутки) узел.scrollIntoView({ block: 'nearest' });
   }
 
-  async function recognizeLyrics() {
-    if (asr.busy || busy) return;
-    if (!state.originalBuffer) { alert(t('asr.сначалаПесня')); return; }
-
-    const key = $('asr-model').value || ASR_ЛУЧШАЯ;
-    asr.busy = true;
-    try {
-      const res = await listenToSong(key);
-      if (!res.ok) {
-        showAsrOverlay(false);
-        asr.busy = false;
-        if (res.error !== 'отменено') alert(t('asr.неРаспозналось') + res.error);
-        return;
-      }
-
-      const lines = wordsToLines(res.words || []);
-      showAsrOverlay(false);
-      asr.busy = false;
-
-      if (!lines.length) {
-        alert(t('asr.ничегоНеРазобрало'));
-        return;
-      }
-
-      /* Текст кладём в поле — его можно править как обычно.
-         Метки времени и слов запоминаем: если пользователь не станет
-         менять строки, разметка подставится сама. */
-      $('lyrics-input').value = lines.map((l) => l.text).join('\n');
-      $('lyrics-input').dispatchEvent(new Event('input'));
-      window.__asrLines = lines;
-      показатьИтогРазметки(() => ({
-        заголовок: t('asr.меткаРаспознано', { n: lines.length }),
-        пояснение: t('asr.меткаРаспознаноХвост'),
-      }));
-
-      alert(t('asr.итогРаспознано', { n: lines.length }));
-    } catch (err) {
-      showAsrOverlay(false);
-      asr.busy = false;
-      alert(t('asr.ошибка') + (err && err.message ? err.message : err));
-    }
-  }
+  /* Свободного распознавания («нейросеть напишет текст сама») здесь
+     больше нет. Пение оно разбирало плохо: гласные тянутся, мешают
+     бэк-вокал и музыка, рифм модель не знает, — и вместо помощи выходил
+     черновик, который всё равно переписывали целиком. Осталась подгонка
+     готового текста: буквы приносит человек, времена — нейросеть.
+     Вместе с распознаванием ушла и вторая кнопка, и переключение
+     режимов у первой. */
 
   /* ---------- Подгонка своего текста ----------
      Главный способ работы: буквы берём у человека, времена — у
@@ -898,21 +863,13 @@
     }
   }
 
-  /* Поле пустое — распознаём с нуля, поле заполнено — подгоняем.
-     Кнопка и пояснение меняются вместе, чтобы человек видел заранее,
-     что произойдёт, и не затёр свой текст случайно. */
+  /* Дело у кнопки одно — подогнать готовый текст, — поэтому подпись
+     и пояснение стоят прямо в разметке и не переключаются. Следим
+     здесь только за одним: поле опустошили — метка о прежней разметке
+     врёт, размечать больше нечего. Правку отдельных строк метка
+     переживает: времена остальных строк от этого не портятся. */
   function updateAsrMode() {
-    const есть = !!$('lyrics-input').value.trim();
-    $('btn-asr-run').textContent = t(есть ? 'asr.кнопка.подогнать' : 'asr.кнопка.распознать');
-    // Подсказка идёт за подписью: у кнопки два разных дела
-    $('btn-asr-run').title = t(есть ? 'asr.кнопка.подогнать.подсказка' : 'asr.кнопка.распознать.подсказка');
-    $('btn-asr-fresh').classList.toggle('hidden', !есть);
-    $('asr-about-fit').classList.toggle('hidden', !есть);
-    $('asr-about-fresh').classList.toggle('hidden', есть);
-    /* Поле опустошили — метка о прежней разметке врёт: размечать
-       больше нечего. Правку отдельных строк она переживает: времена
-       остальных строк от этого не портятся. */
-    if (!есть) показатьИтогРазметки(null);
+    if (!$('lyrics-input').value.trim()) показатьИтогРазметки(null);
   }
   $('lyrics-input').addEventListener('input', updateAsrMode);
   updateAsrMode();
@@ -1118,17 +1075,7 @@
     }
   };
 
-  $('btn-asr-run').addEventListener('click', () => {
-    if ($('lyrics-input').value.trim()) fitLyrics();
-    else recognizeLyrics();
-  });
-
-  /* Свободное распознавание при непустом поле затрёт чужую работу,
-     поэтому прячем его во вторую кнопку и переспрашиваем */
-  $('btn-asr-fresh').addEventListener('click', () => {
-    const ok = confirm(t('asr.сНуляВопрос'));
-    if (ok) recognizeLyrics();
-  });
+  $('btn-asr-run').addEventListener('click', () => fitLyrics());
   $('btn-asr-cancel').addEventListener('click', () => {
     if (asr.worker) asr.worker.postMessage({ cmd: 'cancel' });
     if (asr.stop) asr.stop();

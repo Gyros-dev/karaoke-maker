@@ -88,11 +88,15 @@ const AI_OVERLAY = `<div class="export-overlay hidden" id="ai-overlay">
 /* Разметка текста нейросетью — только в приложении: модель весит
    десятки мегабайт и в браузере не потянется.
 
-   Два режима в одной кнопке. Поле с текстом пустое — нейросеть пишет
-   текст сама (черновик). Текст уже вставлен — она только расставляет
-   по нему времена, и это главный способ работы. Пояснение и подпись
-   кнопки переключает updateAsrMode в desktop.js, чтобы человек заранее
-   видел, что произойдёт, и не затёр свой текст распознаванием.
+   Дело у блока ровно одно: расставить времена по ГОТОВОМУ тексту
+   человека. Распознавание с нуля («нейросеть напишет текст сама»)
+   отсюда убрано насовсем — пение оно разбирало плохо, и вместо помощи
+   выходил черновик, который всё равно приходилось переписывать.
+   Буквы приносит человек, времена — нейросеть, и только так.
+
+   Язык выбирают руками, пункта «определить сам» тоже больше нет:
+   на пении определение промахивалось, а промах по языку — это
+   промах по всем словам сразу.
 
    Сразу под заголовком — метка о готовой разметке (#asr-result). Она
    стоит первой, а не в конце блока: расчёт долгий, и его итог должен
@@ -103,7 +107,7 @@ const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
         <span class="asr-source" id="asr-source"></span>
       </div>
       <p class="asr-result hidden" id="asr-result"><b id="asr-result-head"></b><span id="asr-result-note"></span></p>
-      <p class="asr-warning hidden" id="asr-about-fit" data-i18n-html="asr.подгонка">
+      <p class="asr-warning" id="asr-about-fit" data-i18n-html="asr.подгонка">
         <b>Текст на месте — нейросеть расставит по нему времена.</b> Она послушает
         песню, найдёт, где какое слово поётся, и разложит по этим меткам твои строки:
         буквы остаются твоими, от нейросети берётся только время. Так надёжнее, чем
@@ -111,18 +115,9 @@ const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
         Точнее выходит, если сначала убрать вокал нейросетью на первом шаге:
         тогда она слушает чистый голос, а не микс.
       </p>
-      <p class="asr-warning" id="asr-about-fresh" data-i18n-html="asr.сНуля">
-        <b>Текста песни нет под рукой?</b> Нейросеть напишет его сама. Честно:
-        распознавание <b>пения</b> работает заметно хуже, чем распознавание речи —
-        гласные тянутся, мешают бэк-вокал и музыка, рифм модель не знает, так что
-        это черновик, который экономит набор текста, а не готовый результат.
-        Обычный путь другой: найти текст песни, вставить его в поле ниже — и тогда
-        нейросети останется только расставить времена.
-      </p>
       <div class="asr-controls">
         <label class="btn btn-ghost btn-small export-quality" for="asr-lang"><span data-i18n="asr.язык">Язык</span>
           <select id="asr-lang">
-            <option value="" data-i18n="asr.язык.сам">Определить сам</option>
             <option value="russian" selected data-i18n="asr.язык.ru">Русский</option>
             <option value="english" data-i18n="asr.язык.en">Английский</option>
             <option value="ukrainian" data-i18n="asr.язык.uk">Украинский</option>
@@ -132,10 +127,9 @@ const ASR_BLOCK = `    <div class="asr-block hidden" id="asr-block">
             <option value="italian" data-i18n="asr.язык.it">Итальянский</option>
           </select>
         </label>
-        <button class="btn btn-primary btn-small" id="btn-asr-run">Распознать текст</button>
-        <button class="btn btn-ghost btn-small hidden" id="btn-asr-fresh"
-          data-i18n="asr.сНуля.кнопка" data-i18n-title="asr.сНуля.подсказка"
-          title="Нейросеть напишет текст сама и заменит им то, что в поле">Распознать с нуля</button>
+        <button class="btn btn-primary btn-small" id="btn-asr-run"
+          data-i18n="asr.кнопка.подогнать" data-i18n-title="asr.кнопка.подогнать.подсказка"
+          title="Нейросеть послушает песню и расставит времена по твоему тексту">Подогнать мой текст</button>
       </div>
       <p class="asr-eta" id="asr-eta"></p>
       <details class="asr-more">
