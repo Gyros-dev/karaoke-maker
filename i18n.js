@@ -808,6 +808,7 @@ I18N.EN = {
   'ред.оригинал.строка.подсказка': 'Turn this line into an original stretch: the recording itself plays under it, with a level of its own',
   'ред.оригинал.слово.подсказка': 'Turn this word into an original stretch: the recording itself plays under it, with a level of its own',
   'ред.громкость.подсказка': 'How loud this stretch of the original is against the rest of the song. Double-click brings back 100 %. It goes into the .wav instrumental and into the video as well',
+  'ред.отрезок.как': 'A stretch is a piece where the recording itself plays instead of the instrumental. To make one: the “original” button in the line or word panel, or drag along the “original” lane on the track. Click a stretch to select it.',
   'ред.отрезок.убрать.подсказка': 'Remove this stretch — the instrumental plays under it again',
   'ред.слышу': 'hear the original',
   'ред.слова.заголовок': 'Word timing',
