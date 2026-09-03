@@ -384,12 +384,39 @@ function collapseRuns(words) {
   return out;
 }
 
+/* Отпустить движок ДО того, как поток убьют.
+
+   Беда та же, что и у разделения (см. отпуститьДвижок в
+   separator-worker.js): под нами стайка потоков WASM по числу ядер,
+   а главная страница звала terminate() сразу по ответу — и потоки
+   оставались осиротевшими. На Windows это выглядело как «приложение
+   живо, а нажать ничего нельзя»: текст мышью выделяется, страница
+   рисуется, а нажатия стоят в очереди за занятыми ядрами.
+
+   Держать разобранную модель между запусками всё равно не выходит:
+   поток создаётся заново на каждое распознавание и убивается после,
+   так что закрытие сессии здесь не стоит нам ничего. */
+async function отпуститьДвижок() {
+  const p = pipe;
+  pipe = null;
+  pipeId = null;
+  if (!p || typeof p.dispose !== 'function') return;
+  try { await p.dispose(); } catch (e) { /* уже закрыт — и хорошо */ }
+}
+
 self.onmessage = (e) => {
   const msg = e.data;
-  if (msg.cmd === 'cancel') { cancelled = true; return; }
+  if (msg.cmd === 'cancel') {
+    cancelled = true;
+    отпуститьДвижок().then(() => post({ type: 'closed' }));
+    return;
+  }
   // Разбор отката по температуре в самопроверке: KARAOKE_ASR_DEBUG=1
   if (msg.debug) self.__asrDebug = true;
   transcribe(msg)
-    .then((res) => post({ type: 'done', ...res }))
-    .catch((err) => post({ type: 'error', error: String((err && err.message) || err) }));
+    .then(async (res) => { await отпуститьДвижок(); post({ type: 'done', ...res }); })
+    .catch(async (err) => {
+      await отпуститьДвижок();
+      post({ type: 'error', error: String((err && err.message) || err) });
+    });
 };

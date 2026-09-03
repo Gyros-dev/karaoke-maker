@@ -257,15 +257,42 @@ async function separate({ modelBytes, left, right, sampleRate, shifts = 1 }) {
   return { left: outL, right: outR, vocal: voc, sampleRate };
 }
 
+/* Отпустить движок ДО того, как поток убьют.
+
+   Беда, которую это лечит. Наш поток — не единственный: onnxruntime
+   поднимает под собой стайку потоков WASM (по числу ядер, до восьми),
+   и живут они в общей памяти. Главная страница, получив ответ, звала
+   terminate() сразу — а мы к этому моменту не сказали движку ни слова.
+   Осиротевшие потоки продолжали крутиться, и на Windows это выглядело
+   как «приложение живо, а нажать ничего нельзя»: страница рисуется
+   (выделение текста мышью видно), но поток, который разбирает нажатия,
+   стоит в очереди за восемью занятыми ядрами.
+
+   Поэтому сессия закрывается ЗДЕСЬ и до ответа: пока главная страница
+   не получила 'done', поток не убьют, а значит, освободиться успеем. */
+async function отпуститьДвижок() {
+  const s = session;
+  session = null;
+  if (!s || typeof s.release !== 'function') return;
+  try { await s.release(); } catch (e) { /* уже закрыт — и хорошо */ }
+}
+
 self.onmessage = (e) => {
   const msg = e.data;
-  if (msg.cmd === 'cancel') { cancelled = true; return; }
+  if (msg.cmd === 'cancel') {
+    cancelled = true;
+    // Отмена — тот же случай: движок надо отпустить, а не бросить
+    отпуститьДвижок().then(() => post({ type: 'closed' }));
+    return;
+  }
   separate(msg)
-    .then(({ left, right, vocal, sampleRate }) => {
+    .then(async ({ left, right, vocal, sampleRate }) => {
+      await отпуститьДвижок();
       post({ type: 'done', left: left.buffer, right: right.buffer, vocal: vocal.buffer, sampleRate },
         [left.buffer, right.buffer, vocal.buffer]);
     })
-    .catch((err) => {
+    .catch(async (err) => {
+      await отпуститьДвижок();
       post({ type: 'error', error: String((err && err.message) || err) });
     });
 };

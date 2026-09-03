@@ -469,8 +469,7 @@
   $('btn-ai-run').addEventListener('click', removeVocals);
   $('btn-ai-cancel').addEventListener('click', () => {
     if (sepWorker) {
-      sepWorker.postMessage({ cmd: 'cancel' });
-      sepWorker.terminate();
+      закрытьПоток(sepWorker);
       sepWorker = null;
     }
     /* Отмена должна отменять и скачивание, а не только расчёт: раньше
@@ -631,6 +630,26 @@
     }
     await fillAsrModels();
     return true;
+  }
+
+  /* Убить поток, дав ему отпустить движок нейросети.
+
+     Под каждым нашим потоком живёт стайка потоков WASM — по числу
+     ядер, до восьми, — и terminate() их не спрашивает. Поэтому
+     сначала просим закрыться, ответа ждём, но не вечно: поток мог
+     уже не отвечать, а висеть в ожидании нельзя.
+
+     На обычном пути (расчёт дошёл до конца) ждать нечего: поток
+     закрывает сессию ДО того, как пришлёт ответ. Это для отмены. */
+  function закрытьПоток(worker, мс) {
+    if (!worker) return;
+    let убит = false;
+    const убить = () => { if (убит) return; убит = true; worker.terminate(); };
+    worker.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'closed') убить();
+    });
+    setTimeout(убить, мс || 4000);
+    try { worker.postMessage({ cmd: 'cancel' }); } catch (e) { убить(); }
   }
 
   function runWhisper(modelId, pcm, language) {
@@ -1077,7 +1096,10 @@
 
   $('btn-asr-run').addEventListener('click', () => fitLyrics());
   $('btn-asr-cancel').addEventListener('click', () => {
-    if (asr.worker) asr.worker.postMessage({ cmd: 'cancel' });
+    if (asr.worker) {
+      закрытьПоток(asr.worker);
+      asr.worker = null;   // чтобы finish ниже не убил его вторым разом
+    }
     if (asr.stop) asr.stop();
     window.desktop.asrCancel();
     showAsrOverlay(false);
