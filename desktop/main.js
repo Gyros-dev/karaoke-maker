@@ -7243,6 +7243,44 @@ function createWindow() {
         }
       }
 
+      /* Настройки караоке должны влезать в свою колонку.
+
+         Жалоба была простая: «в режиме караоке левое окно не влезает,
+         приходится скроллить». Колонка и правда прокручивается — так
+         задумано на узких экранах, — но на обычном окне человек не
+         должен листать четыре ползунка. Мерим не на глаз: высоту
+         содержимого закладки против видимой высоты. На низком окне
+         (меньше 800 точек) прокрутка законна, там не придираемся. */
+      report.настройкиВлезают = await win.webContents.executeJavaScript(`__раздел('настройкиВлезают', () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        document.getElementById('lyrics-input').value = 'строка раз';
+        state.lines = [{ text: 'строка раз', time: 5, end: 9 }];
+        goToStep(4);
+        const тело = document.querySelector('.side-body');
+        const с = getComputedStyle(тело);
+        const пад = parseFloat(с.paddingTop) + parseFloat(с.paddingBottom);
+        const по = {};
+        for (const кн of document.querySelectorAll('#side-tabs button')) {
+          кн.click();
+          const г = тело.querySelector('.side-group.active');
+          if (!г) continue;
+          const дети = [...г.children];
+          const посл = дети[дети.length - 1];
+          const хвост = посл ? parseFloat(getComputedStyle(посл).marginBottom) : 0;
+          const надо = Math.round(г.getBoundingClientRect().height + хвост + пад);
+          по[кн.dataset.g] = { надо, видно: тело.clientHeight, запас: тело.clientHeight - надо };
+        }
+        const низкоеОкно = innerHeight < 800;
+        const влезают = Object.values(по).every((в) => в.запас >= 0);
+        return {
+          окно: [innerWidth, innerHeight], по, низкоеОкно, влезают,
+          закладок: Object.keys(по).length,
+          вНорме: Object.keys(по).length === 4 && (влезают || низкоеОкно),
+        };
+      })`);
+
       /* Снимок живого окна: KARAOKE_SHOT=путь-к-png.
 
          Числа говорят, что код считает верно, но не говорят, как это
@@ -7321,6 +7359,17 @@ function createWindow() {
               goToStep(4);
               показатьФинал();
               await new Promise((r) => setTimeout(r, 2600));
+              return 'ок';
+            }
+            /* Настройки караоке: снимок нужен, чтобы глазом увидеть,
+               влезает ли закладка в колонку. Числа про высоту врут
+               реже, но не показывают, не стало ли тесно. */
+            if (сцена === 'настройки') {
+              goToStep(4);
+              const вкл = document.querySelector('#side-tabs button[data-g="' +
+                (${JSON.stringify(process.env.KARAOKE_SHOT_TAB || 'color')}) + '"]');
+              if (вкл) вкл.click();
+              await new Promise((r) => setTimeout(r, 400));
               return 'ок';
             }
             goToStep(3);

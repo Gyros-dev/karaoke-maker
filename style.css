@@ -2759,14 +2759,14 @@ input[type="range"]::-moz-range-thumb {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.6rem 0.8rem;
+  padding: 0.45rem 0.8rem;
   border-bottom: 1px solid var(--border);
   font-size: 0.95rem;
 }
 .side-tabs {
   display: flex;
   gap: 0.25rem;
-  padding: 0.5rem 0.6rem 0;
+  padding: 0.35rem 0.6rem 0;
 }
 .side-tabs button {
   flex: 1;
@@ -2791,8 +2791,25 @@ input[type="range"]::-moz-range-thumb {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0.8rem;
+  padding: 0.65rem 0.8rem;
 }
+
+/* Плотность настроек караоке.
+
+   Беда, которую это лечит: в закладке «Цвет» четырнадцать рядов,
+   и на ноутбучном экране они не влезали в колонку — приходилось
+   прокручивать, чтобы добраться до последних. Прокрутка внутри
+   узкой колонки настроек хуже тесноты: человек не знает, что там
+   ниже что-то есть.
+
+   Ужимаем не текст, а воздух между рядами: кегль остаётся прежним,
+   читаемость не страдает, а колонка перестаёт быть длиннее места. */
+.side-body .style-row { margin-bottom: 0.28rem; gap: 0.1rem 0.6rem; }
+.side-body .style-row input[type="range"] { margin: 0; }
+.side-body .eq-row { margin-bottom: 0.45rem; }
+.side-body .eq-hint,
+.side-body .side-note { line-height: 1.4; }
+.side-body .side-note { margin-top: 0.45rem; padding-top: 0.45rem; }
 .side-group { display: none; }
 .side-group.active { display: block; }
 .side-note {
