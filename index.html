@@ -1353,6 +1353,8 @@
             <div class="insp-actions">
               <button class="nudge-btn" id="btn-word-loop" disabled data-i18n-title="ред.слово.поКругу.подсказка"
                 title="Играть это слово по кругу, с небольшим разгоном и хвостом (клавиша L)"><svg class="icon" aria-hidden="true"><use href="#i-loop"></use></svg><span data-i18n="ред.покругу">по кругу</span></button>
+              <button class="nudge-btn" id="btn-word-orig" disabled data-i18n-title="ред.оригинал.слово.подсказка"
+                title="Сделать это слово отрезком оригинала: под ним зазвучит сама запись, и у неё будет своя громкость"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg><span data-i18n="ред.оригиналКнопка">оригинал</span></button>
             </div>
           </div>
           </details>
@@ -1412,6 +1414,8 @@
                 title="Расставит слова строки по времени соразмерно числу слогов: длинное слово поётся дольше короткого. Это замена простукиванию слов руками — годится, пока слова руками не размечены"><svg class="icon" aria-hidden="true"><use href="#i-spread"></use></svg><span data-i18n="ред.распределить">распределить</span></button>
               <button class="nudge-btn" id="btn-sel-tap" data-i18n-title="ред.простучать.подсказка"
                 title="Простучать эту строку и следующие заново (пробелом)"><svg class="icon" aria-hidden="true"><use href="#i-pencil"></use></svg><span data-i18n="ред.простучать">простучать заново</span></button>
+              <button class="nudge-btn" id="btn-sel-orig" data-i18n-title="ред.оригинал.строка.подсказка"
+                title="Сделать эту строку отрезком оригинала: под ней зазвучит сама запись, и у неё будет своя громкость"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg><span data-i18n="ред.оригиналКнопка">оригинал</span></button>
               <button class="nudge-btn" id="btn-sel-del" data-i18n-title="ред.удалить.подсказка"
                 title="Убрать эту строку из караоке"><svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg><span data-i18n="ред.удалить">удалить</span></button>
             </div>
@@ -1420,6 +1424,37 @@
               <input type="checkbox" id="sel-vocal" checked>
               <span data-i18n="ред.слышу">слышу оригинал</span>
             </label>
+          </div>
+          </details>
+
+          <!-- Панель выбранного отрезка оригинала.
+
+               Отрезок — это кусок, где вместо минусовки звучит сама
+               запись со словами. Раньше он звучал ровно как записан,
+               и «оставить оригинальный кусок, но потише» сделать было
+               нечем. Теперь у каждого своя громкость, и она уходит
+               не только в колонки, но и в минусовку .wav, и в видео:
+               расписание у них одно на всех (см. расписатьОтрезки). -->
+          <details class="insp-sec" id="insp-orig" open>
+          <summary data-i18n="ред.окно.оригинал">Оригинал</summary>
+          <div class="sel-line" id="orig-panel">
+            <div class="insp-row">
+              <span class="sel-label" data-i18n="ред.инсп.отрезок">отрезок</span>
+              <span class="sel-value" id="orig-sel" data-i18n="ред.отрезокНет">не выбран</span>
+            </div>
+            <div class="insp-row">
+              <label class="sel-label" for="orig-gain" data-i18n="ред.инсп.громкость">громкость</label>
+              <span class="sel-field">
+                <input type="range" class="tl-gain" id="orig-gain" min="0" max="1.5" step="0.05" value="1" disabled
+                       data-i18n-title="ред.громкость.подсказка"
+                       title="Громкость этого куска оригинала: тише или громче остальной песни. Двойной щелчок — вернуть 100 %. Уходит и в минусовку .wav, и в видео">
+                <span class="tl-gain-val off" id="orig-gain-val">100%</span>
+              </span>
+            </div>
+            <div class="insp-actions">
+              <button class="nudge-btn" id="btn-orig-del" disabled data-i18n-title="ред.отрезок.убрать.подсказка"
+                title="Убрать этот отрезок — под ним снова зазвучит минусовка"><svg class="icon" aria-hidden="true"><use href="#i-trash"></use></svg><span data-i18n="ред.удалить">удалить</span></button>
+            </div>
           </div>
           </details>
         </div>

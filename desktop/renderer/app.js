@@ -463,6 +463,24 @@ function усиленияСейчас(forceVocal) {
 const ОТРЕЗОК_ФЕЙД = 0.05;   // перекрёстное затухание на границе, с
 const ОТРЕЗОК_МИН = 0.2;     // короче отрезок не делаем
 
+/* ГРОМКОСТЬ ОТРЕЗКА. У каждого отрезка своя, от нуля до полутора —
+   те же полтора, что у ползунков дорожек, и та же сотня процентов
+   за единицу. Раньше внутри отрезка оригинал звучал ровно как записан,
+   и «оставить оригинальный кусок, но потише» сделать было нечем.
+
+   Тише становится ВЕСЬ кусок, а не только голос в нём: внутри отрезка
+   минусовка выключена, звучит одна оригинальная запись — её и убавляем.
+   Щелчку взяться неоткуда: громкость меняется тем же линейным
+   затуханием в 50 мс, что и подмена источника.
+
+   Отрезок без числа — это отрезок из проекта постарше: там громкости
+   не было, и он звучит как звучал, в полную. */
+const УСИЛ_МАКС = 1.5;
+function зажатьУсиление(v) {
+  const n = v == null ? 1 : +v;
+  return Number.isFinite(n) ? Math.min(УСИЛ_МАКС, Math.max(0, n)) : 1;
+}
+
 /* Отрезки в порядок: выкинуть вырожденные, отсортировать, слить
    наложенные и слишком близкие. Меньше двух затуханий между соседями
    не оставляем — иначе на стыке вышел бы дребезг вместо перехода. */
@@ -473,14 +491,26 @@ function нормОтрезки(spans, длина) {
     const a = Math.max(0, Math.min(+s.start, +s.end));
     const b = Math.min(предел, Math.max(+s.start, +s.end));
     if (!Number.isFinite(a) || !Number.isFinite(b) || b - a < 0.01) continue;
-    годные.push({ start: a, end: b });
+    годные.push({ start: a, end: b, усиление: зажатьУсиление(s.усиление) });
   }
   годные.sort((p, q) => p.start - q.start);
   const итог = [];
   for (const s of годные) {
     const пред = итог[итог.length - 1];
-    if (пред && s.start - пред.end < ОТРЕЗОК_ФЕЙД * 2) пред.end = Math.max(пред.end, s.end);
-    else итог.push(s);
+    if (!пред || s.start - пред.end >= ОТРЕЗОК_ФЕЙД * 2) { итог.push(s); continue; }
+    /* Сошлись ближе, чем на два затухания. Одинаково громкие сливаем,
+       как и раньше. А вот разной громкости сливать нельзя: это два
+       разных решения человека, и одно из них пропало бы молча.
+       Поэтому второй отодвигаем вправо ровно настолько, чтобы
+       затухания не наложились. Если после этого от него ничего
+       не остаётся — сливаем, деваться некуда. */
+    if (Math.abs(s.усиление - пред.усиление) < 0.001) {
+      пред.end = Math.max(пред.end, s.end);
+      continue;
+    }
+    const start = пред.end + ОТРЕЗОК_ФЕЙД * 2;
+    if (s.end - start < ОТРЕЗОК_МИН) { пред.end = Math.max(пред.end, s.end); continue; }
+    итог.push({ start, end: s.end, усиление: s.усиление });
   }
   return итог;
 }
@@ -494,15 +524,21 @@ function отрезкиОригинала() {
    между — это и есть перекрёстное затухание. Затухание лежит СНАРУЖИ
    отрезка (вход [start−f, start], выход [end, end+f]), поэтому всё,
    что человек отметил, звучит оригиналом целиком и без огрызков. */
-function доляОригинала(t, spans) {
+function отрезокВМомент(t, spans) {
   const f = ОТРЕЗОК_ФЕЙД;
   for (const s of spans) {
     if (t <= s.start - f || t >= s.end + f) continue;
-    if (t >= s.start && t <= s.end) return 1;
-    if (t < s.start) return (t - (s.start - f)) / f;
-    return 1 - (t - s.end) / f;
+    const усиление = зажатьУсиление(s.усиление);
+    if (t >= s.start && t <= s.end) return { доля: 1, усиление };
+    if (t < s.start) return { доля: (t - (s.start - f)) / f, усиление };
+    return { доля: 1 - (t - s.end) / f, усиление };
   }
-  return 0;
+  return { доля: 0, усиление: 1 };
+}
+
+// Только доля — тем, кому громкость не нужна (рисование полосы оригинала)
+function доляОригинала(t, spans) {
+  return отрезокВМомент(t, spans).доля;
 }
 
 /* Переломы расписания: начало и конец каждого затухания. Начало песни
@@ -522,21 +558,26 @@ function точкиОтрезков(spans) {
 function расписатьОтрезки(ctx, vGain, iGain, база, spans, t0) {
   const сейчас = ctx.currentTime;
   const от = сейчас - t0;   // какая секунда песни звучит прямо сейчас
-  const пары = [
-    [vGain.gain, база.вокал, 1],
-    [iGain.gain, база.минусовка, 0],
-  ];
-  const знач = (доля, вне, внутри) => вне + (внутри - вне) * доля;
-  for (const [param, вне, внутри] of пары) {
+  const параметры = [vGain.gain, iGain.gain];
+  /* Куда усиления обязаны прийти к секунде t. Внутри отрезка вокал
+     идёт на громкость ЭТОГО отрезка, минусовка в ноль; снаружи —
+     то, что задано ползунками. Между — линейно, это и есть затухание. */
+  const цель = (t) => {
+    const о = отрезокВМомент(t, spans);
+    return [
+      база.вокал + (о.усиление - база.вокал) * о.доля,
+      база.минусовка + (0 - база.минусовка) * о.доля,
+    ];
+  };
+  const сейчасЖе = цель(от);
+  параметры.forEach((param, k) => {
     param.cancelScheduledValues(сейчас);
-    param.setValueAtTime(знач(доляОригинала(от, spans), вне, внутри), сейчас);
-  }
+    param.setValueAtTime(сейчасЖе[k], сейчас);
+  });
   for (const t of точкиОтрезков(spans)) {
     if (t <= от) continue;
-    const доля = доляОригинала(t, spans);
-    for (const [param, вне, внутри] of пары) {
-      param.linearRampToValueAtTime(знач(доля, вне, внутри), t0 + t);
-    }
+    const ц = цель(t);
+    параметры.forEach((param, k) => param.linearRampToValueAtTime(ц[k], t0 + t));
   }
 }
 
@@ -3565,6 +3606,7 @@ function refreshTimes() {
   });
   updateSelInfo();
   updateWordInfo();
+  обновитьОтрезок();
 }
 
 /* ============================================================
@@ -5715,6 +5757,10 @@ function snapshotEqual(a, b) {
   if (ao.length !== bo.length) return false;
   for (let i = 0; i < ao.length; i++) {
     if (ao[i].start !== bo[i].start || ao[i].end !== bo[i].end) return false;
+    // Громкость отрезка — такая же правка, как его границы: без этой
+    // строчки правка одной громкости считалась бы «ничего не менялось»,
+    // снимок не ложился бы в стек и отменить её было бы нечем
+    if (зажатьУсиление(ao[i].усиление) !== зажатьУсиление(bo[i].усиление)) return false;
   }
   for (let i = 0; i < a.length; i++) {
     const x = a[i];
@@ -6412,6 +6458,34 @@ $('btn-sel-words-reset').addEventListener('click', () => {
   if (editor.sel >= 0) resetWords(editor.sel);
 });
 $('btn-sel-del').addEventListener('click', () => deleteLine(editor.sel));
+/* «Оригинал» у строки и у слова: отрезок ровно по выбранному куску.
+   Дальше громкость крутится в панели «Оригинал» — и уходит в .wav
+   и в видео вместе со всей разметкой. */
+$('btn-sel-orig').addEventListener('click', () => {
+  const sp = spanOfRow(editor.sel);
+  if (sp) сделатьОтрезокПо(sp.start, sp.end);
+});
+$('btn-word-orig').addEventListener('click', () => {
+  const info = selectedWord();
+  if (info) сделатьОтрезокПо(info.words[info.k].start, info.words[info.k].end);
+});
+$('btn-orig-del').addEventListener('click', () => удалитьОтрезок(editor.origSel));
+{
+  const ползунок = $('orig-gain');
+  /* История — один раз на всю тягу, а не на каждое движение: иначе
+     одна правка громкости съедала бы весь стек отмены. */
+  ползунок.addEventListener('pointerdown', () => { ползунок.dataset.тянут = ''; });
+  ползунок.addEventListener('input', () => {
+    const первый = !('тянули' in ползунок.dataset);
+    ползунок.dataset.тянули = '1';
+    поставитьГромкостьОтрезка(+ползунок.value, первый);
+  });
+  const конец = () => { delete ползунок.dataset.тянули; delete ползунок.dataset.тянут; };
+  ползунок.addEventListener('change', конец);
+  ползунок.addEventListener('blur', конец);
+  // Двойной щелчок — обратно к сотне, как у фейдера в монтажной
+  ползунок.addEventListener('dblclick', () => поставитьГромкостьОтрезка(1, true));
+}
 $('btn-sel-tap').addEventListener('click', () => {
   startTapMode(editor.sel >= 0 ? editor.sel : 0);
 });
@@ -7616,7 +7690,13 @@ function drawOrigLane(g, lane, W) {
 
     const крестик = w >= ORIG_DEL_W + 26;
     g.fillStyle = '#ffe4e6';
-    const txt = clipText(g, t('дорожка.оригинал'), w - 8 - (крестик ? ORIG_DEL_W : 0));
+    /* Громкость пишем прямо в блоке — и только когда она не сотня:
+       «оригинал · 60%» читается с одного взгляда, а «· 100%» у каждого
+       отрезка было бы шумом. Так же поступает Final Cut с уровнем клипа. */
+    const усиление = зажатьУсиление(s.усиление);
+    const подпись = Math.abs(усиление - 1) < 0.001 ? t('дорожка.оригинал')
+      : t('дорожка.оригинал.тише', { v: Math.round(усиление * 100) });
+    const txt = clipText(g, подпись, w - 8 - (крестик ? ORIG_DEL_W : 0));
     if (txt) g.fillText(txt, x0 + 4, lane.y + lane.h / 2);
     if (крестик) {
       // Крестик значком, а не символом текста: тот же набор, что и
@@ -8356,6 +8436,8 @@ function updateSelInfo() {
   panel.classList.toggle('empty', !sp);
   $('btn-sel-play').disabled = !sp;
   $('btn-sel-words').disabled = !sp;
+  // Отрезок оригинала делается по строке — значит, нужна выбранная строка
+  $('btn-sel-orig').disabled = !sp;
   $('btn-sel-del').disabled = !state.lines.length;
   const marked = !!(line && hasWords(line));
   // Подпись не меняется, меняется только галочка справа от неё (CSS,
@@ -8448,6 +8530,9 @@ function updateWordInfo() {
     loopBtn.disabled = !info;
     loopBtn.classList.toggle('on', editor.loop && editor.loopScope === 'word');
   }
+  // Отрезок оригинала делается по слову — значит, нужно выбранное слово
+  const origBtn = $('btn-word-orig');
+  if (origBtn) origBtn.disabled = !info;
 }
 
 /* Граница между словом idx−1 и словом idx — общая часть перетаскивания
@@ -8674,7 +8759,7 @@ function вставитьОтрезок(t) {
   const hi = i < spans.length ? spans[i].start - зазор : (audio.duration || Infinity);
   if (hi - lo < ОТРЕЗОК_МИН) return -1;
   const start = Math.min(Math.max(t, lo), hi - ОТРЕЗОК_МИН);
-  spans.splice(i, 0, { start, end: start });
+  spans.splice(i, 0, { start, end: start, усиление: 1 });
   return i;
 }
 
@@ -8684,7 +8769,102 @@ function удалитьОтрезок(i) {
   state.origSpans.splice(i, 1);
   editor.origSel = -1;
   saveProject();
+  audio.applyMix();   // под отрезком снова минусовка — и слышно это сразу
+  обновитьОтрезок();
   drawTimeline();
+}
+
+/* ---------- Громкость отрезка оригинала ----------
+
+   «Оставить оригинальный кусок, но потише» — то, ради чего у отрезка
+   появилась своя громкость. Тише становится весь кусок целиком:
+   внутри отрезка минусовка выключена, звучит одна оригинальная запись.
+
+   Всё, что здесь выставлено, уходит и в колонки, и в минусовку .wav,
+   и в видео: расписание у них одно на всех (см. расписатьОтрезки). */
+function выбранныйОтрезок() {
+  return state.origSpans[editor.origSel] || null;
+}
+
+function поставитьГромкостьОтрезка(v, сИсторией) {
+  const s = выбранныйОтрезок();
+  if (!s) return;
+  const было = зажатьУсиление(s.усиление);
+  const стало = зажатьУсиление(v);
+  if (Math.abs(было - стало) < 0.001) return;
+  if (сИсторией) pushHistory();
+  s.усиление = стало;
+  saveProject();
+  audio.applyMix();   // расписание пересчитывается на ходу, не дожидаясь перезапуска
+  обновитьОтрезок();
+  drawTimeline();
+}
+
+/* Отрезок оригинала ровно по куску [от, до] — это и есть «сделать эту
+   строку (или это слово) погромче или потише». Строка сама по себе
+   текст; тише становится кусок ЗАПИСИ под ней.
+
+   Кусок уже занят чужим отрезком — новый не плодим, а выбираем тот:
+   человеку нужен доступ к громкости, а не второй отрезок поверх. */
+function сделатьОтрезокПо(от, до) {
+  if (!(до > от + 0.01)) return -1;
+  const spans = state.origSpans;
+  const пересёк = spans.findIndex((s) => s.end > от + 0.001 && s.start < до - 0.001);
+  if (пересёк >= 0) {
+    editor.origSel = пересёк;
+    обновитьОтрезок();
+    drawTimeline();
+    return пересёк;
+  }
+  pushHistory();
+  spans.push({ start: от, end: до, усиление: 1 });
+  state.origSpans = нормОтрезки(spans, audio.duration);
+  state.отрезокБыл = true;
+  // После приведения в порядок номер мог сдвинуться — ищем по времени
+  const середина = (от + до) / 2;
+  editor.origSel = state.origSpans.findIndex((s) => s.start <= середина && s.end >= середина);
+  if (!dropEmptyHistory()) saveProject();
+  audio.applyMix();
+  обновитьОтрезок();
+  drawTimeline();
+  return editor.origSel;
+}
+
+/* Панель отрезка в инспекторе. Зовётся там, где меняется выбор или сам
+   отрезок, а не каждый кадр: это разметка, а не рисование. */
+function обновитьОтрезок() {
+  const поле = $('orig-sel');
+  if (!поле) return;
+  if (editor.origSel >= state.origSpans.length) editor.origSel = -1;
+  const s = выбранныйОтрезок();
+  писать(поле, s ? t('ред.отрезокОт', { 'от': fmtTimeMs(s.start), 'до': fmtTimeMs(s.end) })
+    : t('ред.отрезокНет'));
+  /* Дальше всё пишется ТОЛЬКО при настоящем изменении. Панель зовётся
+     из refreshTimes, то есть и по ходу воспроизведения, и во время
+     перетаскивания: безусловная запись в узел на каждом кадре — это
+     ровно та холостая работа, которую сторожит раздел кадрыРедактора. */
+  const ползунок = $('orig-gain');
+  const число = $('orig-gain-val');
+  const усиление = s ? зажатьУсиление(s.усиление) : 1;
+  if (ползунок) {
+    if (ползунок.disabled !== !s) ползунок.disabled = !s;
+    // Пока ползунок тянут, значение ему не навязываем: это его же ввод
+    if (document.activeElement !== ползунок) ставитьЗначение(ползунок, String(усиление));
+  }
+  if (число) {
+    писать(число, Math.round(усиление * 100) + '%');
+    класс(число, 'off', !s);
+  }
+  const убрать = $('btn-orig-del');
+  if (убрать && убрать.disabled !== !s) убрать.disabled = !s;
+  класс($('orig-panel'), 'empty', !s);
+}
+
+/* Класс без холостой записи: classList.toggle переписывает атрибут
+   даже когда набор классов от этого не меняется, а наблюдатель правок
+   считает это правкой (см. раздел кадрыРедактора). */
+function класс(el, имя, надо) {
+  if (el && el.classList.contains(имя) !== !!надо) el.classList.toggle(имя, !!надо);
 }
 
 /* ---------- Перетаскивание ---------- */

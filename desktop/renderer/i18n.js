@@ -601,6 +601,11 @@ I18N.EN = {
   'ред.простучать.подсказка': 'Tap this line and the ones after it again (with the spacebar)',
   'ред.удалить': 'delete',
   'ред.удалить.подсказка': 'Remove this line from the karaoke',
+  'ред.оригиналКнопка': 'original',
+  'ред.оригинал.строка.подсказка': 'Turn this line into an original stretch: the recording itself plays under it, with a level of its own',
+  'ред.оригинал.слово.подсказка': 'Turn this word into an original stretch: the recording itself plays under it, with a level of its own',
+  'ред.громкость.подсказка': 'How loud this stretch of the original is against the rest of the song. Double-click brings back 100 %. It goes into the .wav instrumental and into the video as well',
+  'ред.отрезок.убрать.подсказка': 'Remove this stretch — the instrumental plays under it again',
   'ред.слышу': 'hear the original',
   'ред.слова.заголовок': 'Word timing',
   'ред.слова.подсказка2': 'Hit <kbd>space</kbd> the moment each word starts. Esc cancels.',
@@ -1069,6 +1074,14 @@ I18N.СТРОКИ = {
   'ред.инсп.длина': { ru: 'длина', en: 'length' },
   'ред.словоНет': { ru: 'не выбрано', en: 'none' },
   'ред.строкаНет': { ru: 'не выбрана', en: 'none' },
+  /* Отрезок оригинала: кусок, где вместо минусовки звучит сама запись.
+     У каждого своя громкость — она уходит и в .wav, и в видео. */
+  'ред.окно.оригинал': { ru: 'Оригинал', en: 'Original' },
+  'ред.инсп.отрезок': { ru: 'отрезок', en: 'stretch' },
+  'ред.инсп.громкость': { ru: 'громкость', en: 'level' },
+  'ред.отрезокНет': { ru: 'не выбран', en: 'none' },
+  'ред.отрезокОт': { ru: '{от} → {до}', en: '{от} → {до}' },
+  'дорожка.оригинал.тише': { ru: 'оригинал · {v}%', en: 'original · {v}%' },
   'ред.номер': { ru: '№{n}', en: '#{n}' },
   'ред.сдвинуть.подсказка': {
     ru: 'Сдвинуть всю разметку на {v} с',
