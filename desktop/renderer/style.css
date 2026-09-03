@@ -1076,6 +1076,22 @@ body.is-desktop .steps-tool.only-desktop { display: inline-flex; }
   border-radius: 8px;
   border: 1px solid var(--border);
 }
+/* Главное действие шага. Порядок на первом шаге — это порядок работы,
+   но одного порядка мало: три одинаковые карточки читаются как три
+   равнозначных «необязательно». Та, с которой начинают (убрать вокал
+   нейросетью), не необязательная — у неё акцентная рамка и подложка,
+   и подпись под ней говорит, что дальше. */
+.bg-upload.key-action {
+  border-color: rgb(var(--accent-rgb) / 0.5);
+  background: rgb(var(--accent-rgb) / 0.07);
+}
+.key-step {
+  width: 100%;
+  margin: 0.1rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+.key-step b { color: var(--text); font-weight: 600; }
 .bg-upload-text { flex: 1; min-width: 180px; }
 .bg-upload-text b { display: block; }
 .bg-upload-text span { color: var(--text-dim); font-size: 0.85rem; }

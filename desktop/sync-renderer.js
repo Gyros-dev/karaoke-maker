@@ -45,7 +45,7 @@ const CSP_DESKTOP =
    не влияет (замерено), поэтому по умолчанию один, а переключатель
    убран в свёрнутое «Ещё варианты» без обещаний. Строку #ai-eta
    заполняет desktop.js: там считается, сколько это займёт. */
-const AI_BLOCK = `      <div class="bg-upload hidden" id="ai-block">
+const AI_BLOCK = `      <div class="bg-upload key-action hidden" id="ai-block">
         <div class="bg-upload-text">
           <b data-i18n="ии.заголовок">🧠 Убрать вокал нейросетью</b>
           <span data-i18n="ии.текст">Локальная модель UVR-MDX-NET-Inst_HQ_3 — та же, которой считает UVR5. Всё посчитается прямо на компьютере</span>
@@ -54,6 +54,9 @@ const AI_BLOCK = `      <div class="bg-upload hidden" id="ai-block">
           data-i18n-title="ии.кнопка.подсказка"
           title="Посчитать минусовку нейросетью прямо на этом компьютере. Песня никуда не отправляется">Убрать вокал</button>
         <p class="ai-eta" id="ai-eta"></p>
+        <p class="key-step" data-i18n-html="шаг1.порядок"><b>С этого начинают.</b>
+          Убрал вокал — и дальше на шаге «Текст» нейросеть расставит времена
+          по твоим строкам. Остальное на этом шаге необязательно.</p>
         <details class="ai-more">
           <summary data-i18n="ии.ещё">Ещё варианты</summary>
           <div class="ai-more-body">
@@ -182,10 +185,18 @@ function patchHtml(src) {
   // 3. Версии в путях к файлам не нужны — тут нет кэша браузера
   s = s.replace(/(href|src)="(style\.css|app\.js|i18n\.js|fft\.js|tempo\.js)\?v=[^"]*"/g, '$1="$2"');
 
-  // 4. Блок удаления вокала — после блока своей минусовки
-  const anchor = '        <input type="file" id="inst-input" accept="audio/*" hidden>\n      </div>\n';
+  /* 4. Блок удаления вокала — ПЕРЕД блоком своей минусовки.
+
+     Порядок на первом шаге — это порядок работы: сначала главное
+     действие (убрать вокал нейросетью), ниже запасной путь для тех,
+     у кого минусовка уже есть, и только потом картинка фона. Раньше
+     блок нейросети вставлялся третьим, и главное действие оказывалось
+     в самом низу карточки — его пролистывали. */
+  const anchor = '      <div class="bg-upload">\n'
+    + '        <div class="bg-upload-text">\n'
+    + '          <b data-i18n="шаг1.минусовка.заголовок">Своя минусовка</b>\n';
   if (!s.includes(anchor)) throw new Error('не нашёл блок «Своя минусовка»');
-  s = s.replace(anchor, anchor + AI_BLOCK);
+  s = s.replace(anchor, AI_BLOCK + anchor);
 
   // 5. Блок распознавания текста — перед полем текста песни
   const textAnchor = '    <textarea id="lyrics-input"';

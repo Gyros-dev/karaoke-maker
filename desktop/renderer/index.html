@@ -543,8 +543,8 @@
     найдёт, где какое слово поётся, и разложит по этим меткам твои строки. Времена
     строк и слов проставятся сами, простукивать ничего не нужно. Буквы остаются
     твоими: от нейросети берётся только время, а во времени она ошибается куда реже,
-    чем в буквах. Если текста под рукой нет, она напишет его и сама — но это уже
-    черновик, который придётся править.
+    чем в буквах. Точнее выходит, если сначала убрать вокал нейросетью: тогда она
+    слушает чистый голос, а не микс.
   </p>
   <p class="desktop-lead" data-i18n="настольная.локально">
     Всё считает твой компьютер, ничего не уходит в интернет.
@@ -787,27 +787,15 @@
            обновитьПотерюМинусовки в app.js). На сайте нейросети нет вовсе,
            и это условие там просто не сходится. -->
       <p class="voice-lost hidden" id="voice-lost"><svg class="icon" aria-hidden="true"><use href="#i-warn"></use></svg> <span data-i18n="шаг1.минусовкаПотеряна">Минусовка нейросети не сохраняется между запусками: сейчас звучит встроенное приглушение, и вокал в нём слышно. Убери вокал ещё раз — или загрузи свою минусовку файлом.</span></p>
-      <div class="bg-upload">
-        <img id="bg-preview" class="bg-preview hidden" alt="Фон караоке" data-i18n-alt="шаг1.фон.alt">
-        <div class="bg-upload-text">
-          <b data-i18n="шаг1.фон.заголовок">Фон для караоке</b>
-          <span data-i18n="шаг1.фон.текст">Необязательно: картинка будет под текстом во время пения</span>
-        </div>
-        <button class="btn btn-ghost btn-small" id="btn-bg-add" data-i18n-title="шаг1.фон.выбрать.подсказка" title="Выбрать картинку: она встанет под текстом на сцене караоке и попадёт в видео" data-i18n="минусовка.выбрать">Выбрать</button>
-        <button class="btn btn-ghost btn-small hidden" id="btn-bg-remove" data-i18n-title="шаг1.фон.убрать.подсказка" title="Убрать картинку — сцена вернётся к обычному фону" data-i18n="шаг1.убрать">Убрать</button>
-        <input type="file" id="bg-input" accept="image/*" hidden>
-      </div>
-      <div class="bg-upload">
-        <div class="bg-upload-text">
-          <b data-i18n="шаг1.минусовка.заголовок">Своя минусовка</b>
-          <span data-i18n="шаг1.минусовка.текст">Необязательно: готовый файл без вокала (например, из UVR5) — звучит заметно лучше встроенного приглушения</span>
-        </div>
-        <span class="inst-status hidden" id="inst-status" data-i18n="шаг1.минусовка.готова">✓ загружена</span>
-        <button class="btn btn-ghost btn-small" id="btn-inst-add" data-i18n-title="шаг1.минусовка.выбрать.подсказка" title="Выбрать готовый файл без вокала: он будет звучать вместо встроенного приглушения" data-i18n="минусовка.выбрать">Выбрать</button>
-        <button class="btn btn-ghost btn-small hidden" id="btn-inst-remove" data-i18n-title="шаг1.минусовка.убрать.подсказка" title="Убрать свою минусовку и вернуться к встроенному приглушению вокала" data-i18n="шаг1.убрать">Убрать</button>
-        <input type="file" id="inst-input" accept="audio/*" hidden>
-      </div>
-      <div class="bg-upload hidden" id="ai-block">
+      <!-- Порядок на первом шаге — это порядок работы. Сначала то, ради
+           чего сюда приходят: убрать вокал нейросетью. Ниже — запасной
+           путь для тех, у кого минусовка уже есть. Картинка фона стоит
+           последней: она украшение, а не шаг.
+
+           Раньше блок нейросети стоял третьим, после своей минусовки
+           и фона, — то есть главное действие оказывалось в самом низу
+           карточки, и его пролистывали. -->
+      <div class="bg-upload key-action hidden" id="ai-block">
         <div class="bg-upload-text">
           <b data-i18n="ии.заголовок">🧠 Убрать вокал нейросетью</b>
           <span data-i18n="ии.текст">Локальная модель UVR-MDX-NET-Inst_HQ_3 — та же, которой считает UVR5. Всё посчитается прямо на компьютере</span>
@@ -816,6 +804,9 @@
           data-i18n-title="ии.кнопка.подсказка"
           title="Посчитать минусовку нейросетью прямо на этом компьютере. Песня никуда не отправляется">Убрать вокал</button>
         <p class="ai-eta" id="ai-eta"></p>
+        <p class="key-step" data-i18n-html="шаг1.порядок"><b>С этого начинают.</b>
+          Убрал вокал — и дальше на шаге «Текст» нейросеть расставит времена
+          по твоим строкам. Остальное на этом шаге необязательно.</p>
         <details class="ai-more">
           <summary data-i18n="ии.ещё">Ещё варианты</summary>
           <div class="ai-more-body">
@@ -833,6 +824,26 @@
               найдётся, но по умолчанию — один проход.</p>
           </div>
         </details>
+      </div>
+      <div class="bg-upload">
+        <div class="bg-upload-text">
+          <b data-i18n="шаг1.минусовка.заголовок">Своя минусовка</b>
+          <span data-i18n="шаг1.минусовка.текст">Необязательно: готовый файл без вокала (например, из UVR5) — звучит заметно лучше встроенного приглушения</span>
+        </div>
+        <span class="inst-status hidden" id="inst-status" data-i18n="шаг1.минусовка.готова">✓ загружена</span>
+        <button class="btn btn-ghost btn-small" id="btn-inst-add" data-i18n-title="шаг1.минусовка.выбрать.подсказка" title="Выбрать готовый файл без вокала: он будет звучать вместо встроенного приглушения" data-i18n="минусовка.выбрать">Выбрать</button>
+        <button class="btn btn-ghost btn-small hidden" id="btn-inst-remove" data-i18n-title="шаг1.минусовка.убрать.подсказка" title="Убрать свою минусовку и вернуться к встроенному приглушению вокала" data-i18n="шаг1.убрать">Убрать</button>
+        <input type="file" id="inst-input" accept="audio/*" hidden>
+      </div>
+      <div class="bg-upload">
+        <img id="bg-preview" class="bg-preview hidden" alt="Фон караоке" data-i18n-alt="шаг1.фон.alt">
+        <div class="bg-upload-text">
+          <b data-i18n="шаг1.фон.заголовок">Фон для караоке</b>
+          <span data-i18n="шаг1.фон.текст">Необязательно: картинка будет под текстом во время пения</span>
+        </div>
+        <button class="btn btn-ghost btn-small" id="btn-bg-add" data-i18n-title="шаг1.фон.выбрать.подсказка" title="Выбрать картинку: она встанет под текстом на сцене караоке и попадёт в видео" data-i18n="минусовка.выбрать">Выбрать</button>
+        <button class="btn btn-ghost btn-small hidden" id="btn-bg-remove" data-i18n-title="шаг1.фон.убрать.подсказка" title="Убрать картинку — сцена вернётся к обычному фону" data-i18n="шаг1.убрать">Убрать</button>
+        <input type="file" id="bg-input" accept="image/*" hidden>
       </div>
       <div class="panel-actions">
         <button class="btn btn-ghost" id="btn-change-track" data-i18n-title="шаг1.другойФайл.подсказка" title="Загрузить другую песню. Текст, разметка и оформление останутся" data-i18n="шаг1.другойФайл">Другой файл</button>

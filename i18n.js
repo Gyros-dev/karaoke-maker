@@ -285,7 +285,7 @@ I18N.EN = {
   /* ---------- Настольная версия ---------- */
   'настольная.заголовок': 'Desktop version: two neural networks inside',
   'настольная.вокал': '<b>Remove the vocals.</b> In the browser the voice is ducked the simple way — fast, but reverb tails and backing vocals stay. The desktop version strips it out with the local UVR-MDX-NET-Inst_HQ_3 model — the very one UVR5 runs. The model downloads once, weighs 64 MB, and works offline afterwards.',
-  'настольная.текст': '<b>Time the lyrics.</b> Paste the lyrics and the Whisper model listens to the singing, finds where each word is sung, and lays your lines out on those marks. Line and word timings appear by themselves — no tapping needed. The words stay yours: only the timing comes from the network, and it gets timing wrong far less often than letters. If you don’t have the lyrics at hand it will write them out too — but that’s a draft you’ll need to edit.',
+  'настольная.текст': '<b>Time the lyrics.</b> Paste the lyrics and the Whisper model listens to the singing, finds where each word is sung, and lays your lines out on those marks. Line and word timings appear by themselves — no tapping needed. The words stay yours: only the timing comes from the network, and it gets timing wrong far less often than letters. It comes out better if you remove the vocals first: then the network hears a clean voice instead of a mix.',
   'настольная.локально': 'Your computer does all the work; nothing goes to the internet.',
   'настольная.мак': '🍎 Download for macOS',
   'настольная.виндоус': '🪟 Download for Windows',
@@ -354,6 +354,7 @@ I18N.EN = {
   'шаг1.фон.текст': 'Optional: the picture sits under the text while you sing',
   'шаг1.фон.alt': 'Karaoke background',
   'шаг1.убрать': 'Remove',
+  'шаг1.порядок': '<b>This is where you start.</b> Remove the vocals, and on the “Lyrics” step the network will time your own lines. Everything else on this step is optional.',
   'шаг1.минусовка.заголовок': 'Your own instrumental',
   'шаг1.минусовка.текст': 'Optional: a ready file with no vocals (from UVR5, say) — sounds much better than the built-in ducking',
   'шаг1.минусовка.готова': '✓ loaded',
