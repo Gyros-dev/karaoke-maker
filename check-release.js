@@ -102,6 +102,18 @@ function получить(url) {
   скажи(имена.includes(`Karaoke-Punch-${версия}-Windows-Setup.exe.blockmap`), 'блок-карта установщика');
   скажи(!релиз.draft && !релиз.prerelease, 'релиз не черновик и не предварительный');
 
+  /* «Последний выпуск» обязан быть выпуском ПРИЛОЖЕНИЯ. В хранилище
+     лежат и другие выпуски — зеркало весов модели, — и стоит забыть
+     пометить такой предварительным, как GitHub объявит последним его.
+     Автообновление ходит именно по ссылке releases/latest, и найдёт
+     там не latest.yml, а веса нейросети. */
+  const посл = await получить(`https://api.github.com/repos/${РЕПО}/releases/latest`);
+  if (посл.код === 200) {
+    const тег = JSON.parse(посл.тело.toString()).tag_name;
+    скажи(тег === `v${версия}`,
+      `«последний выпуск» — это приложение, а не что-то ещё (сейчас ${тег})`);
+  }
+
   if (имена.includes('latest.yml')) {
     const y = await получить(`https://github.com/${РЕПО}/releases/latest/download/latest.yml`);
     const текст = y.тело.toString();
