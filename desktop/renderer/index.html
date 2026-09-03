@@ -5,7 +5,7 @@
      и отсюда же — app.js, чтобы решить, показывать ли окно. В словаре
      перевода номера нет: там он однажды отстал, и при переключении
      на английский окно объявляло прошлую версию. -->
-<html lang="ru" data-news-version="1.19.0">
+<html lang="ru" data-news-version="1.20.0">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -89,13 +89,20 @@
     <span class="whatsnew-badge"><span class="dot"></span> <span data-i18n="новости.значок">Обновление</span></span>
     <h3 id="whatsnew-title" data-i18n="новости.заголовок">Что нового в версии {версия}</h3>
     <ul class="whatsnew-list">
-      <li data-i18n-html="новости.финал">
-        <b>🎉 После песни — похвала и счёт.</b> Спел — и караоке говорит
-        спасибо: случайная фраза из восьми десятков и счёт, который
-        бежит вверх к заведомо невозможной величине. С перебором
-        нарочно: «спел на 242 037 446 %» смешно именно тем, что так
-        не бывает. Хвалит на языке ПЕСНИ, а не студии: обращаются
-        к тому, кто только что стоял с микрофоном.
+      <li data-i18n-html="новости.финалВидео">
+        <b>🎬 Финал теперь и в видео — и тремя ударами.</b> Сначала
+        во весь экран вылетает надпись «Karaoke Punch», следом логотип,
+        и только потом поверх него встают похвала и счёт. Появления
+        резкие: не растворение, а удар — концерт не затухает, он ставит
+        точку. Всё это уходит и в записанное видео, а не только
+        на экран.
+      </li>
+      <li data-i18n-html="новости.финалПоСлову">
+        <b>Хвалят после последнего слова, а не после песни.</b> У песни
+        бывает проигрыш на полминуты, и всё это время певец стоял бы
+        с микрофоном и гадал, спел он или нет. Теперь похвала выходит
+        через три секунды после последнего слова, а музыка играет себе
+        дальше — так это и устроено в караоке.
       </li>
     </ul>
     <!-- Что было раньше. Список рос от выпуска к выпуску и дорос
@@ -107,6 +114,17 @@
          что был верхним, переезжает сюда под своим номером. -->
     <details class="whatsnew-old">
       <summary data-i18n="новости.раньше">Что было раньше</summary>
+      <h4 class="whatsnew-ver"><span data-i18n="новости.версияСлово">Версия</span> 1.19.0</h4>
+    <ul class="whatsnew-list">
+      <li data-i18n-html="новости.финал">
+        <b>🎉 После песни — похвала и счёт.</b> Спел — и караоке говорит
+        спасибо: случайная фраза из восьми десятков и счёт, который
+        бежит вверх к заведомо невозможной величине. С перебором
+        нарочно: «спел на 242 037 446 %» смешно именно тем, что так
+        не бывает. Хвалит на языке ПЕСНИ, а не студии: обращаются
+        к тому, кто только что стоял с микрофоном.
+      </li>
+    </ul>
       <h4 class="whatsnew-ver"><span data-i18n="новости.версияСлово">Версия</span> 1.18.0</h4>
     <ul class="whatsnew-list">
       <li data-i18n-html="новости.дуэты">
@@ -613,9 +631,9 @@
       <span class="hero-get-label" data-i18n="герой.скачать">Лучше — приложением: там нейросети убирают вокал и размечают текст</span>
       <span class="hero-get-buttons">
         <a class="btn btn-primary btn-small" id="dl-mac-hero" data-i18n="герой.мак"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.19.0/Karaoke-Punch-1.19.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.20.0/Karaoke-Punch-1.20.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
         <a class="btn btn-primary btn-small" id="dl-win-hero" data-i18n="герой.виндоус"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.19.0/Karaoke-Punch-1.19.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.20.0/Karaoke-Punch-1.20.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
       </span>
     </div>
     <div class="hero-note"><span class="pill" data-i18n="герой.приватно">100% приватно</span> <span data-i18n="герой.файлы">файлы не покидают твой компьютер</span></div>
@@ -666,9 +684,9 @@
   </p>
   <div class="desktop-buttons">
     <a class="btn btn-primary" id="dl-mac" data-i18n="настольная.мак"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.19.0/Karaoke-Punch-1.19.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.20.0/Karaoke-Punch-1.20.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
     <a class="btn btn-primary" id="dl-win" data-i18n="настольная.виндоус"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.19.0/Karaoke-Punch-1.19.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.20.0/Karaoke-Punch-1.20.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
   </div>
   <p class="desktop-note" data-i18n-html="настольная.заметка">
     Бесплатно и с открытым кодом. Каждая модель скачивается один раз при первом
