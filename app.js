@@ -9349,6 +9349,11 @@ function beginOrigDrag(hit, t) {
     создан = true;
   }
   editor.origSel = i;
+  /* Панель обязана ожить сразу по нажатию, а не когда-нибудь потом.
+     Без этой строчки отрезок выбирался (блок на дорожке подсвечивался),
+     а инспектор продолжал говорить «не выбран» с мёртвым ползунком —
+     и громкость выставить было нечем. */
+  обновитьОтрезок();
   editor.drag = { kind, i, создан, grabT: t, was: { ...state.origSpans[i] }, moved: false };
 }
 
@@ -9398,6 +9403,7 @@ function endOrigDrag() {
     editor.origSel = -1;
     dropEmptyHistory();
     if (!d.moved) seekTo(d.grabT);
+    обновитьОтрезок();
     drawTimeline();
     return;
   }
@@ -9408,6 +9414,7 @@ function endOrigDrag() {
   editor.origSel = state.origSpans.findIndex((x) => s && x.start <= s.start && x.end >= s.end);
   if (!dropEmptyHistory()) saveProject();
   audio.applyMix();   // расписание пересчитывается на ходу, не дожидаясь перезапуска
+  обновитьОтрезок();  // после слияния номер мог смениться — панель за ним
   drawTimeline();
 }
 
@@ -10399,7 +10406,7 @@ document.addEventListener('keydown', (e) => {
       if (editor.loop) { e.preventDefault(); setLoop(false); }
       else if (editor.range) { e.preventDefault(); снятьДиапазон(); }
       else if (editor.wordSel >= 0) { e.preventDefault(); editor.wordSel = -1; updateWordInfo(); drawTimeline(); }
-      else if (editor.origSel >= 0) { editor.origSel = -1; drawTimeline(); }
+      else if (editor.origSel >= 0) { editor.origSel = -1; обновитьОтрезок(); drawTimeline(); }
       break;
     case 'Equal':
     case 'NumpadAdd': e.preventDefault(); zoomTimeline(1.5); break;
