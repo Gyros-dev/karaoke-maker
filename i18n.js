@@ -89,9 +89,17 @@ const I18N = (function () {
     return множественные[язык].select(n);
   }
 
-  /* Значение ключа на текущем языке. Для разметки английский лежит
-     в EN, русский приходит из документа (аргумент «русский»). */
-  function значение(ключ, русский) {
+  /* Значение ключа. Для разметки английский лежит в EN, русский
+     приходит из документа (аргумент «русский»).
+
+     Обычно отвечаем на языке интерфейса, но иногда нужен другой:
+     похвала после песни звучит на языке ПЕСНИ, а не студии (см. финал
+     в app.js). Для этого есть необязательный третий довод. */
+  function значение(ключ, русский, наЯзыке) {
+    return значениеНа(ключ, русский, наЯзыке || язык);
+  }
+
+  function значениеНа(ключ, русский, язык) {
     const своя = I18N.СТРОКИ[ключ];
     if (своя) return своя[язык] !== undefined ? своя[язык] : своя.ru;
     if (язык === 'en') {
@@ -112,8 +120,8 @@ const I18N = (function () {
 
   /* Главная функция. t('ключ') — строка из СТРОК на текущем языке;
      t('ключ', { n: 5 }) — она же с подстановкой и нужной формой. */
-  function t(ключ, парам) {
-    let v = значение(ключ, ключ);
+  function t(ключ, парам, наЯзыке) {
+    let v = значение(ключ, ключ, наЯзыке);
     if (v && typeof v === 'object') {
       const n = парам && парам.n;
       v = v[форма(Number(n) || 0)] !== undefined
@@ -188,6 +196,184 @@ const I18N = (function () {
     СТРОКИ: {},    // код: ключ → { ru, en }
   };
 })();
+
+/* ============================================================
+   ПОХВАЛА ПОСЛЕ ПЕСНИ
+
+   Список, а не словарь, — и язык здесь ПО ПЕСНЕ, а не по интерфейсу.
+   Пел человек по-русски — хвалим по-русски, даже если студия у него
+   английская: похвала обращена к тому, кто только что стоял
+   с микрофоном, и звучать она должна на языке, на котором он пел.
+   Какой это язык, решает алфавит текста (см. языкПесни в app.js).
+
+   Фразы намеренно разные по тону: от тихого «спасибо» до «это было
+   ОГОНЬ». Выпадает случайная — иначе на третьей песне её перестают
+   читать.
+   ============================================================ */
+I18N.ПОХВАЛЫ = {
+  ru: [
+    'Браво! Это было великолепно!',
+    'Спасибо за этот момент! Ты лучший!',
+    'Браво! Спасибо за прекрасное исполнение!',
+    'Спасибо за выступление! Это было круто!',
+    'Браво! Ты сделал это потрясающе!',
+    'Спасибо, что поделился своим голосом!',
+    'Браво! Спасибо за такую красоту!',
+    'Спасибо за исполнение! Было великолепно!',
+    'Браво! Это было незабываемо!',
+    'Спасибо за музыку и настроение!',
+    'Браво! Ты настоящий артист!',
+    'Спасибо, что подарил нам эту песню!',
+    'Браво! Было очень круто!',
+    'Спасибо, что спел для нас. Ты лучший! \u2764\uFE0F',
+    'Браво! Спасибо, что подарил нам этот момент!',
+    'Спасибо за твой голос и твоё настроение!',
+    'Браво! Слушать тебя — одно удовольствие!',
+    'Спасибо за такую душевную песню!',
+    'Браво! Ты сделал этот вечер особенным!',
+    'Спасибо, что вышел к микрофону и зажёг!',
+    'Браво! Спасибо за эмоции!',
+    'Спасибо за прекрасное исполнение. Это было от души!',
+    'Браво! Спасибо, что поделился своей энергией!',
+    'Спасибо за песню! Было тепло, красиво и очень круто.',
+    'Браво! Спасибо за этот маленький концерт!',
+    'Спасибо, что сделал наш вечер ярче!',
+    'Браво! Твой голос сегодня звучал особенно прекрасно!',
+    'БРАВО! Спасибо, это было ОГОНЬ! \u{1F525}',
+    'Спасибо за разрыв! Браво!',
+    'Браво! Ты просто зажёг сцену!',
+    'Спасибо за такое мощное выступление!',
+    'Браво! Вот это подача!',
+    'Спасибо за этот вокальный пожар! \u{1F525}',
+    'Браво! Ты устроил настоящее шоу!',
+    'Спасибо! Это было невероятно мощно!',
+    'Браво! Вот так надо петь!',
+    'Спасибо за энергию! Ты был великолепен!',
+    'Браво! Сцена точно была твоей!',
+    'Спасибо за такой драйв!',
+    'Браво! Ты сегодня настоящая рок-звезда!',
+    'Спасибо за выступление! Это было на высшем уровне!',
+    'Браво! Спасибо за выступление — это было великолепно!',
+    'Спасибо за песню! Ты настоящий талант!',
+    'Браво! Спасибо, что подарил нам своё лучшее исполнение!',
+    'Спасибо за этот невероятный вокал! Браво!',
+    'Браво! Ты сделал эту песню своей!',
+    'Спасибо за выступление! Ты был великолепен!',
+    'Браво! Спасибо за настоящее музыкальное удовольствие!',
+    'Спасибо, что спел! Ты определённо умеешь зажечь публику!',
+    'Браво! Спасибо за такой прекрасный перформанс!',
+    'Спасибо за песню! Ещё долго будем её вспоминать!',
+    'Браво! Ты только что подарил нам отличный концерт!',
+    'Спасибо за голос, эмоции и настроение!',
+    'Браво! Спасибо за незабываемое исполнение!',
+    'Спасибо! Это было настолько хорошо, что хочется ещё!',
+    'Браво! Спасибо, микрофон тобой гордится!',
+    'Спасибо за песню! Браво, микрофон теперь можно передавать следующему артисту!',
+    'Браво! Спасибо за такой вокальный шедевр!',
+    'Спасибо! Браво! Где твой сольный концерт?',
+    'Браво! Спасибо за выступление — публика требует ещё!',
+    'Спасибо за песню! Браво, звезда родилась! \u2B50',
+    'Браво! Спасибо! Кажется, нам пора выпускать твой альбом.',
+    'Спасибо за выступление! Браво, сцена тебя запомнила!',
+    'Браво! Спасибо за прекрасный концерт длиной в одну песню!',
+    'Спасибо! Браво! Грамми где-то рядом. \u{1F3C6}',
+    'Браво! Спасибо за шоу! На бис!',
+    'Спасибо за этот вокальный шедевр! Браво!',
+    'Браво! Спасибо, что сделал караоке немного прекраснее!',
+    'Спасибо за песню! Браво — сегодня ты звезда!',
+    'Браво! Спасибо, что спел! Karaoke Punch гордится тобой!',
+    'Спасибо за песню! Браво, ты настоящий Karaoke Punch!',
+    'Браво! Спасибо за этот вокальный удар!',
+    'Спасибо за выступление! Ты только что сделал настоящий Punch!',
+    'Браво! Спасибо, что устроил такой Punch-концерт!',
+    'Спасибо за голос! Браво — это было мощно!',
+    'Браво! Спасибо за песню. Удар получился! \u{1F44A}\u{1F3A4}',
+    'Спасибо за выступление! Punch одобряет. Браво!',
+    'Браво! Спасибо, что спел от души!',
+    'Спасибо за этот Punch-момент! Браво!',
+  ],
+  en: [
+    'Bravo! That was magnificent!',
+    'Thank you for this moment! You are the best!',
+    'Bravo! Thank you for a beautiful performance!',
+    'Thanks for the show! That was awesome!',
+    'Bravo! You absolutely nailed it!',
+    'Thank you for sharing your voice!',
+    'Bravo! Thank you for something that lovely!',
+    'Thanks for singing! It was magnificent!',
+    'Bravo! That was unforgettable!',
+    'Thank you for the music and the mood!',
+    'Bravo! You are a true performer!',
+    'Thank you for giving us this song!',
+    'Bravo! That was really something!',
+    'Thanks for singing for us. You are the best! \u2764\uFE0F',
+    'Bravo! Thank you for giving us this moment!',
+    'Thank you for your voice and your spirit!',
+    'Bravo! Listening to you is pure pleasure!',
+    'Thank you for a song with so much heart!',
+    'Bravo! You made this evening special!',
+    'Thanks for stepping up to the mic and lighting it up!',
+    'Bravo! Thank you for the feeling!',
+    'Thank you for a beautiful performance. Straight from the heart!',
+    'Bravo! Thank you for sharing your energy!',
+    'Thanks for the song! Warm, beautiful and very cool.',
+    'Bravo! Thank you for this little concert!',
+    'Thank you for making our evening brighter!',
+    'Bravo! Your voice sounded especially good tonight!',
+    'BRAVO! Thank you, that was FIRE! \u{1F525}',
+    'Thanks for tearing it up! Bravo!',
+    'Bravo! You set the stage alight!',
+    'Thank you for a performance that powerful!',
+    'Bravo! What a delivery!',
+    'Thank you for that vocal blaze! \u{1F525}',
+    'Bravo! You put on a real show!',
+    'Thank you! That was incredibly powerful!',
+    'Bravo! That is how it is done!',
+    'Thank you for the energy! You were magnificent!',
+    'Bravo! That stage was definitely yours!',
+    'Thank you for the drive!',
+    'Bravo! You are a proper rock star tonight!',
+    'Thanks for the show! That was top class!',
+    'Bravo! Thank you for the performance — it was magnificent!',
+    'Thanks for the song! You are a real talent!',
+    'Bravo! Thank you for giving us your very best!',
+    'Thank you for that incredible vocal! Bravo!',
+    'Bravo! You made that song your own!',
+    'Thanks for the show! You were magnificent!',
+    'Bravo! Thank you for real musical pleasure!',
+    'Thanks for singing! You certainly know how to work a room!',
+    'Bravo! Thank you for such a beautiful performance!',
+    'Thanks for the song! We will be remembering it for a while!',
+    'Bravo! You just gave us a great concert!',
+    'Thank you for the voice, the feeling and the mood!',
+    'Bravo! Thank you for an unforgettable performance!',
+    'Thank you! That was so good it makes us want more!',
+    'Bravo! Thank you, the microphone is proud of you!',
+    'Thanks for the song! Bravo — the mic may now be passed on!',
+    'Bravo! Thank you for that vocal masterpiece!',
+    'Thank you! Bravo! Where is your solo concert?',
+    'Bravo! Thanks for the show — the crowd wants more!',
+    'Thanks for the song! Bravo, a star is born! \u2B50',
+    'Bravo! Thank you! It might be time to release your album.',
+    'Thanks for the show! Bravo, the stage will remember you!',
+    'Bravo! Thank you for a wonderful one-song concert!',
+    'Thank you! Bravo! A Grammy is somewhere nearby. \u{1F3C6}',
+    'Bravo! Thanks for the show! Encore!',
+    'Thank you for that vocal masterpiece! Bravo!',
+    'Bravo! Thank you for making karaoke a little more beautiful!',
+    'Thanks for the song! Bravo — tonight you are the star!',
+    'Bravo! Thanks for singing! Karaoke Punch is proud of you!',
+    'Thanks for the song! Bravo, you are a real Karaoke Punch!',
+    'Bravo! Thank you for that vocal punch!',
+    'Thanks for the show! You just landed a real Punch!',
+    'Bravo! Thank you for a Punch of a concert!',
+    'Thank you for the voice! Bravo — that was powerful!',
+    'Bravo! Thanks for the song. The punch landed! \u{1F44A}\u{1F3A4}',
+    'Thanks for the show! Punch approves. Bravo!',
+    'Bravo! Thank you for singing from the heart!',
+    'Thank you for that Punch of a moment! Bravo!',
+  ],
+};
 
 window.I18N = I18N;
 window.t = I18N.t;
@@ -880,6 +1066,25 @@ I18N.СТРОКИ = {
      а не в словаре разметки. На сайте у тех же кнопок свои подписи —
      там .kpunch и есть единственный способ сохраниться, и зовётся
      он черновиком. */
+  /* Финал песни. Язык здесь по ПЕСНЕ, а не по студии (см. финал
+     в app.js): благодарят того, кто только что пел. */
+  'финал.подпись': {
+    ru: 'Точность попадания в ноты и в слова — по нашим самым щедрым подсчётам',
+    en: 'Accuracy on the notes and the words — by our most generous reckoning',
+  },
+  'финал.ещё': { ru: 'Спеть ещё раз', en: 'Sing it again' },
+  'финал.закрыть': { ru: 'Закрыть', en: 'Close' },
+  /* Подписи кнопок идут за языком ПЕСНИ — их переписывает финал.
+     А подсказки остаются на языке студии: они для того, кто ведёт
+     вечер, а не для того, кто только что пел. */
+  'финал.ещё.подсказка': {
+    ru: 'Начать эту же песню сначала',
+    en: 'Start the same song from the beginning',
+  },
+  'финал.закрыть.подсказка': {
+    ru: 'Убрать похвалу и вернуться к сцене',
+    en: 'Dismiss the praise and go back to the stage',
+  },
   'черновик.разметка': {
     ru: 'Сохранить разметку файлом',
     en: 'Save the timing to a file',

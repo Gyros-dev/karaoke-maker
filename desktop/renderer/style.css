@@ -856,6 +856,61 @@ body.is-desktop .steps-tool-group {
 /* Короткий ответ на «сохранить»: кнопка на секунду становится галочкой
    в цвете темы. Окошком «сохранено» отвечать нельзя — Cmd+S жмут часто,
    и закрывать окно пришлось бы каждый раз. */
+/* ============ Финал песни ============
+   Похвала и счёт после последней строки. Лежит поверх сцены и накрывает
+   её целиком: в этот момент показывать больше нечего — песня кончилась.
+   Цифра нарочно огромная и набрана моноширинным: пока она бежит вверх,
+   строка не должна дёргаться от разной ширины цифр. */
+.finale {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+  background: radial-gradient(ellipse at center,
+    rgba(10, 10, 15, 0.86) 0%, rgba(6, 6, 10, 0.96) 70%);
+  backdrop-filter: blur(3px);
+  animation: finaleIn 0.4s ease-out;
+}
+@keyframes finaleIn { from { opacity: 0; } }
+.finale-box { max-width: 90%; }
+.finale-praise {
+  font-size: clamp(1.1rem, 3.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+  margin-bottom: 0.9rem;
+  text-wrap: balance;
+}
+.finale-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.15em;
+  font-family: var(--font-num, ui-monospace, monospace);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent-solid);
+  text-shadow: 0 0 28px rgb(var(--accent-rgb) / 0.45);
+}
+.finale-num { font-size: clamp(1.8rem, 7vw, 4.5rem); font-variant-numeric: tabular-nums; }
+.finale-unit { font-size: clamp(1rem, 3vw, 2rem); opacity: 0.8; }
+.finale-sub {
+  margin-top: 0.7rem;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+.finale-acts { margin-top: 1.4rem; display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
+/* Пока цифра бежит, она чуть «дышит» — но только если человек
+   не просил меньше движения */
+@media (prefers-reduced-motion: no-preference) {
+  .finale.бежит .finale-score { animation: finalePulse 0.6s ease-in-out infinite alternate; }
+}
+@keyframes finalePulse { to { transform: scale(1.04); } }
+
 /* ============ Дуэт ============
    Партия строки видна в трёх местах сразу: в списке строк (полоска
    слева), на дорожке (цвет блока) и на сцене (цвет текста). Выбирается
