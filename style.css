@@ -876,7 +876,42 @@ body.is-desktop .steps-tool-group {
   animation: finaleIn 0.4s ease-out;
 }
 @keyframes finaleIn { from { opacity: 0; } }
-.finale-box { max-width: 90%; }
+/* Три удара финала. Каждый появляется СРАЗУ и целиком, но с коротким
+   перелётом по размеру: влетает чуть крупнее и за полторы десятых
+   доезжает до своего. Растворение читалось бы как «плавно кончается»,
+   а нужно обратное — точка, а не затухание. */
+@keyframes finaleУдар { from { transform: scale(1.28); } to { transform: scale(1); } }
+.finale-brand,
+.finale-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  display: none;
+}
+.finale-brand {
+  width: 84%;
+  text-align: center;
+  font-family: var(--font-brand-shade), Impact, sans-serif;
+  font-size: clamp(1.6rem, 11vw, 9rem);
+  line-height: 1;
+  color: #fff;
+  white-space: nowrap;
+}
+.finale-logo { width: auto; height: 62%; object-fit: contain; }
+.finale.знак .finale-brand { display: block; animation: finaleУдар 0.16s cubic-bezier(0.2, 0.9, 0.3, 1); }
+.finale.лого .finale-logo { display: block; animation: finaleУдар 0.16s cubic-bezier(0.2, 0.9, 0.3, 1); }
+/* Третий удар: логотип остаётся подложкой, поверх него встают
+   похвала и счёт — «поверх этого», как и задумано */
+.finale.счёт .finale-logo { display: block; opacity: 0.28; }
+.finale.счёт .finale-box { animation: finaleУдар 0.16s cubic-bezier(0.2, 0.9, 0.3, 1); }
+.finale .finale-box { display: none; }
+.finale.счёт .finale-box { display: block; }
+@media (prefers-reduced-motion: reduce) {
+  .finale-brand, .finale-logo, .finale-box { animation: none !important; }
+}
+
+.finale-box { max-width: 90%; position: relative; }
 .finale-praise {
   font-size: clamp(1.1rem, 3.2vw, 2rem);
   font-weight: 700;

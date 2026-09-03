@@ -1261,6 +1261,12 @@
                по языку ПЕСНИ, а не интерфейса: обращаются к тому, кто
                только что пел (см. языкПесни в app.js). -->
           <div class="finale hidden" id="finale" role="status" aria-live="polite">
+            <!-- Финал идёт тремя ударами: сначала во весь экран надпись,
+                 следом логотип, и только потом поверх него похвала
+                 и счёт. Появления резкие — не растворение, а удар:
+                 концерт не затухает, он ставит точку. -->
+            <div class="finale-brand" id="finale-brand" aria-hidden="true">Karaoke Punch</div>
+            <img class="finale-logo" id="finale-logo" src="watermark.png" alt="" aria-hidden="true">
             <div class="finale-box">
               <div class="finale-praise" id="finale-praise"></div>
               <div class="finale-score">
