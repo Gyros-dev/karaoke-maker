@@ -11,3 +11,6 @@ desktop/dist/
 
 # Служебное
 .claude/
+
+# Временная папка для запуска сборки в виртуалке Windows (см. README)
+.wintest/
