@@ -3369,6 +3369,10 @@ body.is-desktop .site-header .footer-link {
 }
 .hero-get-label { color: var(--text-dim); font-size: 0.92rem; }
 .hero-get-buttons { display: flex; gap: 0.8rem; flex-wrap: wrap; justify-content: center; }
+/* Браузерная студия — запасной путь, а не главный: обычная кнопка
+   с обводкой под парой крупных «скачать». Отделена сверху чертой
+   расстояния, чтобы не читалась как третья кнопка того же ряда. */
+.hero-browser { margin-top: 0.4rem; }
 
 /* --- Распознавание текста песни (только в приложении) --- */
 .asr-block {

@@ -471,8 +471,8 @@ I18N.EN = {
   /* ---------- Первый экран ---------- */
   'герой.заголовок': 'Turn any song<br><span class="grad-text">into karaoke</span>',
   'герой.подзаголовок': 'Load a song — the studio ducks the vocals, helps you time the lyrics line by line and word by word, and runs karaoke with word-level highlighting. Nothing is uploaded anywhere: it all happens on your device.',
-  'герой.кнопка': 'Make karaoke →',
-  'герой.скачать': 'Better with the app: neural networks remove the vocals and time the lyrics',
+  'герой.вБраузере': 'Make karaoke in the browser (beta)',
+  'герой.скачать': 'Neural networks remove the vocals and time the lyrics — right on your computer',
   'герой.мак': '🍎 Download for macOS',
   'герой.виндоус': '🪟 Download for Windows',
   'герой.приватно': '100% private',
