@@ -7578,6 +7578,40 @@ function createWindow() {
         }
       })`);
 
+      /* Системное окно не должно уносить клавиатуру с собой.
+
+         Беда, из-за которой раздел заведён, держалась четыре выпуска:
+         «на Windows после подгонки текста ничего не напечатать — мышь
+         работает, текст выделяется, буквы не идут». Разгадку дал сам
+         человек: «если текст не подгонять, редактировать можно». Разница
+         ровно одна — подгонка кончается сообщением с итогом, обычным
+         alert. На Windows это настоящее окно системы: закрыл его, окно
+         приложения фокус получило, а страница внутри — нет.
+
+         Проверяем не фокус (со скрытым окном его не спросишь честно),
+         а то, что каждое системное окно ПРОХОДИТ через возврат
+         клавиатуры: alert, confirm и prompt обёрнуты, и обёртка зовёт
+         вернутьКлавиатуру. Снимут обёртку — раздел покраснеет. */
+      report.окнаВозвращаютКлавиатуру = await win.webContents.executeJavaScript(`__раздел('окнаВозвращаютКлавиатуру', () => {
+        /* Настоящие alert и confirm звать нельзя: посреди прогона на экране
+           у человека всплыло бы окно, а заглушки самопроверки стоят поверх
+           обёртки и до неё не дошли бы. Проверяем саму обёртку — на
+           пустышке, считая по настоящему счётчику внутри возврата. */
+        const доТого = window.__клавиатураВозвращена || 0;
+        const пустышка = window.__обернутьОкно
+          ? window.__обернутьОкно(() => 'ы') : null;
+        const ответ = пустышка ? пустышка('проба') : null;
+        const было = { всего: (window.__клавиатураВозвращена || 0) - доТого };
+        const обёрнуты = window.__окнаОбёрнуты || [];
+        return {
+          вызовов: было.всего, ответ, обёрнуты,
+          /* Обёртка обязана вернуть ответ окна нетронутым (иначе «да»
+             и «нет» перестанут различаться) и вернуть клавиатуру. */
+          вНорме: было.всего === 1 && ответ === 'ы'
+            && ['alert', 'confirm', 'prompt'].every((и) => обёрнуты.includes(и)),
+        };
+      })`);
+
       /* Витрины сайта в приложении не видно НИ МИГА.
 
          Жалоба повторялась трижды: «при открытии приложения на секунду
@@ -8642,7 +8676,7 @@ ipcMain.handle('auto-update-install', () => {
 });
 
 ipcMain.handle('save-file', async (_evt, { name, data }) => {
-  const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: name });
+  const { canceled, filePath } = await сОкном(() => dialog.showSaveDialog(win, { defaultPath: name }));
   if (canceled || !filePath) return { ok: false };
   fs.writeFileSync(filePath, Buffer.from(data));
   return { ok: true, path: filePath };
@@ -8670,11 +8704,11 @@ function имяВПапкеЧистое(имя) {
 }
 
 ipcMain.handle('project-pick', async (_evt, defaultName) => {
-  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+  const { canceled, filePath } = await сОкном(() => dialog.showSaveDialog(win, {
     title: языкМеню === 'ru' ? 'Сохранить проект' : 'Save the project',
     defaultPath: typeof defaultName === 'string' ? defaultName : 'проект.karaokeproj',
     buttonLabel: языкМеню === 'ru' ? 'Сохранить' : 'Save',
-  });
+  }));
   if (canceled || !filePath) return { ok: false };
   return { ok: true, path: filePath };
 });
@@ -8683,6 +8717,20 @@ ipcMain.handle('project-pick', async (_evt, defaultName) => {
    окно при этом никуда не уходило, и обработчики win.on('focus')
    не срабатывали, а фокус на Windows остаётся у окна, не доходя
    до страницы. Со стороны это «текст не редактируется». */
+/* Системное окно из главного процесса — та же ловушка, что и alert
+   на странице: на Windows окно приложения фокус возвращает, а страница
+   внутри него нет. Поэтому каждый вызов диалога проходит через эту
+   обёртку: показали, дождались, вернули клавиатуру странице. */
+async function сОкном(показать) {
+  try {
+    return await показать();
+  } finally {
+    if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+      win.webContents.focus();
+    }
+  }
+}
+
 ipcMain.handle('focus-page', () => {
   if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return { ok: false };
   /* Окно не поднимаем: человек мог уйти в другую программу, пока
@@ -8775,11 +8823,11 @@ ipcMain.handle('project-write', async (_evt, { dir, files }) => {
 });
 
 ipcMain.handle('project-open-pick', async () => {
-  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+  const { canceled, filePaths } = await сОкном(() => dialog.showOpenDialog(win, {
     title: языкМеню === 'ru' ? 'Открыть проект' : 'Open a project',
     properties: ['openDirectory'],
     buttonLabel: языкМеню === 'ru' ? 'Открыть' : 'Open',
-  });
+  }));
   if (canceled || !filePaths || !filePaths[0]) return { ok: false };
   const п = filePaths[0];
   return { ok: true, path: п, name: path.basename(п).replace(/\.[^.]+$/, '') };
