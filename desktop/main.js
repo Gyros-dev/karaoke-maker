@@ -312,6 +312,16 @@ function createWindow() {
     minWidth: 900,
     minHeight: 640,
     backgroundColor: '#0a0a0f',
+    /* Окно НЕ показываем сразу. Пока страница не готова, показывать
+       нечего: Electron открывает окно тут же, и первые кадры человек
+       видит какими получится — на быстрой машине это незаметно, на
+       Windows человек дважды написал «на секунду появляется вид сайта».
+       Спорить о том, что именно мелькнуло, бессмысленно: правильный
+       порядок — сперва страница, потом окно. Показываем по ready-to-show
+       (так это и задумано в Electron), а если событие почему-то
+       не придёт — по сторожевому таймеру ниже, чтобы приложение
+       не осталось невидимым вовсе. */
+    show: false,
     title: 'Karaoke Punch',
     /* Полосы меню над интерфейсом быть не должно. autoHideMenuBar здесь
        не годится: с ним полосу открывает одиночный Alt, а Alt у нас —
@@ -341,7 +351,26 @@ function createWindow() {
      ничего не делает. На macOS maximize() растягивает окно по рабочей
      области, не уводя его в полноэкранный режим. */
   win.maximize();
-  win.once('ready-to-show', () => { if (!win.isMaximized()) win.maximize(); });
+
+  /* Показ окна — ровно один раз, кто первый: событие готовности или
+     сторож. Сторож нужен потому, что ready-to-show не приходит, если
+     страница не отрисовалась (сломался протокол, не нашёлся файл),
+     а невидимое приложение хуже мелькнувшего: человек решит, что оно
+     не запускается вовсе. Полторы секунды — с запасом: на этой машине
+     страница готова за 0,8 с. Самопроверке и щупу окно не показываем:
+     они работают со скрытым окном нарочно. */
+  const тихийЗапуск = !!(process.env.KARAOKE_SELFTEST || process.env.KARAOKE_PROBE);
+  let показали = тихийЗапуск;
+  const показать = () => {
+    if (показали || !win || win.isDestroyed()) return;
+    показали = true;
+    if (!win.isMaximized()) win.maximize();
+    win.show();
+    win.webContents.focus();
+  };
+  win.once('ready-to-show', показать);
+  const сторож = setTimeout(показать, 1500);
+  win.on('closed', () => clearTimeout(сторож));
 
   /* Вернулись в окно — вернуть клавиатуру СТРАНИЦЕ.
 
@@ -363,6 +392,44 @@ function createWindow() {
       win.webContents.focus();
     }
   };
+  /* Что видно в первую секунду после запуска: KARAOKE_SHOTS=<путь-без-
+     расширения>. Имя переменной латиницей нарочно: zsh не отдаёт
+     процессу переменные с кириллицей в имени — на этом уже спотыкались. Снимает окно очередью с самого начала загрузки и пишет
+     кадры <путь>-0.png, -1.png…
+
+     Заведено по жалобе «при открытии приложения на секунду появляется
+     изображение сайта». На глаз это не поймать, а спорить о том, что
+     мелькнуло, бессмысленно: надо смотреть кадры. */
+  if (process.env.KARAOKE_SHOTS) {
+    const путь = process.env.KARAOKE_SHOTS;
+    win.webContents.on('did-start-loading', async () => {
+      /* Окно НЕ показываем сами: смысл снимков в том, чтобы увидеть
+         запуск таким, каким его видит человек, — включая момент,
+         когда окна ещё нет на экране. */
+      for (let к = 0; к < 14; к++) {
+        try {
+          const снимок = await win.webContents.capturePage();
+          const байты = снимок.toPNG();
+          if (байты.length) fs.writeFileSync(`${путь}-${String(к).padStart(2, '0')}.png`, байты);
+          const что = await win.webContents.executeJavaScript(`(() => {
+            const h = document.querySelector('.hero');
+            const s = document.querySelector('.studio');
+            return {
+              мс: Math.round(performance.now()),
+              стилей: document.styleSheets.length,
+              классБоди: document.body ? document.body.className : '(нет body)',
+              герой: h ? getComputedStyle(h).display : '(нет)',
+              студия: s ? getComputedStyle(s).display : '(нет)',
+              шаг: [...document.querySelectorAll('.step-panel.active')].map((p) => p.id).join(),
+            };
+          })()`).catch(() => null);
+          console.log('КАДР', к, 'видно=' + win.isVisible(), JSON.stringify(что));
+        } catch (e) { console.log('КАДР', к, 'сбой ' + ((e && e.message) || e)); }
+        await new Promise((r) => setTimeout(r, 90));
+      }
+      app.quit();
+    });
+  }
   win.on('focus', вернутьФокусСтранице);
   win.on('restore', вернутьФокусСтранице);
   win.on('show', вернутьФокусСтранице);
