@@ -3607,6 +3607,15 @@ $('btn-to-editor').addEventListener('click', кРедактору);
 function applyRecognized(lines) {
   const src = window.__asrLines;
   if (!src || !src.length) return;
+  /* Разметку принесли заново — дорожку надо показать ЦЕЛИКОМ.
+
+     Беда, которую это лечит: нейросеть иногда ставит хвост песни туда,
+     где его не видно при обычном увеличении, — а человек про эти строки
+     и не знает. Он видит, что размечено сорок пять строк, находит сорок
+     одну и считает, что остальные пропали. Так и было: строки лежали
+     у самого правого края, и найти их можно было только кнопкой
+     «вся песня». Показываем всю песню сами. */
+  editor.показатьВсё = true;
   lines.forEach((line, i) => {
     const r = src[i];
     if (!r || r.text !== line.text) return;
@@ -6483,6 +6492,14 @@ function openEditor() {
   пер.disabled = !state.instrumentalBuffer;
   обновитьПодписиРедактора();
   resizeTimeline();
+  /* Свежая разметка — вся песня в окне: см. applyRecognized. Признак
+     одноразовый, дальше человек двигает и приближает сам. */
+  if (editor.показатьВсё) {
+    editor.показатьВсё = false;
+    const { W } = timelineDims();
+    editor.pxPerSec = Math.max(4, W / Math.max(1, audio.duration || 1));
+    editor.scrollT = 0;
+  }
   $('edit-total').textContent = fmtTimeCs(audio.duration);
   drawTimeline();
 

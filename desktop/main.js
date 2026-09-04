@@ -7444,6 +7444,49 @@ function createWindow() {
         }
       })`);
 
+      /* После свежей разметки видно ВСЮ песню.
+
+         Жалоба была такая: часть строк «уезжает вправо за пределы
+         редактора, их невозможно увидеть, при прокрутке дорожки они
+         тоже не появляются, но если нажать „вся песня“ — появляются».
+         Строки лежали у самого края, а дорожка стояла в прежнем
+         увеличении. Саму причину (ложная опора у конца записи) чинит
+         align.js, но и показывать разметку надо целиком: человек
+         должен видеть, что ему принесли, а не искать пропажу.
+
+         Проверяем на песне в 200 секунд с последней строкой у самого
+         конца: после разметки правый край окна дорожки обязан быть
+         не левее её. */
+      report.послеРазметкиВсяПесня = await win.webContents.executeJavaScript(`__раздел('послеРазметкиВсяПесня', async () => {
+        const c = new OfflineAudioContext(1, 200 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 200 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 200;
+        const т = ['раз', 'два', 'три'];
+        document.getElementById('lyrics-input').value = т.join('\\n');
+        state.lines = т.map((x) => ({ text: x, time: null, end: null }));
+        /* Дорожка нарочно стоит в крупном увеличении — как после работы
+           над началом песни: без подгонки хвост остался бы за краем. */
+        editor.pxPerSec = 60;
+        editor.scrollT = 0;
+        window.__asrLines = [
+          { text: 'раз', time: 5, end: 8, words: [], сомнительная: false },
+          { text: 'два', time: 9, end: 12, words: [], сомнительная: false },
+          { text: 'три', time: 196, end: 199, words: [], сомнительная: true },
+        ];
+        applyRecognized(state.lines);
+        goToStep(3);
+        await new Promise((r) => setTimeout(r, 200));
+        const ширина = timelineDims().W;
+        const виднаДо = editor.scrollT + ширина / editor.pxPerSec;
+        window.__asrLines = null;
+        return {
+          pxPerSec: +editor.pxPerSec.toFixed(2), scrollT: editor.scrollT,
+          виднаДо: +виднаДо.toFixed(1), длина: audio.duration,
+          вНорме: виднаДо >= 199 && editor.scrollT === 0,
+        };
+      })`);
+
       /* Панель выбранного: компактная и без прокрутки.
 
          Две жалобы разом. Первая: «правое окно параметров хотелось бы
