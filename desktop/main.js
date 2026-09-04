@@ -3484,7 +3484,13 @@ function createWindow() {
               .forEach((п) => п.classList.remove('active'));
             панель.classList.add('active');
             editor.peaks = null;
+            /* Обе доли — на умолчание. Со своей широкой панелью
+               из профиля список упирается в предел, и тянуть его
+               оказывается некуда: раздел краснел, хотя разделитель
+               исправен. */
             доляСписка = ДОЛЯ_СПИСКА;
+            доляИнспектора = ДОЛЯ_ИНСПЕКТОРА;
+            применитьШиринуИнспектора();
             openEditor();
 
             const узел = document.getElementById('ed-lsplitter');
@@ -6988,6 +6994,11 @@ function createWindow() {
         const тишина = await узнать(new Float32Array(SR * 4));
 
         const былЯзык = I18N.язык();
+        /* Русский ставим ЯВНО: язык берётся из профиля, и на профиле
+           с английским раздел краснел на ровном месте — интерфейс при
+           этом вёл себя верно. Проверка обязана мерить студию, а не
+           настройку человека. */
+        I18N.установить('ru');
         поставитьТональностьПесни(9, 'минор');
         тон.выбран = 0;
         обновитьТон();
@@ -7455,7 +7466,7 @@ function createWindow() {
           text, time: 5 + i * 6, end: 9 + i * 6,
           ручнойКонец: true, ручноеНачало: true, сомнительная: false,
         }));
-        state.origSpans = [{ from: 4, to: 10, доля: 1, усиление: 1 }];
+        state.origSpans = [{ start: 4, end: 10, усиление: 1 }];
         editor.spansKey = ''; editor.stageKey = ''; editor.stageDrawn = null;
         try { localStorage.removeItem('karaoke-inspector'); } catch (e) { /* нет хранилища */ }
         ИНСПЕКТОР.применить();
@@ -7605,7 +7616,13 @@ function createWindow() {
             вширь: тело.scrollWidth - тело.clientWidth,
           };
         }
-        const низкоеОкно = innerHeight < 800;
+        /* Порог поблажки. Раньше стоял на 800 — и прощал ровно то, что
+           видит человек на ноутбуке 1280×800: закладке «Цвет» не хватало
+           десятка точек, а проверка молчала. Теперь граница — самый
+           маленький РАБОЧИЙ экран: 1280×800 даёт 768 внутренних точек,
+           и на нём всё обязано влезать. Ниже — окно меньше любого
+           ноутбука, там прокрутка колонки законна. */
+        const низкоеОкно = innerHeight < 760;
         const влезают = Object.values(по).every((в) => в.запас >= 0);
         const безПрокруткиВбок = Object.values(по).every((в) => в.вширь <= 0);
         return {
@@ -7693,12 +7710,10 @@ function createWindow() {
               await new Promise((r) => setTimeout(r, 400));
               return 'ок';
             }
-            if (сцена === 'финал') {
-              goToStep(4);
-              показатьФинал();
-              await new Promise((r) => setTimeout(r, 2600));
-              return 'ок';
-            }
+            /* Сцены «финал» больше нет: финал живёт только в кадре видео
+               (см. KARAOKE_SHOT_SCENE=финалкадр). Показывать на экране
+               нечего, и звать показатьФинал — не по чему: её убрали
+               вместе с окном. */
             /* Витрина сайта. Разметка у сайта и приложения одна, но
                приложение прячет витрину классом is-desktop — снять его
                на время и есть самый дешёвый способ посмотреть на первый
@@ -8471,7 +8486,11 @@ ipcMain.handle('project-write', async (_evt, { dir, files }) => {
     return { ok: false, error: 'плохой вызов' };
   }
   for (const ф of files) {
-    if (!ф || !имяВПапкеЧистое(ф.имя)) return { ok: false, error: 'плохое имя файла' };
+    if (!ф || !имяВПапкеЧистое(ф.имя)) {
+      return { ok: false, error: языкМеню === 'ru'
+        ? 'недопустимое имя файла внутри проекта'
+        : 'a file inside the project has an invalid name' };
+    }
   }
   try {
     /* Место занято чем-то посторонним — не трогаем. Диалог сохранения
@@ -8480,7 +8499,11 @@ ipcMain.handle('project-write', async (_evt, { dir, files }) => {
        спокойно (это обычное «сохранить»). */
     if (fs.existsSync(dir)) {
       const с = fs.statSync(dir);
-      if (!с.isDirectory()) return { ok: false, error: 'по этому пути лежит файл' };
+      if (!с.isDirectory()) {
+        return { ok: false, error: языкМеню === 'ru'
+          ? 'по этому пути лежит файл, а не папка'
+          : 'that path is a file, not a folder' };
+      }
       /* Папка есть, но писать в неё может быть нельзя. Живой случай:
          проект сохранили из Windows в общую папку Parallels — на Маке
          она осталась за пользователем root, и своя же студия получала
@@ -8491,15 +8514,23 @@ ipcMain.handle('project-write', async (_evt, { dir, files }) => {
       try {
         fs.accessSync(dir, fs.constants.W_OK);
       } catch (e) {
+        /* Про владельца молчим: причина бывает и в правах на своей же
+           папке. Говорим то, что знаем наверняка, — писать нельзя, —
+           и что делать. «Удали папку» тоже не советуем: чужую папку
+           человек может и не удалить. */
         return { ok: false, error: языкМеню === 'ru'
-          ? 'система не даёт писать в эту папку — она принадлежит другому '
-            + 'пользователю. Выбери другое место или удали папку и сохрани заново'
-          : 'the system will not let us write into that folder — it belongs to '
-            + 'another user. Pick another place, or delete the folder and save again' };
+          ? 'система не даёт писать в эту папку. Выбери другое место '
+            + '— или дай себе права на эту папку и сохрани заново'
+          : 'the system will not let us write into that folder. Pick another '
+            + 'place — or grant yourself write access to it and save again' };
       }
       const внутри = fs.readdirSync(dir);
       const свой = внутри.includes(ОПИСЬ_ПРОЕКТА);
-      if (внутри.length && !свой) return { ok: false, error: 'папка занята чужими файлами' };
+      if (внутри.length && !свой) {
+        return { ok: false, error: языкМеню === 'ru'
+          ? 'папка занята чужими файлами'
+          : 'the folder already holds someone else’s files' };
+      }
     } else {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -8523,10 +8554,10 @@ ipcMain.handle('project-write', async (_evt, { dir, files }) => {
        и EPERM в готовом виде человеку ничего не объясняют. */
     if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
       return { ok: false, error: языкМеню === 'ru'
-        ? 'система не даёт писать в эту папку — обычно она принадлежит другому '
-          + 'пользователю. Выбери другое место или удали папку и сохрани заново'
-        : 'the system will not let us write into that folder — it usually belongs '
-          + 'to another user. Pick another place, or delete the folder and save again' };
+        ? 'система не даёт писать в эту папку. Выбери другое место '
+          + '— или дай себе права на эту папку и сохрани заново'
+        : 'the system will not let us write into that folder. Pick another '
+          + 'place — or grant yourself write access to it and save again' };
     }
     return { ok: false, error: (e && e.message) || String(e) };
   }
