@@ -1395,40 +1395,10 @@
       <div class="karaoke-main" id="karaoke-main">
         <div class="stage-wrap" id="stage-wrap">
           <div class="lyrics-stage" id="lyrics-stage"></div>
-          <!-- Финал песни: похвала и счёт.
-
-               Так принято в караоке — и мы делаем это с перебором,
-               потому что весь смысл в перегибе: цифра заведомо
-               невозможная, и от этого смешно и приятно. Язык похвалы —
-               по языку ПЕСНИ, а не интерфейса: обращаются к тому, кто
-               только что пел (см. языкПесни в app.js). -->
-          <div class="finale hidden" id="finale" role="status" aria-live="polite">
-            <!-- Финал идёт тремя ударами: сначала во весь экран надпись,
-                 следом логотип, и только потом поверх него похвала
-                 и счёт. Появления резкие — не растворение, а удар:
-                 концерт не затухает, он ставит точку. -->
-            <div class="finale-brand" id="finale-brand" aria-hidden="true">Karaoke Punch</div>
-            <!-- Логотип во весь экран берём из полноразмерного файла,
-                 а не из водяного знака: знак — 256 точек, и на пол-экрана
-                 он растягивался втрое и мылился. -->
-            <img class="finale-logo" id="finale-logo" src="logo-full.png" alt="" aria-hidden="true">
-            <div class="finale-box">
-              <div class="finale-praise" id="finale-praise"></div>
-              <div class="finale-score">
-                <span class="finale-num" id="finale-num">0</span>
-                <span class="finale-unit" id="finale-unit">%</span>
-              </div>
-              <div class="finale-sub" id="finale-sub"></div>
-              <div class="finale-acts">
-                <button class="btn btn-primary" id="finale-again"
-                  data-i18n="финал.ещё" data-i18n-title="финал.ещё.подсказка"
-                  title="Начать эту же песню сначала">Спеть ещё раз</button>
-                <button class="btn btn-ghost" id="finale-close"
-                  data-i18n="финал.закрыть" data-i18n-title="финал.закрыть.подсказка"
-                  title="Убрать похвалу и вернуться к сцене">Закрыть</button>
-              </div>
-            </div>
-          </div>
+          <!-- Финала на сцене нет: похвала, логотипы и счёт уходят
+               ТОЛЬКО в записанное видео — там же, где водяной знак
+               (см. drawФиналКадра в app.js). В студии это было окно
+               поверх сцены, которое приходилось закрывать. -->
           <button class="stage-full-btn" id="btn-stage-full" title="Развернуть просмотр (F)"
             data-i18n-title="караоке.развернуть" data-i18n-aria="караоке.развернуть"
             aria-label="Развернуть просмотр"><svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg></button>

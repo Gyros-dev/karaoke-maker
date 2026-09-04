@@ -17,6 +17,22 @@
      «а в приложении ещё…» в окне «Что нового») */
   document.body.classList.add('is-desktop');
 
+  /* Вернуть клавиатуру странице после долгой работы.
+
+     Беда видна только на Windows: пока считалась разметка или уходил
+     вокал, окно никуда не девалось — значит, и обработчики возвращения
+     окна (win.on('focus') в main.js) не срабатывали. А фокус при этом
+     остаётся у окна, не доходя до страницы: мышь работает, текст
+     выделяется, а буквы не идут ни в поле текста, ни в редактор.
+     Со стороны это «текст не редактируется». */
+  function вернутьКлавиатуру() {
+    try {
+      window.focus();
+      if (window.desktop && window.desktop.focusPage) window.desktop.focusPage();
+    } catch (e) { /* фокус — не то, из-за чего стоит падать */ }
+  }
+  window.__вернутьКлавиатуру = вернутьКлавиатуру;
+
   // Приложение уже установлено — предлагать его скачать незачем
   const cta = document.getElementById('desktop');
   if (cta) cta.remove();
@@ -162,6 +178,7 @@
 
   function showOverlay(show) {
     $('ai-overlay').classList.toggle('hidden', !show);
+    if (!show) вернутьКлавиатуру();
   }
 
   function fmtMB(bytes) {
@@ -607,6 +624,7 @@
 
   function showAsrOverlay(show) {
     $('asr-overlay').classList.toggle('hidden', !show);
+    if (!show) вернутьКлавиатуру();
   }
 
   async function ensureAsrModel(key) {
