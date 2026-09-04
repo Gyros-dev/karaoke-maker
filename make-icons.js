@@ -96,6 +96,21 @@ if (fs.existsSync(rendererDir)) {
 }
 console.log('Знак:    watermark.png (сайт и приложение)');
 
+/* --- Логотип в полный рост для финала песни ---
+   Финал рисует логотип во весь экран: на кадре 1920×1080 сторона
+   выходит под восемьсот точек. Водяной знак в 256 точек на такой
+   размер растягивался втрое и заметно мылился. Здесь копия исходника
+   без уменьшения — и с прозрачностью, которая финалу нужна: логотип
+   стоит на своём тёмном фоне, а не на белом квадрате.
+
+   Не resize, а копия: исходник и так квадрат ровно того размера,
+   какой нужен, а лишний пересчёт — лишняя потеря. */
+const ПОЛНЫЙ = 'logo-full.png';
+if (fs.existsSync(path.join(__dirname, ПОЛНЫЙ)) && fs.existsSync(rendererDir)) {
+  fs.copyFileSync(path.join(__dirname, ПОЛНЫЙ), path.join(rendererDir, ПОЛНЫЙ));
+  console.log('Финал:   logo-full.png (логотип во весь экран)');
+}
+
 /* --- Иконка macOS --- */
 fs.mkdirSync(APP_OUT, { recursive: true });
 const iconset = fs.mkdtempSync(path.join(os.tmpdir(), 'iconset-')) + '.iconset';

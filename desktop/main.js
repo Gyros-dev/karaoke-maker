@@ -7017,6 +7017,32 @@ function createWindow() {
          языка, и праздник не вылезает там, где его не звали, — на
          чужом шаге, посреди записи видео и после прослушивания
          отрывка. */
+      /* Логотип финала — в полный рост, а не растянутый водяной знак.
+
+         Финал рисует логотип во весь экран: на кадре 1920×1080 сторона
+         выходит под восемьсот точек. Знак в углу — 256 точек, и, взятый
+         для финала, растягивался втрое: человек это увидел и назвал
+         мутным. Мерим не «картинка есть», а хватает ли ей точек
+         на тот размер, каким её рисуют. */
+      report.логотипФинала = await win.webContents.executeJavaScript(`__раздел('логотипФинала', async () => {
+        const взять = (путь) => new Promise((r) => {
+          const i = new Image();
+          i.onload = () => r({ w: i.naturalWidth, h: i.naturalHeight });
+          i.onerror = () => r({ нет: true });
+          i.src = путь;
+        });
+        const полный = await взять('logo-full.png');
+        const наЭкране = document.getElementById('finale-logo');
+        const сторона = Math.round(Math.min(1920, 1080) * 0.74);
+        const запас = полный.w ? полный.w / сторона : 0;
+        return {
+          полный, вРазметке: наЭкране.getAttribute('src'),
+          вКадре: сторона, запас: +запас.toFixed(2),
+          вНорме: !полный.нет && полный.w >= сторона
+            && наЭкране.getAttribute('src') === 'logo-full.png',
+        };
+      })`);
+
       report.финал = await win.webContents.executeJavaScript(`__раздел('финал', () => {
         const узел = document.getElementById('finale');
         const текст = (id) => document.getElementById(id).textContent;

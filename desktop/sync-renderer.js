@@ -366,6 +366,13 @@ try {
   if (!fs.existsSync(path.join(OUT, 'logo.png'))) {
     throw new Error('нет renderer/logo.png — сделай его: node make-icons.js');
   }
+  /* Логотип в полный рост нужен финалу песни: без него студия покажет
+     на весь экран пустое место, а в видео финал уйдёт без логотипа.
+     Проверяем здесь по той же причине, что и шапочный: в собранном
+     приложении беда видна только после песни. */
+  if (!fs.existsSync(path.join(OUT, 'logo-full.png'))) {
+    throw new Error('нет renderer/logo-full.png — сделай его: node make-icons.js');
+  }
 
   // DSP-модуль общий, но в воркере экспортируется иначе
   const dsp = fs.readFileSync(path.join(__dirname, 'renderer', 'dsp.js'), 'utf8');

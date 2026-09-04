@@ -11220,12 +11220,18 @@ async function exportVideo() {
   $('export-status').textContent = t('экспорт.записываем');
 
   // Логотип для угла кадра — грузим заранее, чтобы не мигал
-  const watermark = await new Promise((resolve) => {
+  const картинка = (путь) => new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
-    img.src = 'watermark.png';
+    img.src = путь;
   });
+  const watermark = await картинка('watermark.png');
+  /* Финал рисует логотип во весь экран: на 1080p сторона под восемьсот
+     точек, а знак в углу — 256. Растянутый знак заметно мылил, поэтому
+     у финала своя картинка в полный рост. Не нашлась — берём знак:
+     мыльный логотип лучше, чем никакого. */
+  const логоФинала = (await картинка('logo-full.png')) || watermark;
 
   // Фоновая картинка (если есть)
   let bgImg = null;
@@ -11368,7 +11374,7 @@ async function exportVideo() {
     if (pos >= финалС) {
       /* Знак в углу в финале не рисуем: надпись и логотип и так
          во весь экран, второй раз то же самое в углу — шум. */
-      drawФиналКадра(g2d, W, H, bgImg, pos - финалС, финалКадра, watermark);
+      drawФиналКадра(g2d, W, H, bgImg, pos - финалС, финалКадра, логоФинала);
     } else {
       drawVideoFrame(g2d, W, H, bgImg, Math.max(0, pos), watermark);
     }
