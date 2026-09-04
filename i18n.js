@@ -391,6 +391,13 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.цветаДуэта': '<b>\u{1F3A8} You pick the duet colours.</b> Blue and pink were hard-wired in the code and came with every song. They are now part of the design, like the font and the line colour: three swatches on the “Colour” tab, and what you pick reaches the line list, the stage, the video frame, and travels with the project.',
+  'новости.ширинаСписка': '<b>\u2194 The line list resizes like every other pane.</b> Every editor pane could be dragged except that one: it held a fixed share and took more than half the editor on a wide screen. It now has the same divider as its neighbours: mouse, arrow keys, a double click puts it back, and the width is remembered between sessions.',
+  'новости.панельПараметров': '<b>The parameters panel no longer asks to be scrolled.</b> It has three sections — word, line, stretch — and open at once they needed twice the height available. Exactly one is open now: the one you just asked about with a click. A neighbour opens with its triangle. The buttons inside sit in two columns instead of six rows, and the pane is called “Parameters” rather than repeating the name of the open section.',
+  'новости.тональностьУСтрелок': '<b>The key is spelled out right at the arrows.</b> You used to see “+2” and had to read the line below to learn which key that was. The stepper now says “0 (Am)”, “+2 (Bm)”, and “Apply” is an ordinary-sized button like “Reset” next to it. The settings column also stopped scrolling sideways: the “0 dB” readout was running off the right edge.',
+  'новости.простораВРедакторе': '<b>The studio has more room.</b> The collapsed “How to edit the timing” help always took a row under the track, and it is read once — it moved into the guide behind the “How to use” button. In the app the song-rights line gave its space back to the stage: it is now an icon next to “Save video”. Both gains went where they matter — to the track and the stage.',
+  'новости.логотипФинала': '<b>The finale logo is sharp again.</b> The finale draws it full-screen, but the picture came from the corner watermark — four times smaller than needed. The finale now has its own full-size file, with transparency: the logo stands on the dark finale background instead of a light square.',
+  'новости.безМиганияСайта': '<b>The app no longer flashes the website on start.</b> For a second after launch you could see the site header and its showcase, and only then the studio — most noticeably on Windows. The app now knows what it is before the first paint.',
   'новости.тональностьПесни': '<b>\u{1F3BC} The studio tells you what key the song is in.</b> The “higher — lower” arrows used to move the recording blind: only someone who hears keys by ear knew what they were counting from. Now it says underneath what the song sounds like — “A minor”, say. We work it out from the clean vocal left over by vocal removal, and we say nothing when we are not sure: being wrong about the key is worse than staying quiet.',
   'новости.панельОтрезка': '<b>The original-stretch panel explains itself, and wakes up on a click.</b> It used to say “no stretch selected” and not a word about what to do to select one. And clicking a stretch on the track highlighted the block while the level slider stayed dead, leaving you to guess whether it was broken or meant to be that way. The panel now says where to click, and comes alive with the click.',
   'новости.колонкаНастроек': '<b>The karaoke settings fit without scrolling.</b> The “Colour” and “Sound” tabs ran out of height, so you had to scroll the column to reach a slider. We squeezed the air between the rows, not the text: same type, same wording, over a hundred points more room — every setting at once.',
@@ -464,7 +471,6 @@ I18N.EN = {
   'шапка.компьютер': 'Desktop',
   'шапка.как': 'How it works',
   'шапка.вопросы': 'FAQ',
-  'шапка.студия': 'Open the studio',
   'шапка.язык': 'Interface language',
   'шапка.тема': 'Theme',
 

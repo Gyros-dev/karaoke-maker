@@ -3055,8 +3055,7 @@ body.is-desktop .hero,
 body.is-desktop .features,
 body.is-desktop .faq,
 body.is-desktop .site-footer,
-body.is-desktop .site-nav,
-body.is-desktop .site-header > .btn { display: none; }
+body.is-desktop .site-nav { display: none; }
 /* Заголовок «Студия» над рядом шагов: окно приложения и так подписано */
 body.is-desktop .studio > h2 { display: none; }
 body.is-desktop .studio {
