@@ -513,7 +513,18 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
    «Открыть студию» и переключатель языка перестают ездить, когда
    перевод меняет длину подписей. Замер на 1440 px: раньше при смене
    языка переключатель уезжал на 51 px, теперь стоит на месте. */
-.site-nav { display: flex; flex: 1; justify-content: center; gap: 1.5rem; }
+/* Меню стоит ровно посередине шапки, а не посередине остатка. Оно
+   делило свободное место между широким логотипом слева и парой узких
+   переключателей справа — и выходило заметно правее середины экрана.
+   Абсолютное положение считается от самой шапки: она sticky, то есть
+   позиционированный элемент. */
+.site-nav {
+  display: flex;
+  gap: 1.5rem;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
 .site-nav a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; transition: color 0.15s; }
 .site-nav a:hover { color: var(--text); }
 
@@ -527,15 +538,34 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   padding: 3.5rem 1.5rem 3rem;
   max-width: none;
 }
+/* Пятна света за первым экраном.
+
+   Рисуем их радиальным градиентом, а НЕ размытым кругом (filter: blur).
+   Размытие на пол-экрана Safari складывает отдельным слоем, и стоило
+   рядом чему-нибудь шевельнуться при наведении (кнопка приподнимается
+   на две точки), как на месте пятна оставался тёмный прямоугольник —
+   его собственная рамка. Градиент выглядит так же, слоя не заводит,
+   и перерисовывать нечего. Круги втрое больше прежних: у размытия свет
+   уходил далеко за край круга, и без запаса пятна вышли бы мельче. */
 .hero-glow {
   position: absolute;
   border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.35;
   pointer-events: none;
 }
-.hero-glow-1 { width: 500px; height: 500px; background: var(--violet); top: -150px; left: 8%; }
-.hero-glow-2 { width: 450px; height: 450px; background: var(--pink); top: 50px; right: 5%; opacity: 0.22; }
+.hero-glow-1 {
+  width: 1100px;
+  height: 1100px;
+  top: -450px;
+  left: calc(8% - 300px);
+  background: radial-gradient(closest-side, rgb(16 185 129 / 0.35), rgb(16 185 129 / 0));
+}
+.hero-glow-2 {
+  width: 1000px;
+  height: 1000px;
+  top: -225px;
+  right: calc(5% - 275px);
+  background: radial-gradient(closest-side, rgb(45 212 191 / 0.22), rgb(45 212 191 / 0));
+}
 .hero-inner { position: relative; max-width: 800px; margin: 0 auto; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; }
 /* Имя студии крупно, Bungee Shade. Мельче ставить нельзя: у этого
@@ -903,6 +933,10 @@ body.is-desktop .steps-tool-group {
 .finale.лого .finale-logo { display: block; animation: finaleУдар 0.16s cubic-bezier(0.2, 0.9, 0.3, 1); }
 /* Третий удар: логотип остаётся подложкой, поверх него встают
    похвала и счёт — «поверх этого», как и задумано */
+/* Гаснет плавно и НЕ меняет размера: раньше на третьем ударе он разом
+   терял яркость, и это читалось как подмена картинки. */
+.finale-logo { transition: opacity 0.45s ease; }
+.finale.лого .finale-logo { opacity: 1; }
 .finale.счёт .finale-logo { display: block; opacity: 0.28; }
 .finale.счёт .finale-box { animation: finaleУдар 0.16s cubic-bezier(0.2, 0.9, 0.3, 1); }
 .finale .finale-box { display: none; }
@@ -913,18 +947,24 @@ body.is-desktop .steps-tool-group {
 
 .finale-box { max-width: 90%; position: relative; }
 .finale-praise {
+  /* Похвала — всегда в одну строку. Кегль ставит подогнатьПохвалу
+     (app.js) по ширине окна: фразы разной длины, и перенос делал
+     из одной похвалы то две строки, то три, а весь столбец под ней
+     от этого прыгал. Здесь — только потолок кегля. */
   font-size: clamp(1.1rem, 3.2vw, 2rem);
   font-weight: 700;
   line-height: 1.25;
   color: var(--text);
   margin-bottom: 0.9rem;
-  text-wrap: balance;
+  white-space: nowrap;
 }
 .finale-score {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 0.15em;
+  /* Знак процента вплотную к числу: «362800429%» — это одно
+     высказывание, а не число и единица рядом. */
+  gap: 0;
   font-family: var(--font-num, ui-monospace, monospace);
   font-weight: 700;
   line-height: 1;
@@ -1656,21 +1696,24 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .insp-actions {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
-  gap: 0.2rem;
+  gap: 0.15rem;
   margin-top: 0.1rem;
 }
 .insp-actions .nudge-btn {
   display: flex;
   align-items: center;
   text-align: left;
-  padding: 0.2rem 0.5rem;
+  padding: 0.12rem 0.5rem;
   min-width: 0;
 }
 /* Подпись длиннее кнопки не растягивает столбец: она переносится
    по словам, а кнопка растёт вниз — обрезать подпись нельзя, по ней
    и узнают, что кнопка делает. */
 .insp-actions .nudge-btn > span { overflow-wrap: anywhere; }
-.sel-panel .ed-pane-body { gap: 0.25rem; }
+/* Плотность панели выбранного. Ужимаем воздух, а не текст: на окне
+   с умолчаниями (дорожка забирает свои 46%) панели достаётся 270 точек,
+   и раздел «Строка» в них не влезал на тринадцать. */
+.sel-panel .ed-pane-body { gap: 0.15rem; }
 .sel-label { color: var(--text-dim); font-size: 0.85em; text-align: right; }
 .sel-vocal {
   display: flex;
@@ -1725,7 +1768,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 
    Черта над «Строкой» теперь рисуется у самого раздела, а не у .sel-line:
    иначе у свёрнутого раздела она уезжала бы под заголовок. */
-.insp-sec + .insp-sec { margin-top: 0.1rem; padding-top: 0.3rem; border-top: 1px solid var(--border); }
+.insp-sec + .insp-sec { margin-top: 0.05rem; padding-top: 0.2rem; border-top: 1px solid var(--border); }
 .insp-sec + .insp-sec > .sel-line { margin-top: 0; padding-top: 0.25rem; border-top: none; }
 .insp-sec > summary {
   display: flex;

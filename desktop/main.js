@@ -6568,6 +6568,41 @@ function createWindow() {
         }
       })`, true);
 
+      /* Чужая папка: студия объясняет, а не показывает код ошибки.
+
+         Живой случай: проект сохранили из Windows в общую папку
+         Parallels — на Маке она осталась за пользователем root, и своя
+         же студия падала с «EACCES: permission denied, open
+         '…/песня.mp3'». Человек видел длинный путь и слово denied,
+         и что делать — непонятно. Проверяем то, что он увидит: ответ
+         не «ок», в нём нет ни EACCES, ни пути, и сказано, что делать. */
+      {
+        const чужая = path.join(require('os').tmpdir(),
+          'karaoke-чужая-' + Date.now() + '.karaokeproj');
+        let вердикт;
+        try {
+          fs.mkdirSync(чужая, { recursive: true });
+          fs.chmodSync(чужая, 0o555);          // читать можно, писать нельзя
+          const ответ = await win.webContents.executeJavaScript(
+            `window.desktop.projectWrite(${JSON.stringify(чужая)}, `
+            + `[{ имя: 'проект.json', данные: new Uint8Array([123, 125]) }])`);
+          const текст = String((ответ && ответ.error) || '');
+          вердикт = {
+            ok: !!(ответ && ответ.ok), текст,
+            вНорме: ответ && ответ.ok === false
+              && !/EACCES|EPERM|denied/i.test(текст)
+              && !текст.includes(чужая)
+              && текст.length > 40,
+          };
+        } catch (e) {
+          вердикт = { ошибка: String((e && e.message) || e), вНорме: false };
+        } finally {
+          try { fs.chmodSync(чужая, 0o755); fs.rmSync(чужая, { recursive: true, force: true }); }
+          catch (e) { /* и ладно: это временная папка */ }
+        }
+        report.чужаяПапка = вердикт;
+      }
+
       /* Проект папкой: круг целиком, через настоящий диск.
 
          Проверяем не «функция вызвалась», а то, ради чего проект заведён:
@@ -7113,7 +7148,7 @@ function createWindow() {
           const c = document.createElement('canvas');
           c.width = 640; c.height = 360;
           drawФиналКадра(c.getContext('2d'), 640, 360, null, t,
-            { язык: 'ru', фраза: 'Браво!', подпись: 'п', цель: 242037446 }, null);
+            { язык: 'ru', фраза: 'Браво!', подпись: 'п', цель: 1842305 }, null);
           return drawФиналКадра.последний.фаза;
         };
         const удары = [фазаКадра(0.05), фазаКадра(1.0), фазаКадра(3.2)];
@@ -7618,9 +7653,12 @@ function createWindow() {
               const яз = языкПесни();
               const общий = {
                 язык: яз,
-                фраза: случайнаяПохвала(яз),
+                /* Не случайную, а самую длинную: снимок нужен, чтобы
+                   увидеть худший случай — влезет ли она в одну строку. */
+                фраза: (I18N.ПОХВАЛЫ[яз] || ['Браво!'])
+                  .slice().sort((a, b) => b.length - a.length)[0],
                 подпись: t('финал.подпись', null, яз),
-                цель: 242037446,
+                цель: 1842305,
               };
               const лого = await new Promise((готово) => {
                 const i = new Image();
@@ -8413,6 +8451,22 @@ ipcMain.handle('project-write', async (_evt, { dir, files }) => {
     if (fs.existsSync(dir)) {
       const с = fs.statSync(dir);
       if (!с.isDirectory()) return { ok: false, error: 'по этому пути лежит файл' };
+      /* Папка есть, но писать в неё может быть нельзя. Живой случай:
+         проект сохранили из Windows в общую папку Parallels — на Маке
+         она осталась за пользователем root, и своя же студия получала
+         EACCES на каждом файле внутри. Сырое «EACCES: permission denied,
+         open '…/песня.mp3'» человеку не говорит ничего: он видит длинный
+         путь и слово denied. Поэтому спрашиваем права ЗАРАНЕЕ и говорим
+         по-человечески, что делать. */
+      try {
+        fs.accessSync(dir, fs.constants.W_OK);
+      } catch (e) {
+        return { ok: false, error: языкМеню === 'ru'
+          ? 'система не даёт писать в эту папку — она принадлежит другому '
+            + 'пользователю. Выбери другое место или удали папку и сохрани заново'
+          : 'the system will not let us write into that folder — it belongs to '
+            + 'another user. Pick another place, or delete the folder and save again' };
+      }
       const внутри = fs.readdirSync(dir);
       const свой = внутри.includes(ОПИСЬ_ПРОЕКТА);
       if (внутри.length && !свой) return { ok: false, error: 'папка занята чужими файлами' };
@@ -8435,6 +8489,15 @@ ipcMain.handle('project-write', async (_evt, { dir, files }) => {
     }
     return { ok: true, path: dir, name: path.basename(dir).replace(/\.[^.]+$/, '') };
   } catch (e) {
+    /* Нет прав — говорим об этом словами, а не кодом ошибки: EACCES
+       и EPERM в готовом виде человеку ничего не объясняют. */
+    if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
+      return { ok: false, error: языкМеню === 'ru'
+        ? 'система не даёт писать в эту папку — обычно она принадлежит другому '
+          + 'пользователю. Выбери другое место или удали папку и сохрани заново'
+        : 'the system will not let us write into that folder — it usually belongs '
+          + 'to another user. Pick another place, or delete the folder and save again' };
+    }
     return { ok: false, error: (e && e.message) || String(e) };
   }
 });
