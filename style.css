@@ -1375,45 +1375,6 @@ body.is-desktop .steps-tool-group {
    поле вокруг неё вычиталось из высоты дважды. Оставляем самое малое,
    чтобы рамка окна не срезала край сцены. */
 .ed-viewer .edit-stage-wrap { margin: 0; padding: 0.2rem; }
-/* Справка редактора свёрнута: развернул — прочитал — свернул обратно.
-   Стоит она под дорожкой и легендой, перед кнопками шага: пока
-   свёрнута — это одна строка, и рабочее место от неё ничего не
-   теряет; а разворачивают её, уже глядя на дорожку. */
-.editor-hint > summary {
-  cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--text-dim);
-  list-style-position: inside;
-}
-.editor-hint p { margin-top: 0.5rem; text-align: left; }
-.editor-hint .timeline-keys { margin-top: 0.4rem; }
-/* Развёрнутая справка обязана помещаться в подложку студии. Раньше она
-   просто росла, и редактор вместе с кнопками «← Текст» / «Караоке →»
-   уезжал за нижний край. Поэтому у открытой своя прокрутка, а высота
-   задана долей рабочего места, а не числом пикселей: на 1280×800 её
-   остаётся заметно меньше, чем на 1440×900. Заголовок при прокрутке
-   остаётся на виду — иначе свернуть справку нечем, пока не открутишь
-   обратно наверх. */
-#step-3 .editor-hint[open] {
-  /* Не сжимается (было 0 1 auto). Сжималась она молча и за чужой счёт:
-     пока справка отдавала свои пиксели, сумма «окна плюс дорожка»
-     переставала быть постоянной, и код деления высоты (см. рабочееМесто
-     в app.js) мерил не то место. Теперь развёрнутая справка занимает
-     ровно свою треть, а делят между собой остаток окна и дорожка. */
-  flex: 0 0 auto;
-  min-height: 2.4rem;
-  max-height: 34%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 0.4rem;
-}
-#step-3 .editor-hint[open] > summary {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding-bottom: 0.2rem;
-  background: var(--bg-soft);
-}
 /* Три окна рабочего места: строки — просмотр — инспектор.
    Кегль в просмотре пропорционален его ширине (см. fitStageLines),
    поэтому окну просмотра отдана заметная доля.
@@ -3147,8 +3108,20 @@ body.is-desktop .guide-close {
 }
 body.is-desktop .guide-close:hover { color: var(--text); border-color: var(--text-dim); }
 /* «Что нового» переехала из подвала в шапку приложения: подвала там нет,
-   а узнать, что изменилось в версии, по-прежнему нужно */
-body.is-desktop .site-header .footer-link { font-size: 0.85rem; white-space: nowrap; }
+   а узнать, что изменилось в версии, по-прежнему нужно.
+
+   Стоит ровно посередине шапки, а не «между логотипом и переключателями»:
+   слева логотип широкий, справа два маленьких переключателя, и на своём
+   месте в потоке надпись съезжала вправо — казалась не по центру,
+   потому что и не была. Абсолютное положение считается от самой шапки
+   (она sticky, то есть позиционированный элемент). */
+body.is-desktop .site-header .footer-link {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
 
 .whatsnew {
   position: fixed;
@@ -3201,6 +3174,21 @@ body.is-desktop .site-header .footer-link { font-size: 0.85rem; white-space: now
    пунктов: свежее тонуло среди прошлогоднего, и человек, открывший окно
    после обновления, читал в основном то, что уже видел. Наверху осталось
    только новое, всё прежнее сложено сюда и разложено по версиям. */
+/* Починки этого же выпуска: свёрнуты и стоят под новыми возможностями.
+   Окно открывают с вопросом «что нового», и первым делом человек должен
+   увидеть НОВОЕ — то, чего вчера нельзя было сделать вовсе. */
+.whatsnew-fixes { margin-top: 0.6rem; }
+.whatsnew-fixes > summary,
+.whatsnew-old > summary {
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 0.4rem 0;
+  list-style: none;
+}
+.whatsnew-fixes > summary::-webkit-details-marker { display: none; }
+.whatsnew-fixes > summary::before { content: '▸ '; }
+.whatsnew-fixes[open] > summary::before { content: '▾ '; }
+.whatsnew-fixes > summary:hover { color: var(--text); }
 .whatsnew-old { margin-top: 1rem; }
 .whatsnew-old > summary {
   cursor: pointer;

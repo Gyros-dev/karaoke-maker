@@ -3086,23 +3086,38 @@ function createWindow() {
           document.querySelectorAll('.step-panel')
             .forEach((p) => p.classList.toggle('active', p.id === 'step-4'));
           const наЧетвёртом = !!строка().closest('#step-4');
-          const место = строка().getBoundingClientRect();
-          const виднаСтрока = !!строка().offsetParent
-            && место.height > 0 && место.width > 100;
           const подКнопками = строка().previousElementSibling
             && строка().previousElementSibling.classList.contains('export-row');
+          /* В ПРИЛОЖЕНИИ строки под кнопками нет: две строки текста
+             на весь экран отнимали высоту у сцены на каждом шаге
+             «Караоке», а читают их один раз. Сказано это там же, где
+             забирают файл, — подсказкой у значка рядом с «Сохранить
+             видео», — и целиком в руководстве. На сайте строка
+             по-прежнему на виду. Проверяем то, что должно быть верно
+             в приложении: строка спрятана, значок есть, подсказка
+             у него не пустая и переведена, и тот же текст лежит
+             в руководстве. */
+          const вПриложении = document.body.classList.contains('is-desktop');
+          const значок = document.getElementById('btn-rights');
+          const строкаВидна = !!строка().offsetParent;
+          const вРуководстве = [...document.querySelectorAll('#how [data-i18n]')]
+            .some((el) => el.dataset.i18n === 'экспорт.права');
 
           I18N.установить(былЯзык);
           return {
-            en, ru, ютубEn, ютубRu, наЧетвёртом, виднаСтрока, подКнопками,
+            en, ru, ютубEn, ютубRu, наЧетвёртом, подКнопками,
+            вПриложении, значокЕсть: !!значок, строкаВидна, вРуководстве,
             вНорме: ru.кнопка === 'Сохранить видео' && en.кнопка === 'Save video'
               && ютубEn.length === 0 && ютубRu.length === 0
-              && наЧетвёртом && виднаСтрока && !!подКнопками
-              // Строка про права есть на обоих языках и переведена
+              && наЧетвёртом && !!подКнопками
+              // Текст есть на обоих языках и переведён
               && ru.права.length > 40 && en.права.length > 40
               && ru.права !== en.права
               && !/[А-Яа-яЁё]/.test(en.права) && /[А-Яа-яЁё]/.test(ru.права)
-              && ru.подсказка !== en.подсказка,
+              && ru.подсказка !== en.подсказка
+              // В приложении: строка спрятана, значок и руководство на месте
+              && (!вПриложении || (!строкаВидна && !!значок && вРуководстве
+                && (значок.title || '').length > 40)),
           };
         }),
         /* Номер версии в окне «Что нового» и на кнопке в подвале.
@@ -3648,8 +3663,7 @@ function createWindow() {
         const былЯзык = I18N.язык();
         const панели = [...document.querySelectorAll('.step-panel')];
         const былиАктивны = панели.map((п) => п.classList.contains('active'));
-        const справка = document.getElementById('editor-hint');
-        const былаОткрыта = справка.open;
+        const справкаУбрана = !document.getElementById('editor-hint');
         try {
           /* Своя подсказка вместо системной. Проверяем ПЕРВЫМ делом и
              дав странице отстояться: смена языка уходит в главный
@@ -3713,44 +3727,42 @@ function createWindow() {
           const неПеревелись = имена.filter((k) => ru[k] && ru[k] === en[k]);
           I18N.установить('ru');
 
-          /* Справка после дорожки и легенды, перед кнопками шага */
+          /* Справки под дорожкой больше нет вовсе: свёрнутый блок
+             занимал ряд всегда, а читают его один раз. Текст переехал
+             в руководство («Как пользоваться»), и под дорожкой остались
+             только легенда и кнопки шага. Сторожим и то, и другое:
+             блок не вернулся, а его абзацы на месте в руководстве. */
           const шаг = document.getElementById('step-3');
           const дети = [...шаг.children];
           const где = (s) => дети.indexOf(шаг.querySelector(':scope > ' + s));
-          const поПорядку = где('.timeline-wrap') < дети.indexOf(справка)
-            && где('.timeline-legend') < дети.indexOf(справка)
-            && дети.indexOf(справка) < где('.panel-actions');
+          const поПорядку = где('.timeline-wrap') < где('.timeline-legend')
+            && где('.timeline-legend') < где('.panel-actions');
+          const вРуководстве = ['ред.справка.первый', 'ред.справка.оригинал',
+            'ред.справка.магнит', 'ред.клавиши'].every((ключ) =>
+            !!document.querySelector('#how [data-i18n="' + ключ + '"], #how [data-i18n-html="' + ключ + '"]'));
 
-          /* Развёрнутая справка не выходит за низ подложки студии */
+          /* Шаг без справки помещается в подложку студии целиком */
           панели.forEach((п) => п.classList.remove('active'));
           шаг.classList.add('active');
-          справка.open = true;
           await new Promise((r) => setTimeout(r, 80));
           const низСтудии = document.querySelector('.studio').getBoundingClientRect().bottom;
           const низКнопок = шаг.querySelector(':scope > .panel-actions')
             .getBoundingClientRect().bottom;
           const выступ = Math.round(низКнопок - низСтудии);
-          const своя = getComputedStyle(справка).overflowY === 'auto';
-          const вШаге = Math.round(справка.getBoundingClientRect().height)
-            <= Math.round(шаг.getBoundingClientRect().height);
-          справка.open = false;
-          await new Promise((r) => setTimeout(r, 80));
-          const свёрнутая = Math.round(справка.getBoundingClientRect().height);
 
           return {
             кнопок: имена.length,
             безПодсказки, неПеревелись,
             снялСразу,
             видна, текст: текст.slice(0, 40), титулСнят, совпалСКнопкой, титулВернулся,
-            поПорядку, выступ, своя, вШаге, свёрнутая,
+            поПорядку, выступ, справкаУбрана, вРуководстве,
             вНорме: имена.length > 40
               && безПодсказки.length === 0 && неПеревелись.length === 0
               && видна && титулСнят && совпалСКнопкой && титулВернулся
-              && поПорядку && выступ <= 0 && своя && вШаге && свёрнутая < 48,
+              && поПорядку && выступ <= 0 && справкаУбрана && вРуководстве,
           };
         } finally {
           I18N.установить(былЯзык);
-          справка.open = былаОткрыта;
           панели.forEach((п, i) => п.classList.toggle('active', былиАктивны[i]));
         }
       })`);
