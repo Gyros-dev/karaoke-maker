@@ -29,6 +29,15 @@
     try {
       window.focus();
       if (window.desktop && window.desktop.focusPage) window.desktop.focusPage();
+      /* Фокус мог остаться на кнопке внутри окна, которое только что
+         спрятали: элемент есть, он в фокусе — и клавиши уходят в него,
+         то есть в никуда. Со стороны это ровно то же самое: «текст
+         не редактируется». Снимаем фокус со всего невидимого. */
+      const где = document.activeElement;
+      if (где && где !== document.body && !где.offsetParent) {
+        где.blur();
+        document.body.focus();
+      }
     } catch (e) { /* фокус — не то, из-за чего стоит падать */ }
   }
   window.__вернутьКлавиатуру = вернутьКлавиатуру;
