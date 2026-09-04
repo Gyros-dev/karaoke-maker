@@ -1429,18 +1429,28 @@ body.is-desktop .steps-tool-group {
    её ставит применитьШиринуИнспектора (см. «Ширина инспектора»
    в app.js). Число здесь — запасное: столько инспектор занимал,
    пока границу нельзя было двигать. */
+/* Ширина списка строк и ширина инспектора — не числа в разметке,
+   а доли рабочей ширины: их ставят применитьШиринуСписка и
+   применитьШиринуИнспектора (см. app.js). Числа здесь запасные.
+
+   Дорожка НИЖЕ этой сетки и идёт во всю ширину шага: она в редакторе
+   главная, и отдавать её ширину боковым панелям нельзя — панели
+   ужимаются по высоте, а дорожка остаётся целой. */
 .editor-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto var(--insp-w, 210px);
+  grid-template-columns:
+    var(--list-w, 1.1fr) auto minmax(0, 1fr) auto var(--insp-w, 210px);
   gap: var(--ed-gap);
   flex: 1 1 0;
   min-height: 80px;
 }
-/* ---------- Разделитель просмотра и инспектора ----------
+/* ---------- Разделители: список — просмотр — инспектор
+   Устроены одинаково, поэтому правила общие ----------
    Тянется мышью, как граница окон и дорожки под ним. Полоска узкая,
    а брать её удобно: сама колонка 8 px, а видимая черта внутри —
    3 px посередине. */
-.ed-vsplitter {
+.ed-vsplitter,
+.ed-lsplitter {
   width: 8px;
   align-self: stretch;
   display: flex;
@@ -1451,7 +1461,8 @@ body.is-desktop .steps-tool-group {
      на ноутбуке с тачскрином тянущий жест уезжал бы в прокрутку */
   touch-action: none;
 }
-.ed-vsplitter::before {
+.ed-vsplitter::before,
+.ed-lsplitter::before {
   content: '';
   height: 100%;
   width: 3px;
@@ -1459,9 +1470,11 @@ body.is-desktop .steps-tool-group {
   background: var(--border);
   transition: background 0.15s;
 }
-.ed-vsplitter:hover::before, .ed-vsplitter.тянут::before { background: var(--sel-ring); }
-.ed-vsplitter:focus-visible { outline: none; }
-.ed-vsplitter:focus-visible::before { background: var(--sel-ring); width: 5px; }
+.ed-vsplitter:hover::before, .ed-vsplitter.тянут::before,
+.ed-lsplitter:hover::before, .ed-lsplitter.тянут::before { background: var(--sel-ring); }
+.ed-vsplitter:focus-visible, .ed-lsplitter:focus-visible { outline: none; }
+.ed-vsplitter:focus-visible::before,
+.ed-lsplitter:focus-visible::before { background: var(--sel-ring); width: 5px; }
 /* ---------- Разделитель окон и дорожки ----------
    Тянется мышью, как в Logic Pro и Final Cut: сколько высоты у верхних
    окон, столько и решает человек, а не наши числа в коде. Положение
@@ -1675,8 +1688,27 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .sel-num::-webkit-outer-spin-button,
 .sel-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .sel-num { -moz-appearance: textfield; appearance: textfield; }
-.insp-actions { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.1rem; }
-.insp-actions .nudge-btn { display: flex; align-items: center; text-align: left; padding: 0.2rem 0.5rem; }
+/* Кнопки панели встают в столбец, а на широкой панели — в два-три:
+   шесть кнопок столбиком занимали 150 px высоты, и панель из-за них
+   прокручивалась. Ряд подстраивается под ширину сам, поэтому чем шире
+   человек растянул инспектор, тем меньше кнопки съедают высоты. */
+.insp-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  gap: 0.2rem;
+  margin-top: 0.1rem;
+}
+.insp-actions .nudge-btn {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  padding: 0.2rem 0.5rem;
+  min-width: 0;
+}
+/* Подпись длиннее кнопки не растягивает столбец: она переносится
+   по словам, а кнопка растёт вниз — обрезать подпись нельзя, по ней
+   и узнают, что кнопка делает. */
+.insp-actions .nudge-btn > span { overflow-wrap: anywhere; }
 .sel-panel .ed-pane-body { gap: 0.25rem; }
 .sel-label { color: var(--text-dim); font-size: 0.85em; text-align: right; }
 .sel-vocal {
@@ -2658,14 +2690,20 @@ input[type="range"]::-moz-range-thumb {
 .export-quality option { background: var(--bg-card); color: var(--text); }
 
 /* --- Эквалайзер и настройки в левой колонке --- */
+/* Ряд эквалайзера: подпись, ползунок, число. В узкой колонке настроек
+   ряд не влезал целиком, и «0 дБ» уезжало за правый край — колонка
+   получала горизонтальную прокрутку, которой в панели настроек быть
+   не должно. Ужимается здесь ползунок: подпись и число не режутся. */
 .eq-row {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.6rem;
   margin-bottom: 0.6rem;
   font-size: 0.9rem;
 }
-.eq-label { min-width: 130px; }
+.eq-row input[type="range"] { flex: 1 1 auto; min-width: 0; }
+.eq-row .eq-val { flex: none; }
+.eq-label { min-width: 100px; flex: 0 1 auto; }
 .eq-label small { display: block; color: var(--text-dim); font-size: 0.75rem; }
 .eq-val {
   min-width: 3.4rem;
@@ -2706,15 +2744,35 @@ input[type="range"]::-moz-range-thumb {
 }
 .key-pick .nudge-btn { font-size: 1.05rem; line-height: 1; }
 .key-val {
-  min-width: 2.6rem;
+  min-width: 1.8rem;
   text-align: center;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
 /* Выбрано, но ещё не посчитано: число приглушено, пока не «Применить» */
 .key-val.key-pending { color: var(--text-dim); opacity: 0.75; }
+/* Нота прямо у переключателя: «+2 (Bm)». Мельче числа — полутона тут
+   главные, а нота отвечает на вопрос «а это что за тональность». */
+.key-val-note {
+  margin-left: 0.15rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.key-val-note::before { content: '('; }
+.key-val-note::after { content: ')'; }
+/* «Применить» — кнопка обычного роста, как соседняя «В ноль»: прежняя
+   заливка во всю ширину кричала громче, чем стоит одна настройка
+   из десятка. Цветом остаётся акцент: действие всё-таки главное. */
+.key-apply {
+  border-color: var(--accent-solid);
+  color: var(--accent-solid);
+  font-weight: 600;
+}
+.key-apply:hover:not(:disabled) { background: rgb(var(--accent-rgb) / 0.14); }
 #key-note { margin: 0.5rem 0 0.4rem; }
 #key-fill {
   height: 100%;
@@ -2912,7 +2970,11 @@ body.stage-full .site-header { z-index: 1; }
   gap: 0.4rem 0.6rem;
 }
 .style-row .row-colors input[type="range"] { grid-column: auto; flex: 1; min-width: 90px; }
-.color-pick { display: inline-flex; align-items: center; gap: 0.3rem; }
+/* Пипетка с подписью. Зазор и кегль подписи выбраны так, чтобы ТРИ
+   пипетки вставали в ряд одной строкой: с прежними числами третья
+   переносилась, и ряд занимал вдвое больше высоты — а закладка «Цвет»
+   от этого переставала влезать в колонку (см. настройкиВлезают). */
+.color-pick { display: inline-flex; align-items: center; gap: 0.2rem; }
 .style-row select {
   width: 100%;
   background: var(--bg-soft);
@@ -2933,7 +2995,7 @@ body.stage-full .site-header { z-index: 1; }
   cursor: pointer;
 }
 .style-row input[type="checkbox"] { accent-color: var(--accent-solid); cursor: pointer; }
-.style-row .mini-label { color: var(--text-dim); font-size: 0.8rem; }
+.style-row .mini-label { color: var(--text-dim); font-size: 0.75rem; }
 .seg {
   display: inline-flex;
   border: 1px solid var(--border);
@@ -3225,7 +3287,9 @@ body.is-desktop .site-header .footer-link { font-size: 0.85rem; white-space: now
   #step-3 .panel-actions .btn { padding: 0.5rem 1rem; font-size: 0.9rem; }
   /* Просмотр на низком экране ограничен высотой, а не шириной:
      лишнюю ширину отдаём списку строк — там она нужнее */
-  #step-3 .editor-grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto var(--insp-w, 210px); }
+  #step-3 .editor-grid {
+    grid-template-columns: var(--list-w, 1.6fr) auto minmax(0, 1fr) auto var(--insp-w, 210px);
+  }
 }
 
 /* ============ Адаптив ============ */
@@ -3263,7 +3327,7 @@ body.is-desktop .site-header .footer-link { font-size: 0.85rem; white-space: now
      высотой в окно, всё идёт своей высотой и прокручивается страницей.
      Разделители без общего запаса места только мешали бы — и тот, что
      делит высоту, и тот, что делит ширину: колонка здесь одна. */
-  .ed-splitter, .ed-vsplitter { display: none; }
+  .ed-splitter, .ed-vsplitter, .ed-lsplitter { display: none; }
   .ed-lines .edit-list { max-height: 40vh; }
   .edit-stage-wrap { container-type: normal; display: block; }
   .edit-stage { width: 100%; }

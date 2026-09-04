@@ -1092,6 +1092,27 @@
                 </span>
               </span>
             </div>
+            <!-- Цвета дуэта. Стояли числами в коде: голубой и розовый
+                 доставались всем песням разом, а поменять их было нечем.
+                 Теперь это такое же оформление, как и всё остальное:
+                 уезжает в проект и в готовое видео. -->
+            <div class="style-row">
+              <span class="style-label" data-i18n="караоке.цветаПартий">Цвета дуэта</span>
+              <span class="row-wide row-colors">
+                <span class="color-pick">
+                  <input type="color" id="st-col-part1" value="#38bdf8" title="Первый голос" data-i18n-title="караоке.цвет.партия1">
+                  <span class="mini-label" data-i18n="караоке.цвет.партия1.мини">1-й</span>
+                </span>
+                <span class="color-pick">
+                  <input type="color" id="st-col-part2" value="#fb7185" title="Второй голос" data-i18n-title="караоке.цвет.партия2">
+                  <span class="mini-label" data-i18n="караоке.цвет.партия2.мини">2-й</span>
+                </span>
+                <span class="color-pick">
+                  <input type="color" id="st-col-part-both" value="#fbbf24" title="Поют вместе" data-i18n-title="караоке.цвет.партияОба">
+                  <span class="mini-label" data-i18n="караоке.цвет.партияОба.мини">вместе</span>
+                </span>
+              </span>
+            </div>
             <div class="style-row">
               <span class="style-label" data-i18n="караоке.обводка">Обводка</span>
               <span class="eq-val" id="st-outline-val">0</span>
@@ -1199,12 +1220,12 @@
                 <span class="eq-label" data-i18n-html="караоке.тональность">Тональность <small>выше или ниже записи</small></span>
                 <span class="key-pick">
                   <button class="nudge-btn icon-btn" id="key-down" data-i18n-title="караоке.тон.ниже.подсказка" title="На полтона ниже" aria-label="На полтона ниже" data-i18n-aria="караоке.тон.ниже.подсказка">−</button>
-                  <b class="key-val" id="key-val">0</b>
+                  <b class="key-val" id="key-val">0</b><small class="key-val-note hidden" id="key-val-note"></small>
                   <button class="nudge-btn icon-btn" id="key-up" data-i18n-title="караоке.тон.выше.подсказка" title="На полтона выше" aria-label="На полтона выше" data-i18n-aria="караоке.тон.выше.подсказка">+</button>
                 </span>
               </div>
               <div class="eq-actions">
-                <button class="btn btn-primary btn-small hidden" id="key-apply" data-i18n-title="караоке.тон.применить.подсказка" title="Посчитать выбранную тональность. Считает примерно полминуты на трёхминутную песню — минусовку и оригинал сразу" data-i18n="караоке.тон.применить">Применить</button>
+                <button class="nudge-btn key-apply hidden" id="key-apply" data-i18n-title="караоке.тон.применить.подсказка" title="Посчитать выбранную тональность. Считает примерно полминуты на трёхминутную песню — минусовку и оригинал сразу" data-i18n="караоке.тон.применить">Применить</button>
                 <button class="nudge-btn" id="key-reset" data-i18n-title="караоке.тон.вНоль.подсказка" title="Вернуть песню в ту тональность, в которой она записана. Это мгновенно" data-i18n="караоке.тон.вНоль">В ноль</button>
               </div>
               <p class="eq-hint" id="key-note"></p>
@@ -1212,7 +1233,12 @@
                    после удаления вокала нейросетью (см. key-worker.js);
                    без него строка не появляется вовсе. -->
               <p class="eq-hint key-found hidden" id="key-found"></p>
-              <p class="eq-hint" data-i18n="караоке.тон.подсказка">Темп и длина не меняются, разметка остаётся на местах. Сдвигаются и минусовка, и оригинал на отрезках. Всё это слышно в плеере и попадает в минусовку .wav и в видео.</p>
+              <!-- Коротко в колонке, подробно в подсказке: объяснение
+                   читают один раз, а высоту оно занимало всегда — почти
+                   сотню точек в колонке, где её и так мало. -->
+              <p class="eq-hint" data-i18n="караоке.тон.подсказка"
+                 data-i18n-title="караоке.тон.подсказка.полно"
+                 title="Темп и длина не меняются, разметка остаётся на местах. Сдвигаются и минусовка, и оригинал на отрезках. Всё это слышно в плеере и попадает в минусовку .wav и в видео.">Темп и длина не меняются. Сдвиг попадает и в .wav, и в видео.</p>
             </div>
 
             <div class="eq-row">
@@ -1464,7 +1490,9 @@
       </span>
     </div>
 
-    <!-- Три окна: строки, просмотр, инспектор -->
+    <!-- Три окна: строки, просмотр, инспектор. Границы между ними
+         тянут мышью. Дорожка под ними идёт во всю ширину: она здесь
+         главная, и отдавать её ширину панелям нельзя. -->
     <div class="editor-grid">
       <section class="ed-pane ed-lines">
         <header class="ed-pane-head" data-i18n="ред.окно.строки">Строки</header>
@@ -1487,6 +1515,14 @@
         <ul class="edit-list" id="edit-list"></ul>
         <p class="ed-search-none hidden" id="line-search-none" data-i18n="ред.поиск.пусто">Ничего не нашлось</p>
       </section>
+
+      <!-- Граница списка строк и просмотра. Растянуть можно было любое
+           окно, кроме списка: он стоял долей 1.1 к 1 и на широком экране
+           забирал половину редактора. Теперь и его ширину решает человек. -->
+      <div class="ed-lsplitter" id="ed-lsplitter" role="separator" tabindex="0"
+        aria-orientation="vertical" data-i18n-title="ред.разделительСписка.подсказка"
+        data-i18n-aria="ред.разделительСписка" aria-label="Граница списка строк и просмотра"
+        title="Тяни влево или вправо: список строк станет уже или шире, а просмотр рядом — наоборот. Стрелки ← и → двигают границу с клавиатуры, двойной щелчок возвращает как было. Ширина запоминается"></div>
 
       <section class="ed-pane ed-viewer">
         <header class="ed-pane-head" data-i18n="ред.окно.просмотр">Просмотр</header>
@@ -1525,7 +1561,7 @@
                в инспекторе Final Cut: столбец в 210 px на ноутбуке
                не помещался целиком и прокручивался. Что свёрнуто,
                помнится между сеансами (см. ИНСПЕКТОР в app.js). -->
-          <details class="insp-sec" id="insp-word" open>
+          <details class="insp-sec" id="insp-word">
           <summary data-i18n="ред.словоЗаголовок">Слово</summary>
           <div class="sel-word empty" id="word-panel">
             <div class="insp-row">
@@ -1575,7 +1611,7 @@
                границ и стрелками с клавиатуры. Длина осталась показом:
                менять её правильнее через границы, иначе непонятно,
                какой край поехал. -->
-          <details class="insp-sec" id="insp-line" open>
+          <details class="insp-sec" id="insp-line">
           <summary data-i18n="ред.окно.строка">Строка</summary>
           <div class="sel-line" id="line-panel">
             <div class="insp-row">
@@ -1659,7 +1695,7 @@
                нечем. Теперь у каждого своя громкость, и она уходит
                не только в колонки, но и в минусовку .wav, и в видео:
                расписание у них одно на всех (см. расписатьОтрезки). -->
-          <details class="insp-sec" id="insp-orig" open>
+          <details class="insp-sec" id="insp-orig">
           <summary data-i18n="ред.окно.оригинал">Оригинал</summary>
           <div class="sel-line" id="orig-panel">
             <div class="insp-row">
@@ -1746,6 +1782,7 @@
       <span class="tl-key"><i class="sw sw-own"></i> <span data-i18n="ред.легенда.своё">своё время, если строку подтянуло к голосу</span></span>
     </span>
     </div>
+
 
     <!-- Справка свёрнута и стоит ПОД дорожкой: в редакторе каждый пиксель
          высоты уходит списку строк и дорожке, а прочитанную один раз

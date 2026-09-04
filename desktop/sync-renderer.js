@@ -190,7 +190,20 @@ function patchHtml(src) {
   if (!s.includes(textAnchor)) throw new Error('не нашёл поле текста песни');
   s = s.replace(textAnchor, ASR_BLOCK + textAnchor);
 
-  // 6. Окна прогресса и подключение скриптов
+  /* 6. Приложение узнаёт себя ДО первой отрисовки.
+
+     Класс is-desktop ставил desktop.js — последним скриптом страницы.
+     Пока он не отработал, окно показывало вид сайта: шапку с меню,
+     витрину, подвал. На Маке это мелькание не заметить, а на Windows
+     человек видел «старый вид», и лишь через секунду появлялся
+     редактор. Класс печатаем прямо в разметку: страница эта живёт
+     только внутри приложения, и сомневаться ей не в чем.
+     desktop.js его по-прежнему ставит — вреда от повтора нет. */
+  const bodyTag = '<body>';
+  if (!s.includes(bodyTag)) throw new Error('не нашёл тег body');
+  s = s.replace(bodyTag, '<body class="is-desktop">');
+
+  // 7. Окна прогресса и подключение скриптов
   const scriptTag = '<script src="app.js"></script>';
   if (!s.includes(scriptTag)) throw new Error('не нашёл подключение app.js');
   s = s.replace(scriptTag,

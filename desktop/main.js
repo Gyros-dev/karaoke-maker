@@ -3442,6 +3442,94 @@ function createWindow() {
           }
         }),
 
+        /* Разделитель списка строк и просмотра. Растянуть можно было
+           любое окно, кроме списка: он стоял долей 1.1 к 1 и на широком
+           экране забирал больше половины редактора. Проверяем то же,
+           что и у соседей: тянут мышью — список шире, просмотр уже;
+           стрелки делают то же с клавиатуры; доля попадает в хранилище
+           и переживает перезагрузку; двойной щелчок возвращает
+           умолчание; просмотру всегда остаётся своё. */
+        разделительСписка: __раздел('разделительСписка', () => {
+          const былаДоля = доляСписка;
+          const былиСтроки = state.lines;
+          const былБуфер = state.originalBuffer;
+          const былаДлина = audio.duration;
+          const панель = document.getElementById('step-3');
+          const былаАктивна = панель.classList.contains('active');
+          try {
+            const SR = 8000, dur = 30;
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            state.originalBuffer = ctx.createBuffer(1, SR * dur, SR);
+            audio.duration = dur;
+            state.lines = [1, 2, 3].map((n) => ({
+              text: 'Строка ' + n, time: n * 5, end: null,
+              ручнойКонец: false, сомнительная: false,
+            }));
+            document.querySelectorAll('.step-panel.active')
+              .forEach((п) => п.classList.remove('active'));
+            панель.classList.add('active');
+            editor.peaks = null;
+            доляСписка = ДОЛЯ_СПИСКА;
+            openEditor();
+
+            const узел = document.getElementById('ed-lsplitter');
+            const список = document.querySelector('#step-3 .ed-lines');
+            const просмотр = document.querySelector('#step-3 .ed-viewer');
+            if (!узел) return { разделителяНет: true, вНорме: false };
+            const снимок = () => ({ с: список.offsetWidth, п: просмотр.offsetWidth });
+
+            const до = снимок();
+            const r = узел.getBoundingClientRect();
+            const тянуть = (на) => {
+              узел.dispatchEvent(new PointerEvent('pointerdown',
+                { bubbles: true, pointerId: 1, clientX: r.left + 4 }));
+              узел.dispatchEvent(new PointerEvent('pointermove',
+                { bubbles: true, pointerId: 1, clientX: r.left + 4 + на }));
+              узел.dispatchEvent(new PointerEvent('pointerup',
+                { bubbles: true, pointerId: 1, clientX: r.left + 4 + на }));
+            };
+            тянуть(60);                       // вправо: список шире
+            const шире = снимок();
+            const сохранилась = (() => {
+              try { return Math.abs(parseFloat(localStorage.getItem('karaoke-list-w'))
+                - доляСписка) < 0.01; } catch (e) { return false; }
+            })();
+            const переживётПерезагрузку = Math.abs(прочитатьДолюСписка() - доляСписка) < 0.01;
+            тянуть(-60);                      // обратно
+            const уже = снимок();
+
+            узел.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+            const стрелкой = снимок();
+
+            // Тянем далеко вправо: просмотру рядом всё равно остаётся своё
+            тянуть(4000);
+            const доУпора = снимок();
+
+            узел.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+            const послеДвойного = снимок();
+
+            return {
+              до, шире, уже, стрелкой, доУпора, послеДвойного,
+              сохранилась, переживётПерезагрузку,
+              вНорме: шире.с > до.с && шире.п < до.п
+                && уже.с < шире.с && стрелкой.с > уже.с
+                && сохранилась && переживётПерезагрузку
+                && доУпора.п >= МИН_ПРОСМОТРА - 1
+                && Math.abs(послеДвойного.с - до.с) <= 1,
+            };
+          } finally {
+            доляСписка = былаДоля;
+            state.lines = былиСтроки;
+            state.originalBuffer = былБуфер;
+            audio.duration = былаДлина;
+            editor.peaks = null;
+            editor.sel = -1;
+            editor.spansKey = '';
+            if (!былаАктивна) панель.classList.remove('active');
+            resizeTimeline();
+          }
+        }),
+
         /* Разделитель окон и дорожки. Проверяем не наличие полоски,
            а то, ради чего она стоит: тянут мышью — высота дорожки
            меняется, окна ужимаются ровно на столько же; стрелки делают
@@ -6857,11 +6945,18 @@ function createWindow() {
         тон.выбран = 0;
         обновитьТон();
         const строкаРу = document.getElementById('key-found').textContent;
+        const нотаНаНоле = document.getElementById('key-val-note').textContent;
         тон.выбран = 2;
         обновитьТон();
         const сСдвигомРу = document.getElementById('key-found').textContent;
+        /* Куда попадёт сдвиг, написано у самого переключателя: «+2 (Bm)».
+           Раньше это стояло строкой ниже, и человек, крутя стрелки,
+           видел только «+2» и лез читать, что это за нота. */
+        const нотаУПереключателя = document.getElementById('key-val-note').textContent;
+        const числоУПереключателя = document.getElementById('key-val').textContent;
         I18N.установить('en');
         const сСдвигомЕн = document.getElementById('key-found').textContent;
+        const нотаЕн = document.getElementById('key-val-note').textContent;
         I18N.установить(былЯзык);
         тон.выбран = 0;
         тональностьПесни = null;
@@ -6875,6 +6970,7 @@ function createWindow() {
             мера: доМажор.мера && +доМажор.мера.toFixed(2), нот: доМажор.нот },
           тишина: { ok: тишина.ok, мало: !!тишина.мало },
           строкаРу, сСдвигомРу, сСдвигомЕн, спрятана,
+          нотаНаНоле, нотаУПереключателя, числоУПереключателя, нотаЕн,
         };
         итог.вНорме =
           // Ля минор узнан как ля минор, до мажор — как до мажор
@@ -6885,13 +6981,17 @@ function createWindow() {
           && ляМинор.нот > 60 && доМажор.нот > 60
           // На тишине молчит, а не выдумывает
           && !тишина.ok && тишина.мало
-          // Строка говорит и про песню, и про то, куда её переносят
+          // Строка говорит, в какой тональности записана песня
           /* Без выражений с обратной косой: она проходит через шаблон
              и теряет по слою на каждом переходе. Здесь довольно
              простого «содержит». */
           && строкаРу.includes('ля минор (Am)')
-          && сСдвигомРу.includes('си минор (Bm)')
-          && сСдвигомЕн.includes('B minor (Bm)')
+          && сСдвигомРу.includes('ля минор (Am)')
+          && сСдвигомЕн.includes('A minor (Am)')
+          /* А куда попадёт сдвиг — написано у переключателя, и на обоих
+             языках одинаково: буквенное обозначение не переводится */
+          && нотаНаНоле === 'Am' && нотаУПереключателя === 'Bm' && нотаЕн === 'Bm'
+          && числоУПереключателя === '+2'
           // Нет ответа — нет и строки
           && спрятана;
         return итог;
@@ -7243,6 +7343,136 @@ function createWindow() {
         }
       }
 
+      /* Панель выбранного: компактная и без прокрутки.
+
+         Две жалобы разом. Первая: «правое окно параметров хотелось бы
+         сделать более вместительным, чтобы не приходилось прокручивать».
+         Вторая — на первую попытку это починить: панель тогда встала
+         во всю высоту и отняла ширину у дорожки, а «таймлайн — самое
+         важное». Поэтому чинили не размером, а содержимым: разделы
+         свёрнуты, открыт ровно тот, про который человек спросил
+         щелчком, — строка, слово или отрезок.
+
+         Сторожим оба конца: дорожка идёт во всю ширину шага, а панель
+         не прокручивается ни в одном из состояний выбора. */
+      report.панельВыбранного = await win.webContents.executeJavaScript(`__раздел('панельВыбранного', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        const тексты = ['Я работаю на складе', 'Ты в буфете на раздаче', 'Познакомились с тобою'];
+        document.getElementById('lyrics-input').value = тексты.join('\\n');
+        state.lines = тексты.map((text, i) => ({
+          text, time: 5 + i * 6, end: 9 + i * 6,
+          ручнойКонец: true, ручноеНачало: true, сомнительная: false,
+        }));
+        state.origSpans = [{ from: 4, to: 10, доля: 1, усиление: 1 }];
+        editor.spansKey = ''; editor.stageKey = ''; editor.stageDrawn = null;
+        try { localStorage.removeItem('karaoke-inspector'); } catch (e) { /* нет хранилища */ }
+        ИНСПЕКТОР.применить();
+        goToStep(3);
+        renderEditList();
+
+        const тело = () => document.querySelector('.sel-panel .ed-pane-body');
+        const снимок = () => ({
+          открыты: ['insp-word', 'insp-line', 'insp-orig']
+            .filter((id) => document.getElementById(id).open),
+          надо: Math.max(0, тело().scrollHeight - тело().clientHeight),
+        });
+        const жди = () => new Promise((r) => setTimeout(r, 80));
+
+        editor.sel = 0; editor.wordSel = -1; editor.origSel = -1;
+        updateSelInfo(); await жди();
+        const строка = снимок();
+        editor.wordSel = 1; updateWordInfo(); await жди();
+        const слово = снимок();
+        editor.origSel = 0; обновитьОтрезок(); await жди();
+        const отрезок = снимок();
+
+        /* Дорожка во всю ширину шага: панели ужимаются по высоте,
+           а её ширину не трогают. Ловим возврат к раскладке, где
+           инспектор стоял колонкой рядом с дорожкой. */
+        const шаг = document.getElementById('step-3');
+        const дорожка = шаг.querySelector(':scope > .timeline-wrap');
+        const воВсюШирину = дорожка.offsetWidth >= шаг.clientWidth - 2;
+
+        const низкоеОкно = innerHeight < 800;
+        return {
+          строка, слово, отрезок,
+          дорожка: дорожка.offsetWidth, шаг: шаг.clientWidth, воВсюШирину,
+          вНорме: воВсюШирину
+            // открыт ровно один раздел — тот, что про выбранное
+            && String(строка.открыты) === 'insp-line'
+            && String(слово.открыты) === 'insp-word'
+            && String(отрезок.открыты) === 'insp-orig'
+            // и ни в одном состоянии панель не просит прокрутки
+            && (низкоеОкно || (строка.надо === 0 && слово.надо === 0 && отрезок.надо === 0)),
+        };
+      })`);
+
+      /* Цвета дуэта выбирает человек, а не код.
+
+         Цвета партий стояли числами в двух местах разом — в app.js
+         и в style.css, — и поменять их было нечем. Теперь это такое же
+         оформление, как шрифт и цвет строки: живёт в state.style,
+         красит список, сцену и кадр видео и уезжает в проект.
+         Проверяем весь путь от пипетки до кадра. */
+      report.цветаПартий = await win.webContents.executeJavaScript(`__раздел('цветаПартий', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        const тексты = ['первый голос', 'второй голос', 'поём вместе'];
+        document.getElementById('lyrics-input').value = тексты.join('\\n');
+        state.lines = тексты.map((text, i) => ({
+          text, time: 5 + i * 6, end: 9 + i * 6, партия: i + 1,
+          ручнойКонец: true, ручноеНачало: true, сомнительная: false,
+        }));
+        editor.spansKey = ''; editor.stageKey = ''; editor.stageDrawn = null;
+        goToStep(3);
+        renderEditList();
+        const корень = () => getComputedStyle(document.documentElement)
+          .getPropertyValue('--part-1').trim();
+        /* Начинаем с заводского цвета явно: в сохранённом проекте
+           на этой машине может лежать какой угодно выбор человека,
+           а раздел проверяет ПУТЬ цвета, а не чужую настройку. */
+        state.style.part1 = defaultStyle().part1;
+        applyStyle();
+        const было = корень();
+
+        // Человек выбирает цвет пипеткой
+        const поле = document.getElementById('st-col-part1');
+        поле.value = '#00ff88';
+        поле.dispatchEvent(new Event('input'));
+        await new Promise((r) => setTimeout(r, 120));
+
+        const стало = корень();
+        const ряд = document.querySelector('#edit-list .edit-row.part-1');
+        const полоска = ряд ? getComputedStyle(ряд, '::after').backgroundColor : null;
+        const вКадре = цветПартии(1);
+        const проект = JSON.parse(JSON.stringify(собратьПроект()));
+        const изПроекта = styleFromSaved(проект).part1;
+
+        // Сброс оформления возвращает заводские цвета
+        document.getElementById('st-reset').click();
+        await new Promise((r) => setTimeout(r, 120));
+        const послеСброса = { корень: корень(), стиль: state.style.part1 };
+
+        return {
+          было, стало, полоска, вКадре, вПроекте: проект.style.part1, изПроекта,
+          послеСброса, вПолях: {
+            есть: !!document.getElementById('st-col-part2')
+              && !!document.getElementById('st-col-part-both'),
+          },
+          вНорме: было === '#38bdf8' && стало === '#00ff88'
+            // цвет дошёл до списка строк, до кадра видео и до проекта
+            && polоска(полоска) && вКадре === '#00ff88'
+            && проект.style.part1 === '#00ff88' && изПроекта === '#00ff88'
+            // и сброс вернул заводской
+            && послеСброса.корень === '#38bdf8' && послеСброса.стиль === '#38bdf8'
+            && !!document.getElementById('st-col-part2'),
+        };
+        function polоска(v) { return String(v).replace(/\\s/g, '') === 'rgb(0,255,136)'; }
+      })`);
+
       /* Настройки караоке должны влезать в свою колонку.
 
          Жалоба была простая: «в режиме караоке левое окно не влезает,
@@ -7258,6 +7488,13 @@ function createWindow() {
         document.getElementById('lyrics-input').value = 'строка раз';
         state.lines = [{ text: 'строка раз', time: 5, end: 9 }];
         goToStep(4);
+        /* Худший случай закладки «Звук»: тональность песни найдена
+           (появляется своя строка) и выбран сдвиг, который ещё
+           не посчитан (появляется «Выбрано …, а звучит …»). Мерить
+           пустую закладку значило бы мерить не то, что видит человек. */
+        поставитьТональностьПесни(9, 'минор');
+        тон.выбран = 2;
+        обновитьТон();
         const тело = document.querySelector('.side-body');
         const с = getComputedStyle(тело);
         const пад = parseFloat(с.paddingTop) + parseFloat(с.paddingBottom);
@@ -7270,14 +7507,22 @@ function createWindow() {
           const посл = дети[дети.length - 1];
           const хвост = посл ? parseFloat(getComputedStyle(посл).marginBottom) : 0;
           const надо = Math.round(г.getBoundingClientRect().height + хвост + пад);
-          по[кн.dataset.g] = { надо, видно: тело.clientHeight, запас: тело.clientHeight - надо };
+          /* И вширь тоже: «0 дБ» у эквалайзера уезжало за правый край,
+             и колонка получала горизонтальную прокрутку — в панели
+             настроек её быть не должно вовсе. */
+          по[кн.dataset.g] = {
+            надо, видно: тело.clientHeight, запас: тело.clientHeight - надо,
+            вширь: тело.scrollWidth - тело.clientWidth,
+          };
         }
         const низкоеОкно = innerHeight < 800;
         const влезают = Object.values(по).every((в) => в.запас >= 0);
+        const безПрокруткиВбок = Object.values(по).every((в) => в.вширь <= 0);
         return {
-          окно: [innerWidth, innerHeight], по, низкоеОкно, влезают,
+          окно: [innerWidth, innerHeight], по, низкоеОкно, влезают, безПрокруткиВбок,
           закладок: Object.keys(по).length,
-          вНорме: Object.keys(по).length === 4 && (влезают || низкоеОкно),
+          вНорме: Object.keys(по).length === 4 && безПрокруткиВбок
+            && (влезают || низкоеОкно),
         };
       })`);
 
