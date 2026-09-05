@@ -1352,7 +1352,8 @@ body.is-desktop .steps-tool-group {
    своими частями: сетка строк с предпросмотром забирают весь остаток,
    дорожка и панель выбранной строки стоят своим размером. Прокручивается
    только список строк, а не страница. */
-#step-3.active { gap: 0.5rem; }
+#step-3 { --step-gap: 0.5rem; }
+#step-3.active { gap: var(--step-gap); }
 #step-3 .panel-hint { font-size: 0.82rem; margin-bottom: 0; flex-shrink: 0; }
 /* Окно рабочего места: заголовок и содержимое, как панели в монтажной */
 .ed-pane {
@@ -1471,13 +1472,25 @@ body.is-desktop .steps-tool-group {
   left: -5px;
   right: -5px;
 }
+/* Черты не видно вовсе, пока к ней не подвели курсор.
+
+   Три полосы в редакторе и одна над дорожкой были нарисованы всегда,
+   и человек сказал прямо: «линии занимают место, убери». Место они
+   и правда занимали — но не шириной, а вниманием: четыре черты делят
+   рабочее поле на клетки, хотя делить его нечем, окна и так видны
+   своими рамками. Ещё и казалось, что черта вылезает за скруглённый
+   угол окна: она была шире самого разделителя.
+
+   Теперь разделитель невидим, а черта проявляется под курсором и пока
+   тянут — как в Final Cut. Тянуть при этом не сложнее: невидимая зона
+   захвата (::after) шире черты впятеро, и курсор над ней меняется. */
 .ed-vsplitter::before,
 .ed-lsplitter::before {
   content: '';
   height: 100%;
-  width: 3px;
+  width: 2px;
   border-radius: 2px;
-  background: var(--border);
+  background: transparent;
   transition: background 0.15s;
 }
 .ed-vsplitter:hover::before, .ed-vsplitter.тянут::before,
@@ -1492,8 +1505,13 @@ body.is-desktop .steps-tool-group {
    Полоска низкая, а брать её удобно: сам ряд 8 px, а видимая черта
    внутри — 3 px посередине. */
 .ed-splitter {
+  position: relative;
   flex: none;
-  height: 8px;
+  height: 2px;
+  /* Съедаем зазор шага по обе стороны: окна и дорожка стоят вплотную
+     к разделителю, как в Final Cut. Восемнадцать точек пустоты между
+     ними были не «воздухом», а потерянной высотой дорожки. */
+  margin-block: calc(-1 * var(--step-gap, 0px));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1502,12 +1520,21 @@ body.is-desktop .steps-tool-group {
      на ноутбуке с тачскрином тянущий жест уезжал бы в прокрутку */
   touch-action: none;
 }
+/* Зона захвата шире черты — та же мера, что у боковых разделителей */
+.ed-splitter::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  bottom: -5px;
+}
 .ed-splitter::before {
   content: '';
   width: 100%;
-  height: 3px;
+  height: 2px;
   border-radius: 2px;
-  background: var(--border);
+  background: transparent;
   transition: background 0.15s;
 }
 .ed-splitter:hover::before, .ed-splitter.тянут::before { background: var(--sel-ring); }

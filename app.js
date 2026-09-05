@@ -5274,6 +5274,10 @@ $('seek').addEventListener('change', () => {
   renderStage();
 });
 
+сбросПоДвойному($('vocal-mix'), 0, (v) => {
+  $('vocal-mix').value = v;
+  $('vocal-mix').dispatchEvent(new Event('input', { bubbles: true }));
+});
 $('vocal-mix').addEventListener('input', () => {
   state.vocalMix = $('vocal-mix').value / 100;
   $('vocal-mix-value').textContent = `${$('vocal-mix').value}%`;
@@ -5430,7 +5434,24 @@ function заполнитьШрифты() {
 }
 заполнитьШрифты();
 
-$('st-font').addEventListener('change', () => setStyle('font', $('st-font').value));
+/* ---------- Двойной щелчок по ползунку — обратно к умолчанию ----------
+
+   Так ведут себя фейдеры в монтажных программах: увёл — и одним
+   двойным щелчком вернул как было. У нас это умели три ползунка
+   из двадцати, и человек справедливо спросил, почему не все:
+   правило, которое работает через раз, не правило, а случайность.
+
+   Помощник ставит и признак «умею возвращаться» (data-сброс) —
+   по нему самопроверка находит ползунок, которому забыли это дать. */
+function сбросПоДвойному(ползунок, умолчание, применить) {
+  if (!ползунок) return;
+  ползунок.dataset.сброс = '1';
+  ползунок.addEventListener('dblclick', () => {
+    применить(typeof умолчание === 'function' ? умолчание() : умолчание);
+  });
+}
+
+$('st-font').addEventListener('change', () => setStyle('font', $('st-font').value));$('st-font').addEventListener('change', () => setStyle('font', $('st-font').value));
 [['st-size', 'size'], ['st-weight', 'weight'], ['st-outline', 'outline'],
  ['st-letter', 'letter'], ['st-line', 'line'], ['st-lines', 'lines'], ['st-pad', 'pad'],
  ['st-pos-cur', 'posCurrent'], ['st-pos-next', 'posNext'],
@@ -5438,6 +5459,10 @@ $('st-font').addEventListener('change', () => setStyle('font', $('st-font').valu
  ['st-scrim-h', 'scrimSize']]
   .forEach(([id, key]) => {
     $(id).addEventListener('input', () => setStyle(key, +$(id).value));
+    сбросПоДвойному($(id), () => defaultStyle()[key], (v) => {
+      setStyle(key, v);
+      updateStyleUI();
+    });
   });
 [['st-col-inactive', 'inactive'], ['st-col-active', 'active'], ['st-col-effect', 'accent'],
  ['st-col-outline', 'outlineColor'], ['st-col-bg', 'bgColor'],
@@ -5532,12 +5557,14 @@ function updateEqUI() {
 }
 
 EQ_BANDS.forEach((band) => {
-  $(`eq-${band}`).addEventListener('input', () => {
-    state.eq[band] = +$(`eq-${band}`).value;
+  const поставить = (v) => {
+    state.eq[band] = v;
     updateEqUI();
     if (audio.eqChain) audio.eqChain.apply();
     saveProject();
-  });
+  };
+  $(`eq-${band}`).addEventListener('input', () => поставить(+$(`eq-${band}`).value));
+  сбросПоДвойному($(`eq-${band}`), 0, поставить);
 });
 
 $('eq-reset').addEventListener('click', () => {
@@ -7174,7 +7201,7 @@ $('btn-orig-del').addEventListener('click', () => удалитьОтрезок(e
   ползунок.addEventListener('change', конец);
   ползунок.addEventListener('blur', конец);
   // Двойной щелчок — обратно к сотне, как у фейдера в монтажной
-  ползунок.addEventListener('dblclick', () => поставитьГромкостьОтрезка(1, true));
+  сбросПоДвойному(ползунок, 1, (v) => поставитьГромкостьОтрезка(v, true));
 }
 for (const [край, id] of [['вход', 'orig-in'], ['выход', 'orig-out']]) {
   const п = $(id);
@@ -7187,7 +7214,7 @@ for (const [край, id] of [['вход', 'orig-in'], ['выход', 'orig-out'
   const конец = () => { delete п.dataset.тянули; };
   п.addEventListener('change', конец);
   п.addEventListener('blur', конец);
-  п.addEventListener('dblclick', () => поставитьФейдОтрезка(край, ОТРЕЗОК_ФЕЙД, true));
+  сбросПоДвойному(п, ОТРЕЗОК_ФЕЙД, (v) => поставитьФейдОтрезка(край, v, true));
 }
 $('btn-sel-tap').addEventListener('click', () => {
   startTapMode(editor.sel >= 0 ? editor.sel : 0);
@@ -8392,8 +8419,8 @@ function renderTimelineHeads(L) {
         показать();
       });
       // Двойной щелчок — обратно к умолчанию, как у фейдера в монтажной
-      уровень.addEventListener('dblclick', () => {
-        поставитьУровень(гейн, уровниПоУмолчанию()[гейн]);
+      сбросПоДвойному(уровень, () => уровниПоУмолчанию()[гейн], (v) => {
+        поставитьУровень(гейн, v);
         renderTimelineHeads(timelineLanes());
       });
       row.appendChild(уровень);
@@ -12156,13 +12183,11 @@ document.addEventListener('keydown', (e) => {
    отрисовки дорожки getComputedStyle звать не по карману. */
 const ТЕМЫ = ['signature', 'neutral', 'steel'];
 const КЛЮЧ_ТЕМЫ = 'karaoke-theme';
-/* По умолчанию — стальная, а не фирменная. Рабочее место должно быть
-   спокойным: в Final Cut и Logic Pro студия серая, а цветом отмечено
-   только то, что выбрано, — глаз тогда цепляется за работу, а не за
-   оформление. Зелень фирменной темы никуда не делась: она осталась
-   на витрине (переменные тем видны только внутри .studio) и в одном
-   нажатии на значок темы для тех, кому она нравилась. */
-const ТЕМА_ПО_УМОЛЧАНИЮ = 'steel';
+/* По умолчанию — фирменная. Пробовали ставить стальную (рабочее место
+   спокойнее, как в Logic Pro), но студия — не безымянный инструмент:
+   зелёный акцент — это её лицо, и по умолчанию она должна выглядеть
+   собой. Стальная никуда не делась и берётся значком темы. */
+const ТЕМА_ПО_УМОЛЧАНИЮ = 'signature';
 
 function прочитатьТему() {
   try {
