@@ -851,16 +851,30 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
 /* Что в памяти студии и черновик. Как и ссылка на руководство, вынесены
    из потока: ряд шагов остаётся ровно посередине, а высоты рабочее
    место не теряет ни пикселя. */
+/* Коробка чипа стоит слева от ряда шагов и по его середине.
+
+   Середину держим растяжкой сверху донизу, а НЕ переносом
+   (transform: translateY(-50%)), как было. Перенос заводит для коробки
+   свой слой отрисовки, и выпадающее меню чипа уезжало в этот слой:
+   на снимке человека сквозь список читалось «поиск по строкам» и весь
+   список строк под ним. Разметка при этом была верной — под точками
+   внутри меню лежало меню, — но составитель кадра рисовал окно студии
+   поверх чужого слоя.
+
+   Растянутая коробка перехватывала бы нажатия своим пустым местом,
+   поэтому она их не ловит вовсе, а ловят только её дети. */
 .proj-box {
   position: absolute;
   left: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   gap: 0.35rem;
   max-width: 40%;
+  pointer-events: none;
 }
+.proj-box > * { pointer-events: auto; }
 .proj-chip {
   display: inline-flex;
   align-items: center;
@@ -1169,13 +1183,17 @@ body.is-desktop .steps-tool-group {
   grid-template-columns: clamp(18rem, 54%, 40rem) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
+/* Подсказка идёт НАД обоими окнами, а не только над полем текста:
+   пока она стояла в правой колонке, левое окно начиналось выше
+   правого — два окна одного шага разной высоты и с разным верхом.
+   Человек так и спросил: «зачем?». Незачем. */
 #step-2.active:has(> .asr-block) > .panel-hint {
-  grid-area: 1 / 2 / 2 / 3;
+  grid-area: 1 / 1 / 2 / 3;
   align-self: start;
   text-align: left;
 }
 #step-2.active:has(> .asr-block) > .asr-block {
-  grid-area: 1 / 1 / 3 / 2;
+  grid-area: 2 / 1 / 3 / 2;
   margin-bottom: 0;
   min-height: 0;
   /* Прокрутка остаётся страховкой на совсем низкое окно, но в рабочих
@@ -1424,7 +1442,14 @@ body.is-desktop .steps-tool-group {
    Дорожка НИЖЕ этой сетки и идёт во всю ширину шага: она в редакторе
    главная, и отдавать её ширину боковым панелям нельзя — панели
    ужимаются по высоте, а дорожка остаётся целой. */
+/* Окна идут от края до края — ровно как дорожка под ними. Человек
+   написал прямо: «у нас монтажная панель с дорожками во всю ширину,
+   а у верхних окон есть отступы — зачем?». Незачем: боковое поле
+   студии окна отыгрывают обратно тем же способом, что и дорожка,
+   и крайние окна теряют внешнюю рамку со скруглением — там край окна,
+   а не край карточки. */
 .editor-grid {
+  margin-inline: calc(-1 * var(--studio-pad-x, 1.5rem));
   display: grid;
   grid-template-columns:
     var(--list-w, 1.1fr) auto minmax(0, 1fr) auto var(--insp-w, 210px);
@@ -1435,6 +1460,17 @@ body.is-desktop .steps-tool-group {
   flex: 1 1 0;
   min-height: 80px;
 }
+.editor-grid > .ed-pane:first-child {
+  border-left: none;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.editor-grid > .ed-pane:last-child {
+  border-right: none;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 /* ---------- Разделители: список — просмотр — инспектор
    Устроены одинаково, поэтому правила общие ----------
    Тянется мышью, как граница окон и дорожки под ним. Полоска узкая,
@@ -1545,48 +1581,6 @@ body.is-desktop .steps-tool-group {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-}
-/* Поиск по строкам. Строка занята целиком полем: в песне сорок-шестьдесят
-   строк, и это единственный способ добраться до нужной, не читая все. */
-.ed-search {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  flex: none;
-  padding: 0.25rem 0.5rem;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-dim);
-}
-.ed-search > .icon { flex: none; width: 0.85em; height: 0.85em; }
-.ed-search input {
-  flex: 1;
-  min-width: 0;
-  padding: 0.15rem 0.2rem;
-  border: none;
-  background: none;
-  color: var(--text);
-  font-family: inherit;
-  font-size: var(--ed-font);
-  outline: none;
-}
-.ed-search input::placeholder { color: var(--text-dim); opacity: 0.8; }
-.ed-search-clear {
-  flex: none;
-  display: inline-flex;
-  padding: 0.1rem;
-  border: none;
-  background: none;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-.ed-search-clear:hover { color: var(--text); }
-.ed-search-clear .icon { width: 0.8em; height: 0.8em; }
-.ed-search-none {
-  flex: none;
-  padding: 0.6rem 0.7rem;
-  color: var(--text-dim);
-  font-size: var(--ed-font);
-  text-align: center;
 }
 /* Строка сетки: только чтение и правка текста. Кнопок подстройки здесь
    нет — они живут в панели выбранной строки и на дорожке. */
@@ -1789,6 +1783,12 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
    второго признака одного и того же. Заодно снимаем черту у соседа:
    без верхнего раздела она висела бы прямо под заголовком окна. */
 .insp-sec:has(> .sel-word.empty) { display: none; }
+/* --- Отрезков нет вовсе — раздела «Оригинал» тоже нет ---
+   То же правило, что и у слова: пока показывать нечего, место
+   не занимаем. Разница одна: отрезок может быть СДЕЛАН, но не выбран, —
+   тогда раздел остаётся на месте («не выбран»), иначе выбрать отрезок
+   щелчком по дорожке было бы негде. Класс ставит обновитьОтрезок. */
+.insp-sec:has(> .sel-line.нет-отрезков) { display: none; }
 .insp-sec:has(> .sel-word.empty) + .insp-sec {
   margin-top: 0;
   padding-top: 0;
@@ -1993,15 +1993,24 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
    с часами слева, инструменты правки в середине, масштаб дорожки
    справа. Раньше то же самое было раскидано на две полосы — одна
    под предпросмотром, другая над дорожкой. */
+/* Панель управления стоит НАД ДОРОЖКОЙ и той же ширины: всё, что
+   на ней есть, — про дорожку, и от неё её больше ничего не отделяет.
+   Снизу рамки нет вовсе — дальше сразу дорожка, и две черты подряд
+   между ними были бы лишними. */
 .ed-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.35rem 0.7rem;
   flex-shrink: 0;
-  padding: var(--ed-pad) 0.5rem;
+  margin-inline: calc(-1 * var(--studio-pad-x, 1.5rem));
+  margin-bottom: calc(-1 * var(--step-gap, 0px));
+  padding: var(--ed-pad) 0.7rem;
   border: 1px solid var(--border);
-  border-radius: var(--ed-radius);
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 0;
   background: var(--bg-card);
   color: var(--text-dim);
   font-size: var(--ed-font);

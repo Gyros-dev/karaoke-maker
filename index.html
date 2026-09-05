@@ -1787,88 +1787,6 @@
       </div>
     </div>
 
-    <!-- Панель управления: транспорт и часы слева, инструменты правки
-         в середине, масштаб дорожки справа — как в монтажной программе -->
-    <div class="ed-bar" id="ed-bar">
-      <span class="ed-group">
-        <button class="play-btn small" id="btn-edit-play" data-i18n-title="ред.играть.подсказка" title="Играть и остановить (пробел)"><svg class="icon i-play" aria-hidden="true"><use href="#i-play"></use></svg><svg class="icon i-pause" aria-hidden="true"><use href="#i-pause"></use></svg></button>
-        <!-- Часы монтажной: текущее время крупно, длина песни следом
-             через косую. Сотые доли — те же, что в списке строк. -->
-        <span class="ed-clock">
-          <b class="time" id="edit-time">0:00,00</b>
-          <span class="ed-clock-sep">/</span>
-          <span class="time" id="edit-total">0:00,00</span>
-        </span>
-      </span>
-      <span class="ed-group">
-        <button class="nudge-btn icon-btn" id="tl-undo" data-i18n-mod-title="ред.отменить"
-          data-i18n-aria="ред.отменить.aria" data-mod-title="Отменить последнее действие (%s+Z)"
-          aria-label="Отменить последнее действие" disabled><svg class="icon" aria-hidden="true"><use href="#i-undo"></use></svg></button>
-        <button class="nudge-btn icon-btn" id="tl-redo" data-i18n-mod-title="ред.повторить"
-          data-i18n-aria="ред.повторить.aria" data-mod-title="Повторить отменённое (%s+Shift+Z)"
-          aria-label="Повторить отменённое" disabled><svg class="icon" aria-hidden="true"><use href="#i-redo"></use></svg></button>
-      </span>
-      <!-- Кольцо и магнит — только значками: подписи занимали треть
-           панели, а включается то и другое ещё и клавишей (L и S). -->
-      <span class="ed-group">
-        <button class="nudge-btn icon-btn" id="tl-loop" data-i18n-title="ред.покругу.подсказка"
-          data-i18n-aria="ред.покругу" aria-label="по кругу"
-          title="Играть выбранную строку по кругу (клавиша L)"><svg class="icon" aria-hidden="true"><use href="#i-loop"></use></svg></button>
-        <button class="nudge-btn icon-btn on" id="tl-snap" data-i18n-title="ред.магнит.подсказка"
-          data-i18n-aria="ред.магнит" aria-label="магнит"
-          title="Магнит: границы прилипают к краям соседних строк, к границам соседних слов, к указателю, к отрезкам оригинала и к настоящему вступлению голоса. Клавиша S — выключить совсем, зажатый Alt — отключить на время перетаскивания"><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg></button>
-        <!-- Выключено по умолчанию: звук под курсором заводится сам собой,
-             стоит провести мышью над дорожкой, и помогает не всем.
-             Включается кнопкой, как магнит. -->
-        <button class="nudge-btn icon-btn" id="tl-scrub" data-i18n-title="ред.скраб.подсказка"
-          data-i18n-aria="ред.скраб" aria-label="слышная перемотка"
-          title="Слышная перемотка и скиммирование: песня звучит под курсором — и пока просто ведёшь мышь над дорожкой (указатель воспроизведения при этом стоит), и пока тащишь его или границу. Место находится на слух. Звучит то же, что выставлено ползунками полос. По умолчанию выключено — нажми, чтобы включить"><svg class="icon" aria-hidden="true"><use href="#i-scrub"></use></svg></button>
-      </span>
-      <!-- Сетка долей. Выключена по умолчанию: темп определяет автомат,
-           а промахнувшийся темп тащил бы границы не туда и портил уже
-           проверенную руками разметку. Поэтому рядом с включателем сразу
-           видно, какой темп нашёлся и насколько уверенно, и оба числа
-           можно набрать руками. -->
-      <span class="ed-group ed-beat">
-        <button class="nudge-btn icon-btn" id="tl-grid" data-i18n-title="ред.доли.подсказка"
-          data-i18n-aria="ред.доли" aria-label="сетка долей"
-          title="Сетка долей: на дорожке появляются линии по долям, границы к ним притягиваются (доля — самая слабая цель магнита). Выключена по умолчанию: темп определён автоматом и может быть неверен. Клавиша G"><svg class="icon" aria-hidden="true"><use href="#i-grid"></use></svg></button>
-        <input class="beat-num" id="beat-bpm" type="text" inputmode="decimal"
-               autocomplete="off" spellcheck="false" data-i18n-title="ред.доли.темп.подсказка"
-               data-i18n-aria="ред.доли.темп" aria-label="темп, ударов в минуту"
-               title="Темп в ударах в минуту. Найден по музыке — набери своё число, если автомат промахнулся. Двойной щелчок возвращает найденное автоматом">
-        <span class="beat-unit">BPM</span>
-        <input class="beat-num" id="beat-phase" type="text" inputmode="decimal"
-               autocomplete="off" spellcheck="false" data-i18n-title="ред.доли.фаза.подсказка"
-               data-i18n-aria="ред.доли.фаза" aria-label="смещение первой доли, секунды"
-               title="Смещение первой доли в секундах: куда попадает первый удар. Двойной щелчок возвращает найденное автоматом">
-        <span class="beat-unit" data-i18n="ред.секунды">с</span>
-        <span class="beat-conf" id="beat-conf" data-уровень="нет"
-              title="Насколько уверенно определён темп">—</span>
-      </span>
-      <!-- Сдвиг всей разметки разом: раньше жил на шаге «Синхронизация».
-           Подпись «сдвинуть всё» ушла в подсказки самих кнопок — их
-           ставит обновитьПодписиРедактора, чтобы число внутри читалось
-           на обоих языках (−0,1 против −0.1). -->
-      <span class="ed-group" id="shift-all">
-        <button class="nudge-btn" data-shift="-1">−1</button>
-        <!-- Десятичный разделитель у языков разный: −0,1 против −0.1 -->
-        <button class="nudge-btn" data-shift="-0.1" data-i18n="ред.сдвиг.минус">−0,1</button>
-        <button class="nudge-btn" data-shift="0.1" data-i18n="ред.сдвиг.плюс">+0,1</button>
-        <button class="nudge-btn" data-shift="1">+1</button>
-      </span>
-      <span class="ed-group ed-right">
-        <button class="nudge-btn icon-btn" id="tl-zoom-out" data-i18n-title="ред.отдалить"
-          data-i18n-aria="ред.отдалить.aria" aria-label="Отдалить"
-          title="Отдалить (клавиша −)"><svg class="icon" aria-hidden="true"><use href="#i-zoom-out"></use></svg></button>
-        <button class="nudge-btn icon-btn" id="tl-zoom-in" data-i18n-title="ред.приблизить"
-          data-i18n-aria="ред.приблизить.aria" aria-label="Приблизить"
-          title="Приблизить (клавиша +)"><svg class="icon" aria-hidden="true"><use href="#i-zoom-in"></use></svg></button>
-        <button class="nudge-btn icon-btn" id="tl-fit" data-i18n-title="ред.вся.подсказка"
-          data-i18n-aria="ред.вся" aria-label="вся песня"
-          title="Показать песню целиком"><svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg></button>
-      </span>
-    </div>
 
     <!-- Три окна: строки, просмотр, инспектор. Границы между ними
          тянут мышью. Дорожка под ними идёт во всю ширину: она здесь
@@ -1876,24 +1794,7 @@
     <div class="editor-grid">
       <section class="ed-pane ed-lines">
         <header class="ed-pane-head" data-i18n="ред.окно.строки">Строки</header>
-        <!-- Поиск по строкам: в песне их сорок-шестьдесят, и нужную
-             ищут глазами долго. Показывает только подходящие, номера
-             при этом остаются настоящими — фильтр прячет ряды, а не
-             перенумеровывает песню. -->
-        <div class="ed-search">
-          <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
-          <input id="line-search" type="text" autocomplete="off" spellcheck="false"
-            data-i18n-placeholder="ред.поиск.место" data-i18n-title="ред.поиск.подсказка"
-            data-i18n-aria="ред.поиск.aria" aria-label="Поиск по строкам песни"
-            placeholder="поиск по строкам"
-            title="Показывать только строки с этими буквами. Регистр и «ё» не важны, Esc очищает. Номера строк остаются настоящими">
-          <button class="ed-search-clear hidden" id="line-search-clear" type="button"
-            data-i18n-title="ред.поиск.очистить" data-i18n-aria="ред.поиск.очистить"
-            title="Очистить поиск и показать все строки (Esc)"
-            aria-label="Очистить поиск"><svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg></button>
-        </div>
         <ul class="edit-list" id="edit-list"></ul>
-        <p class="ed-search-none hidden" id="line-search-none" data-i18n="ред.поиск.пусто">Ничего не нашлось</p>
       </section>
 
       <!-- Граница списка строк и просмотра. Растянуть можно было любое
@@ -2153,6 +2054,94 @@
       aria-orientation="horizontal" data-i18n-title="ред.разделитель.подсказка"
       data-i18n-aria="ред.разделитель" aria-label="Граница окон и дорожки"
       title="Тяни вверх или вниз: дорожка станет выше или ниже, а окна над ней — наоборот. Стрелки ↑ и ↓ двигают границу с клавиатуры, двойной щелчок возвращает как было. Положение запоминается"></div>
+
+    <!-- Панель управления: транспорт и часы слева, инструменты правки
+         в середине, масштаб дорожки справа — как в монтажной программе.
+
+         Стоит НАД ДОРОЖКОЙ, а не над всеми окнами: всё, что на ней
+         есть, — про дорожку. Указатель, отмена разметки, магнит,
+         сетка долей, приближение. Пока она висела сверху, между
+         кнопкой и тем, чем она правит, лежали три окна. -->
+    <div class="ed-bar" id="ed-bar">
+      <span class="ed-group">
+        <button class="play-btn small" id="btn-edit-play" data-i18n-title="ред.играть.подсказка" title="Играть и остановить (пробел)"><svg class="icon i-play" aria-hidden="true"><use href="#i-play"></use></svg><svg class="icon i-pause" aria-hidden="true"><use href="#i-pause"></use></svg></button>
+        <!-- Часы монтажной: текущее время крупно, длина песни следом
+             через косую. Сотые доли — те же, что в списке строк. -->
+        <span class="ed-clock">
+          <b class="time" id="edit-time">0:00,00</b>
+          <span class="ed-clock-sep">/</span>
+          <span class="time" id="edit-total">0:00,00</span>
+        </span>
+      </span>
+      <span class="ed-group">
+        <button class="nudge-btn icon-btn" id="tl-undo" data-i18n-mod-title="ред.отменить"
+          data-i18n-aria="ред.отменить.aria" data-mod-title="Отменить последнее действие (%s+Z)"
+          aria-label="Отменить последнее действие" disabled><svg class="icon" aria-hidden="true"><use href="#i-undo"></use></svg></button>
+        <button class="nudge-btn icon-btn" id="tl-redo" data-i18n-mod-title="ред.повторить"
+          data-i18n-aria="ред.повторить.aria" data-mod-title="Повторить отменённое (%s+Shift+Z)"
+          aria-label="Повторить отменённое" disabled><svg class="icon" aria-hidden="true"><use href="#i-redo"></use></svg></button>
+      </span>
+      <!-- Кольцо и магнит — только значками: подписи занимали треть
+           панели, а включается то и другое ещё и клавишей (L и S). -->
+      <span class="ed-group">
+        <button class="nudge-btn icon-btn" id="tl-loop" data-i18n-title="ред.покругу.подсказка"
+          data-i18n-aria="ред.покругу" aria-label="по кругу"
+          title="Играть выбранную строку по кругу (клавиша L)"><svg class="icon" aria-hidden="true"><use href="#i-loop"></use></svg></button>
+        <button class="nudge-btn icon-btn on" id="tl-snap" data-i18n-title="ред.магнит.подсказка"
+          data-i18n-aria="ред.магнит" aria-label="магнит"
+          title="Магнит: границы прилипают к краям соседних строк, к границам соседних слов, к указателю, к отрезкам оригинала и к настоящему вступлению голоса. Клавиша S — выключить совсем, зажатый Alt — отключить на время перетаскивания"><svg class="icon" aria-hidden="true"><use href="#i-magnet"></use></svg></button>
+        <!-- Выключено по умолчанию: звук под курсором заводится сам собой,
+             стоит провести мышью над дорожкой, и помогает не всем.
+             Включается кнопкой, как магнит. -->
+        <button class="nudge-btn icon-btn" id="tl-scrub" data-i18n-title="ред.скраб.подсказка"
+          data-i18n-aria="ред.скраб" aria-label="слышная перемотка"
+          title="Слышная перемотка и скиммирование: песня звучит под курсором — и пока просто ведёшь мышь над дорожкой (указатель воспроизведения при этом стоит), и пока тащишь его или границу. Место находится на слух. Звучит то же, что выставлено ползунками полос. По умолчанию выключено — нажми, чтобы включить"><svg class="icon" aria-hidden="true"><use href="#i-scrub"></use></svg></button>
+      </span>
+      <!-- Сетка долей. Выключена по умолчанию: темп определяет автомат,
+           а промахнувшийся темп тащил бы границы не туда и портил уже
+           проверенную руками разметку. Поэтому рядом с включателем сразу
+           видно, какой темп нашёлся и насколько уверенно, и оба числа
+           можно набрать руками. -->
+      <span class="ed-group ed-beat">
+        <button class="nudge-btn icon-btn" id="tl-grid" data-i18n-title="ред.доли.подсказка"
+          data-i18n-aria="ред.доли" aria-label="сетка долей"
+          title="Сетка долей: на дорожке появляются линии по долям, границы к ним притягиваются (доля — самая слабая цель магнита). Выключена по умолчанию: темп определён автоматом и может быть неверен. Клавиша G"><svg class="icon" aria-hidden="true"><use href="#i-grid"></use></svg></button>
+        <input class="beat-num" id="beat-bpm" type="text" inputmode="decimal"
+               autocomplete="off" spellcheck="false" data-i18n-title="ред.доли.темп.подсказка"
+               data-i18n-aria="ред.доли.темп" aria-label="темп, ударов в минуту"
+               title="Темп в ударах в минуту. Найден по музыке — набери своё число, если автомат промахнулся. Двойной щелчок возвращает найденное автоматом">
+        <span class="beat-unit">BPM</span>
+        <input class="beat-num" id="beat-phase" type="text" inputmode="decimal"
+               autocomplete="off" spellcheck="false" data-i18n-title="ред.доли.фаза.подсказка"
+               data-i18n-aria="ред.доли.фаза" aria-label="смещение первой доли, секунды"
+               title="Смещение первой доли в секундах: куда попадает первый удар. Двойной щелчок возвращает найденное автоматом">
+        <span class="beat-unit" data-i18n="ред.секунды">с</span>
+        <span class="beat-conf" id="beat-conf" data-уровень="нет"
+              title="Насколько уверенно определён темп">—</span>
+      </span>
+      <!-- Сдвиг всей разметки разом: раньше жил на шаге «Синхронизация».
+           Подпись «сдвинуть всё» ушла в подсказки самих кнопок — их
+           ставит обновитьПодписиРедактора, чтобы число внутри читалось
+           на обоих языках (−0,1 против −0.1). -->
+      <span class="ed-group" id="shift-all">
+        <button class="nudge-btn" data-shift="-1">−1</button>
+        <!-- Десятичный разделитель у языков разный: −0,1 против −0.1 -->
+        <button class="nudge-btn" data-shift="-0.1" data-i18n="ред.сдвиг.минус">−0,1</button>
+        <button class="nudge-btn" data-shift="0.1" data-i18n="ред.сдвиг.плюс">+0,1</button>
+        <button class="nudge-btn" data-shift="1">+1</button>
+      </span>
+      <span class="ed-group ed-right">
+        <button class="nudge-btn icon-btn" id="tl-zoom-out" data-i18n-title="ред.отдалить"
+          data-i18n-aria="ред.отдалить.aria" aria-label="Отдалить"
+          title="Отдалить (клавиша −)"><svg class="icon" aria-hidden="true"><use href="#i-zoom-out"></use></svg></button>
+        <button class="nudge-btn icon-btn" id="tl-zoom-in" data-i18n-title="ред.приблизить"
+          data-i18n-aria="ред.приблизить.aria" aria-label="Приблизить"
+          title="Приблизить (клавиша +)"><svg class="icon" aria-hidden="true"><use href="#i-zoom-in"></use></svg></button>
+        <button class="nudge-btn icon-btn" id="tl-fit" data-i18n-title="ред.вся.подсказка"
+          data-i18n-aria="ред.вся" aria-label="вся песня"
+          title="Показать песню целиком"><svg class="icon" aria-hidden="true"><use href="#i-expand"></use></svg></button>
+      </span>
+    </div>
 
     <!-- Дорожка во всю ширину, как в монтажной программе. Заголовки
          полос — отдельная колонка слева от канваса, их содержимое

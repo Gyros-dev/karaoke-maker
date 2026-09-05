@@ -785,11 +785,6 @@ I18N.EN = {
   'ред.легенда.подсказка': 'What each colour on the timeline means: the original, the voice, lines, words',
   'ред.легенда.aria': 'What each colour on the timeline means',
   /* Поиск по строкам: в песне их сорок-шестьдесят, и нужную ищут долго */
-  'ред.поиск.место': 'search the lines',
-  'ред.поиск.подсказка': 'Show only the lines containing these letters. Case and “ё” do not matter, Esc clears it. Line numbers stay as they are',
-  'ред.поиск.aria': 'Search the lines of the song',
-  'ред.поиск.очистить': 'Clear the search and show every line (Esc)',
-  'ред.поиск.пусто': 'Nothing found',
   /* Руководство в приложении открывается окном поверх студии: витрины
      там нет вовсе, и ссылке «Как пользоваться» некуда было бы вести */
   'руководство.закрыть': 'Close the guide and go back to the studio (Esc)',

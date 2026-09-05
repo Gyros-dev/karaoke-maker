@@ -4036,7 +4036,7 @@ function createWindow() {
           const поля = [...студия.querySelectorAll('input, textarea, [contenteditable]')]
             .filter((э) => ['range', 'checkbox', 'color', 'file', 'radio', 'hidden'].indexOf(э.type) < 0);
           const имена = поля.map((э) => (э.id ? '#' + э.id : '.' + String(э.className).split(' ')[0]));
-          const обязательные = ['#lyrics-input', '#line-search', '#sel-start', '#sel-end',
+          const обязательные = ['#lyrics-input', '#sel-start', '#sel-end',
             '#sel-word-start', '#sel-word-end', '#beat-bpm', '#beat-phase'];
           const пропущенные = обязательные.filter((и) => имена.indexOf(и) < 0);
           const естьТекстСтроки = имена.indexOf('.edit-text') >= 0;
@@ -4569,94 +4569,6 @@ function createWindow() {
         }
       })`);
 
-      /* Поиск по строкам. Беда: в песне сорок-шестьдесят строк, и нужную
-         ищут глазами долго. Опасность у фильтра ровно одна и известна
-         заранее: он не должен ПЕРЕНУМЕРОВАТЬ песню и не должен сломать
-         всё, что живёт по номерам строк, — выбор, клавиши, прокрутку за
-         воспроизведением и правку текста. Поэтому проверяем не «поле
-         есть», а именно это: номера у оставшихся рядов настоящие,
-         editor.sel по-прежнему указывает на ту же строку, поле текста
-         правится, а Esc и пустое поле возвращают весь список.
-
-         Строки подставляем свои, в finally возвращаем прежние. */
-      report.поискСтрок = await win.webContents.executeJavaScript(`__раздел('поискСтрок', async () => {
-        const былиСтроки = state.lines;
-        const былВыбор = editor.sel;
-        const былПоиск = editor.поиск;
-        const былПроект = localStorage.getItem('karaoke-project');
-        const панель = document.getElementById('step-3');
-        const былаАктивна = панель.classList.contains('active');
-        try {
-          панель.classList.add('active');
-          state.lines = [
-            { text: 'Ёлка в лесу', time: 1, end: 2 },
-            { text: 'Синее море', time: 3, end: 4 },
-            { text: 'ЕЛКА большая', time: 5, end: 6 },
-            { text: 'Белый снег', time: 7, end: 8 },
-            { text: 'Ёлки-палки', time: 9, end: 10 },
-          ];
-          editor.sel = 2;
-          // Список строим заново: строки мы только что подменили
-          поставитьПоиск('');
-          renderEditList();
-          const всегоДо = document.querySelectorAll('.edit-row').length;
-
-          // Регистр и «ё» не важны: набрано «елк», найтись обязаны три
-          поставитьПоиск('елк');
-          const ряды = [...document.querySelectorAll('.edit-row')];
-          const номера = ряды.map((r) => r.querySelector('.num').textContent);
-          const строки = ряды.map((r) => +r.dataset.row);
-          // Номера настоящие: у третьей строки песни в списке стоит «3»
-          const номераНастоящие = номера.join(',') === '1,3,5'
-            && строки.join(',') === '0,2,4';
-          // Выбор не сбился, и выбранная строка помечена в отфильтрованном списке
-          const выборЦел = editor.sel === 2;
-          const выбраннаяВидна = !!document.querySelector('.edit-row.selected-row[data-row="2"]');
-          // Текст правится: поле осталось редактируемым
-          const текстПравится = ряды.every((r) => r.querySelector('.edit-text').isContentEditable);
-          // Прокрутка за воспроизведением не спотыкается о спрятанный ряд
-          let прокруткаЖива = true;
-          try { scrollEditListTo(1); scrollEditListTo(2); } catch (e) { прокруткаЖива = false; }
-          // Клавиши работают: ↓ переводит выбор на следующую строку песни
-          moveSelection(1);
-          const клавишиРаботают = editor.sel === 3;
-          editor.sel = 2;
-
-          // Ничего не нашлось — вместо пустоты надпись
-          поставитьПоиск('щщщ');
-          const пустоНайдено = document.querySelectorAll('.edit-row').length;
-          const надписьВидна = !document.getElementById('line-search-none')
-            .classList.contains('hidden');
-
-          // Esc очищает поле и возвращает все строки
-          document.getElementById('line-search').value = 'елк';
-          поставитьПоиск('елк');
-          document.getElementById('line-search').dispatchEvent(
-            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-          await new Promise((r) => setTimeout(r, 40));
-          const послеEsc = document.querySelectorAll('.edit-row').length;
-          const полеПусто = document.getElementById('line-search').value === '';
-
-          return {
-            всегоДо, номера, строки, номераНастоящие, выборЦел, выбраннаяВидна,
-            текстПравится, прокруткаЖива, клавишиРаботают,
-            пустоНайдено, надписьВидна, послеEsc, полеПусто,
-            вНорме: всегоДо === 5 && ряды.length === 3 && номераНастоящие
-              && выборЦел && выбраннаяВидна && текстПравится && прокруткаЖива
-              && клавишиРаботают && пустоНайдено === 0 && надписьВидна
-              && послеEsc === 5 && полеПусто,
-          };
-        } finally {
-          поставитьПоиск('');
-          document.getElementById('line-search').value = былПоиск;
-          state.lines = былиСтроки;
-          editor.sel = былВыбор;
-          renderEditList();
-          if (былПроект != null) localStorage.setItem('karaoke-project', былПроект);
-          else localStorage.removeItem('karaoke-project');
-          if (!былаАктивна) панель.classList.remove('active');
-        }
-      })`);
 
       /* Скиммирование: звук под курсором при ПРОСТОМ НАВЕДЕНИИ, без
          нажатия, — так место в записи ищут в монтажных программах.
@@ -6900,6 +6812,197 @@ function createWindow() {
         }
       })`, true);
 
+      /* Меню чипа обязано НАКРЫВАТЬ окна студии.
+
+         Человек прислал снимок: список открыт, а сквозь него читается
+         «поиск по строкам» из окна «Строки». Меню, сквозь которое видно
+         то, что под ним, — не меню.
+
+         Проверяем не цвет фона, а попадание: что окажется под точкой
+         внутри списка. Заодно собираем цепочку предков с их position,
+         z-index и всем, что заводит слой (transform, filter, opacity,
+         isolation, contain) — по ней и видно, кто кого перебивает. */
+      report.менюНакрывает = await win.webContents.executeJavaScript(`__раздел('менюНакрывает', () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        state.fileName = 'проба.mp3';
+        document.getElementById('lyrics-input').value = 'раз\\nдва\\nтри';
+        state.lines = [
+          { text: 'раз', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true },
+          { text: 'два', time: 10, end: 14, ручнойКонец: true, ручноеНачало: true },
+          { text: 'три', time: 15, end: 19, ручнойКонец: true, ручноеНачало: true },
+        ];
+        goToStep(3);
+        openEditor();
+        обновитьПамять();
+        показатьСписок(document.getElementById('proj-switch'), true);
+
+        const меню = document.getElementById('proj-menu');
+        const r = меню.getBoundingClientRect();
+        /* Под меню лежит окно «Строки» — его заголовок и первые ряды.
+           Раньше здесь мерили поле поиска, но поиск из редактора убран:
+           берём то, что под списком есть всегда. */
+        const поле = document.querySelector('.ed-lines .ed-pane-head');
+        const пр = поле.getBoundingClientRect();
+
+        /* Точки берём внутри списка: его середину и — если заголовок
+           окна попал под список — точку ровно над ним. Вторая и есть
+           та, о которой написал человек: сквозь меню читалось окно. */
+        const точки = [{ имя: 'середина', x: r.left + r.width / 2, y: r.top + r.height / 2 }];
+        const накрыто = пр.left < r.right && пр.right > r.left
+          && пр.top < r.bottom && пр.bottom > r.top;
+        if (накрыто) {
+          точки.push({
+            имя: 'над окном строк',
+            x: Math.max(r.left + 2, Math.min(r.right - 2, пр.left + пр.width / 2)),
+            y: Math.max(r.top + 2, Math.min(r.bottom - 2, пр.top + пр.height / 2)),
+          });
+        }
+        const подТочкой = точки.map((т) => {
+          const el = document.elementFromPoint(т.x, т.y);
+          return {
+            имя: т.имя,
+            что: el ? (el.id || el.className || el.tagName) : 'ничего',
+            вМеню: !!(el && el.closest('#proj-menu')),
+          };
+        });
+
+        const слои = (el, докуда) => {
+          const цепь = [];
+          for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+            const с = getComputedStyle(n);
+            const своё = {
+              кто: n.id ? '#' + n.id : (String(n.className).split(' ')[0] || n.tagName),
+              поз: с.position, z: с.zIndex,
+            };
+            if (с.transform !== 'none') своё.transform = с.transform;
+            if (с.filter !== 'none') своё.filter = с.filter;
+            if (с.opacity !== '1') своё.opacity = с.opacity;
+            if (с.isolation !== 'auto') своё.isolation = с.isolation;
+            if (с.contain !== 'none') своё.contain = с.contain;
+            if (с.willChange !== 'auto') своё.willChange = с.willChange;
+            цепь.push(своё);
+            if (докуда && n.matches(докуда)) break;
+          }
+          return цепь;
+        };
+
+        const см = getComputedStyle(меню);
+        const пункты = [...меню.querySelectorAll('.pick-item')].map((к) => {
+          const кр = к.getBoundingClientRect();
+          return { текст: к.textContent.trim(), низ: Math.round(кр.bottom) };
+        });
+        const итог = {
+          подТочкой,
+          накрыто,
+          коробка: {
+            верх: Math.round(r.top), низ: Math.round(r.bottom),
+            высота: Math.round(r.height),
+            прокрутка: меню.scrollHeight,
+            overflow: см.overflow, maxHeight: см.maxHeight, height: см.height,
+          },
+          пункты,
+          вылезли: пункты.filter((п) => п.низ > Math.round(r.bottom) + 1).map((п) => п.текст),
+          слоиМеню: слои(меню, '.studio'),
+          слоиПоля: слои(поле, '.studio'),
+        };
+        /* Пункты обязаны РАБОТАТЬ. Человек написал: «сами кнопки
+           в выпадающем списке не работают». Проверяем настоящим щелчком
+           по последнему пункту — он открывает выбор файла разметки,
+           и это видно по щелчку, дошедшему до самого поля. */
+        let дошло = 0;
+        const поле2 = document.getElementById('draft-input');
+        const считать = (e) => { дошло++; e.preventDefault(); };
+        поле2.addEventListener('click', считать);
+        показатьСписок(document.getElementById('proj-switch'), true);
+        const пункт = [...меню.querySelectorAll('.pick-item')].pop();
+        итог.пунктМёртв = пункт.disabled;
+        пункт.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        пункт.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        поле2.removeEventListener('click', считать);
+        итог.щелчокДошёл = дошло;
+
+        итог.вНорме = подТочкой.every((т) => т.вМеню) && итог.вылезли.length === 0
+          && меню.scrollHeight <= Math.round(r.height) + 1
+          && !итог.пунктМёртв && итог.щелчокДошёл === 1;
+        показатьСписок(document.getElementById('proj-switch'), false);
+        return итог;
+      })`, true);
+
+      /* Настоящий щелчок мышью по пункту меню чипа.
+
+         Человек написал: «сами кнопки в выпадающем списке не работают,
+         а те, что я обвёл, — работают». Разосланное из кода событие
+         до обработчика доходит (см. менюНакрывает), значит проверять
+         надо ровно то, чем щёлкает человек: ввод через сам браузер,
+         с попаданием по точке на экране. */
+      {
+        const место = await win.webContents.executeJavaScript(`(() => {
+          state.fileName = 'проба.mp3';
+          state.lines = [{ text: 'раз', time: 5, end: 9 }];
+          goToStep(3);
+          обновитьПамять();
+          показатьСписок(document.getElementById('proj-switch'), true);
+          window.__щелчков = 0;
+          const поле = document.getElementById('draft-input');
+          window.__счётчикЩелчков = (e) => { window.__щелчков++; e.preventDefault(); };
+          поле.addEventListener('click', window.__счётчикЩелчков);
+          const пункт = [...document.querySelectorAll('#proj-menu .pick-item')].pop();
+          const r = пункт.getBoundingClientRect();
+          return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2),
+            мёртв: пункт.disabled, текст: пункт.textContent.trim() };
+        })()`);
+        const щёлк = (тип, ещё) => win.webContents.sendInputEvent(
+          Object.assign({ type: тип, x: место.x, y: место.y }, ещё || {}));
+        щёлк('mouseMove');
+        щёлк('mouseDown', { button: 'left', clickCount: 1 });
+        щёлк('mouseUp', { button: 'left', clickCount: 1 });
+        await new Promise((r) => setTimeout(r, 250));
+        const дошло = await win.webContents.executeJavaScript(`(() => {
+          const поле = document.getElementById('draft-input');
+          поле.removeEventListener('click', window.__счётчикЩелчков);
+          показатьСписок(document.getElementById('proj-switch'), false);
+          return window.__щелчков;
+        })()`);
+        /* Тот же щелчок, но коробке чипа возвращён перенос
+           (transform: translateY(-50%)), из-за которого меню уезжало
+           в свой слой. Если и щелчок при этом мимо — беда была одна
+           на двоих, и лечится она одним и тем же. */
+        const сПереносом = await win.webContents.executeJavaScript(`(() => {
+          const к = document.querySelector('.proj-box');
+          к.style.top = '50%'; к.style.bottom = 'auto';
+          к.style.transform = 'translateY(-50%)';
+          показатьСписок(document.getElementById('proj-switch'), true);
+          window.__щелчков = 0;
+          document.getElementById('draft-input')
+            .addEventListener('click', window.__счётчикЩелчков);
+          const пункт = [...document.querySelectorAll('#proj-menu .pick-item')].pop();
+          const r = пункт.getBoundingClientRect();
+          return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+        })()`);
+        const щёлк2 = (тип, ещё) => win.webContents.sendInputEvent(
+          Object.assign({ type: тип, x: сПереносом.x, y: сПереносом.y }, ещё || {}));
+        щёлк2('mouseMove');
+        щёлк2('mouseDown', { button: 'left', clickCount: 1 });
+        щёлк2('mouseUp', { button: 'left', clickCount: 1 });
+        await new Promise((r) => setTimeout(r, 250));
+        const дошлоСПереносом = await win.webContents.executeJavaScript(`(() => {
+          const поле = document.getElementById('draft-input');
+          поле.removeEventListener('click', window.__счётчикЩелчков);
+          показатьСписок(document.getElementById('proj-switch'), false);
+          const к = document.querySelector('.proj-box');
+          к.style.top = ''; к.style.bottom = ''; к.style.transform = '';
+          return window.__щелчков;
+        })()`);
+
+        report.менюНастоящийЩелчок = {
+          место, дошло, дошлоСПереносом,
+          вНорме: !место.мёртв && дошло === 1,
+        };
+      }
+
       /* Двойной щелчок по ползунку возвращает умолчание — у ВСЕХ.
 
          Так ведут себя фейдеры в монтажных программах, и у нас это
@@ -6958,6 +7061,11 @@ function createWindow() {
           const край = Math.abs(+было - +п.min) < 1e-9 ? п.max : п.min;
           п.value = String(край);
           п.dispatchEvent(new Event('input', { bubbles: true }));
+          /* Фокус — как после настоящего щелчка. Без него проверка
+             не увидела бы беду, о которой написал человек: панель
+             отрезка нарочно не навязывает значение полю в фокусе,
+             и кружок оставался на месте, хотя значение возвращалось. */
+          п.focus();
           const сдвинулось = найти(к) && найти(к).value !== было;
           п.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
           /* Ползунок мог быть пересобран (заголовки полос рисуются
@@ -8655,6 +8763,15 @@ function createWindow() {
             /* Работа и её место: чип с открытым меню и список недавних
                проектов на первом шаге. Числа говорят, что подписи верны,
                но не показывают, не разъехалось ли меню под чипом. */
+            if (сцена === 'проект3') {
+              document.getElementById('lyrics-input').value = тексты.join('\\n');
+              goToStep(3);
+              openEditor();
+              обновитьПамять();
+              показатьСписок(document.getElementById('proj-switch'), true);
+              await new Promise((r) => setTimeout(r, 500));
+              return 'ок';
+            }
             if (сцена === 'проект') {
               проектНаДиске.путь = '/Users/kto-to/Music/Моя песня.karaokeproj';
               проектНаДиске.имя = 'Моя песня';
