@@ -6616,10 +6616,20 @@ function createWindow() {
          и что делать — непонятно. Проверяем то, что он увидит: ответ
          не «ок», в нём нет ни EACCES, ни пути, и сказано, что делать. */
       {
+        /* На Windows этой проверки нет: chmod там ничего не значит,
+           папка остаётся записываемой, и раздел краснел бы на ровном
+           месте — то есть врал бы. Права на папку в Windows живут
+           в списках доступа, а подделывать их ради проверки дороже,
+           чем она стоит: сам ответ студии от системы не зависит. */
         const чужая = path.join(require('os').tmpdir(),
           'karaoke-чужая-' + Date.now() + '.karaokeproj');
         let вердикт;
         try {
+          if (process.platform === 'win32') {
+            вердикт = { пропущено: 'на Windows chmod не делает папку закрытой', вНорме: true };
+            report.чужаяПапка = вердикт;
+            throw { пропуск: true };
+          }
           fs.mkdirSync(чужая, { recursive: true });
           fs.chmodSync(чужая, 0o555);          // читать можно, писать нельзя
           const ответ = await win.webContents.executeJavaScript(
@@ -6634,12 +6644,12 @@ function createWindow() {
               && текст.length > 40,
           };
         } catch (e) {
-          вердикт = { ошибка: String((e && e.message) || e), вНорме: false };
+          if (!e || !e.пропуск) вердикт = { ошибка: String((e && e.message) || e), вНорме: false };
         } finally {
           try { fs.chmodSync(чужая, 0o755); fs.rmSync(чужая, { recursive: true, force: true }); }
           catch (e) { /* и ладно: это временная папка */ }
         }
-        report.чужаяПапка = вердикт;
+        if (вердикт) report.чужаяПапка = вердикт;
       }
 
       /* Проект папкой: круг целиком, через настоящий диск.

@@ -457,7 +457,12 @@ I18N.EN = {
   'новости.словаНастройки': '<b>Words now have settings of their own.</b> Precise editing used to stop at the line — a word could only be dragged. A selected word now has numeric start, end and length fields, the same keys as a line, loop playback and snapping. Next to them: “spread”, which lays the words out across the line by syllable count.',
   'новости.тема': '<b>The studio now looks like an editing suite.</b> Tighter layout, proper icons instead of mismatched emoji, times down to the millisecond, a column of track names, and the exact time under the cursor while you drag. There is a theme picker too — the green signature look or a neutral grey one, right in the header.',
   'новости.закрыть': 'Close',
-  'новости.починки': 'Fixes and improvements',
+  /* Заголовок свёрнутого блока починок. Ключ НЕ «новости.починки»:
+     так назывался пункт новостей выпуска 1.12.1, и второй ключ с тем же
+     именем молча затирал первый — по-английски тот пункт показывал
+     «Fixes and improvements» вместо своего текста. */
+  'новости.починкиЗаголовок': 'Fixes and improvements',
+  'новости.толькоПочинки': 'No new features in this release — just fixes. They are below.',
   'новости.раньше': 'Earlier releases',
   'новости.версияСлово': 'Version',
   'новости.значок': 'Update',
