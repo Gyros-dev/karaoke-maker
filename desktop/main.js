@@ -7332,7 +7332,8 @@ function createWindow() {
             editor.origSel = 0;
             обновитьОтрезок();
             const п = document.getElementById('orig-sel');
-            return { текст: п.textContent, влезает: п.scrollWidth <= п.clientWidth + 1 };
+            return { текст: п.textContent, надо: п.scrollWidth, видно: п.clientWidth,
+              влезает: п.scrollWidth <= п.clientWidth + 1 };
           } finally {
             state.origSpans = былиОтрезки;
             editor.origSel = былВыбор;
