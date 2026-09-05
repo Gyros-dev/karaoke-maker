@@ -1066,6 +1066,11 @@ function createWindow() {
             clearHistory();
             const цельМагнита = голосКонец - 0.15;   // рядом, но не вплотную
 
+            /* Магнит мерим на движении СТЫКА целиком, поэтому держим
+               модификатор: обычная протяжка теперь разводит края,
+               и начало правого слова осталось бы на месте — мерить
+               было бы нечего. */
+            editor.обаКрая = true;
             editor.snap = false;
             beginDrag({ kind: 'word-edge', row: 0, k: 3 }, 8);
             applyDrag(цельМагнита);
@@ -1077,6 +1082,7 @@ function createWindow() {
             applyDrag(цельМагнита);
             endDrag();
             const сМагнитом = слова0()[3].start;
+            editor.обаКрая = false;
             const магнитРаботает = Math.abs(безМагнита - цельМагнита) <= 0.02
               && Math.abs(сМагнитом - голосКонец) < 1e-6;
 
@@ -1420,7 +1426,7 @@ function createWindow() {
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
           const былSnap = editor.snap;
-          const былКрай = editor.одинКрай;
+          const былКрай = editor.обаКрая;
           const панель = document.getElementById('step-3');
           const былаАктивна = панель.classList.contains('active');
           try {
@@ -1449,8 +1455,12 @@ function createWindow() {
             const было = слова();
             const стыкБыл = Math.abs(было[1].e - было[2].s) < 1e-9;
 
-            // Обычное перетаскивание стыка: как и раньше, сваривает соседей
-            editor.одинКрай = false;
+            /* С МОДИФИКАТОРОМ стык уезжает целиком и остаётся стыком:
+               оба края едут вместе. Раньше так вела себя обычная
+               протяжка — но тогда паузу можно было сделать ТОЛЬКО
+               с модификатором, а догадаться о нём неоткуда: человек
+               так и написал — «невозможно поставить пропуск». */
+            editor.обаКрая = true;
             beginDrag({ kind: 'word-edge', row: 0, k: 2 }, было[2].s);
             applyDrag(было[2].s + 0.4);
             endDrag();
@@ -1458,13 +1468,14 @@ function createWindow() {
             const сваркаЖива = Math.abs(послеСтыка[1].e - послеСтыка[2].s) < 1e-9
               && Math.abs(послеСтыка[2].s - (было[2].s + 0.4)) < 1e-6;
 
-            // С модификатором: влево уезжает конец левого слова, правое стоит
-            editor.одинКрай = true;
+            /* А ОБЫЧНАЯ протяжка разводит края: влево уезжает конец
+               левого слова, правое стоит. Это и есть пауза, ради которой
+               сюда тянутся, и делается она без секретных клавиш. */
+            editor.обаКрая = false;
             const доРазвода = слова();
             beginDrag({ kind: 'word-edge', row: 0, k: 2 }, доРазвода[2].s);
             applyDrag(доРазвода[2].s - 0.6);
             endDrag();
-            editor.одинКрай = false;
             const сПаузой = слова();
             const пауза = +(сПаузой[2].s - сПаузой[1].e).toFixed(3);
             const правоеНеТронули = Math.abs(сПаузой[2].s - доРазвода[2].s) < 1e-9;
@@ -1508,7 +1519,7 @@ function createWindow() {
             state.originalBuffer = былБуфер;
             audio.duration = былаДлина;
             editor.snap = былSnap;
-            editor.одинКрай = былКрай;
+            editor.обаКрая = былКрай;
             editor.peaks = null;
             editor.sel = -1;
             editor.wordSel = -1;
@@ -1535,7 +1546,7 @@ function createWindow() {
           const былБуфер = state.originalBuffer;
           const былаДлина = audio.duration;
           const былSnap = editor.snap;
-          const былКрай = editor.одинКрай;
+          const былКрай = editor.обаКрая;
           const былМасштаб = editor.pxPerSec;
           const былаПрокрутка = editor.scrollT;
           // Поля и клавиши сами сохраняют черновик — возвращаем как было
@@ -1555,7 +1566,7 @@ function createWindow() {
             clearVoiceTrack();
             editor.peaks = null;
             editor.snap = false;   // здесь мерим руками, магнит только помешает
-            editor.одинКрай = false;
+            editor.обаКрая = false;
             clearHistory();
             openEditor();
             editor.pxPerSec = 40;
@@ -1682,7 +1693,7 @@ function createWindow() {
             state.originalBuffer = былБуфер;
             audio.duration = былаДлина;
             editor.snap = былSnap;
-            editor.одинКрай = былКрай;
+            editor.обаКрая = былКрай;
             editor.pxPerSec = былМасштаб;
             editor.scrollT = былаПрокрутка;
             editor.peaks = null;
@@ -7594,81 +7605,124 @@ function createWindow() {
         };
       })`);
 
-      /* Приглашение у стыка слов.
+      /* Пауза между словами делается ПРОСТОЙ протяжкой.
 
-         Человек написал: «невозможно поставить пропуск между словами,
-         стрелочка не появляется» — и потом сам уточнил: «забыл про
-         Ctrl, пытался без него». Стрелочка появлялась, и код работал;
-         догадаться о модификаторе было неоткуда. Поэтому у стыка теперь
-         висит приглашение, и оно исчезает навсегда, как только человек
-         развёл стык хоть раз.
+         Человек написал: «невозможно растянуть слова и поставить
+         пропуск между ними». Кода это не касалось — стык честно
+         двигался, — но паузу давал только модификатор, а догадаться
+         о нём было неоткуда. Частое действие не должно требовать
+         секретной клавиши, поэтому теперь наоборот: обычная протяжка
+         разводит края (пауза), а модификатор двигает оба края разом,
+         сохраняя стык.
 
-         Проверяем ровно это: приглашение у стыка есть и зовёт нужную
-         клавишу (Cmd на Маке, Ctrl на Windows), в других местах его
-         нет, а после первого разведения оно не возвращается. */
-      report.приглашениеПаузы = await win.webContents.executeJavaScript(`__раздел('приглашениеПаузы', async () => {
+         Сторожим обе половины: без модификатора — пауза, с ним — стык
+         уехал целиком и остался стыком. */
+      report.паузаПротяжкой = await win.webContents.executeJavaScript(`__раздел('паузаПротяжкой', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        const собрать = () => {
+          state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+          state.instrumentalBuffer = state.originalBuffer;
+          audio.duration = 60;
+          document.getElementById('lyrics-input').value = 'раз два три';
+          let t0 = 5;
+          state.lines = [{
+            text: 'раз два три', time: 5, end: 11,
+            ручнойКонец: true, ручноеНачало: true, сомнительная: false,
+            /* Слова СВАРЕНЫ встык — ровно такими их приносит нейросеть */
+            words: 'раз два три'.split(' ').map((w) => {
+              const о = { text: w + ' ', time: t0, end: t0 + 2 };
+              t0 += 2;
+              return о;
+            }),
+          }];
+          editor.spansKey = ''; editor.stageKey = ''; editor.stageDrawn = null;
+          renderEditList();
+          editor.sel = 0;
+          updateSelInfo();
+        };
+        goToStep(3);
+        const tl = document.getElementById('timeline');
+        const L = timelineLanes();
+        const слова = () => lineWords(spanOfRow(0).line, spanOfRow(0));
+        const серед = (п) => п.y + п.h / 2;
+        const тянуть = (x0, dx, мод) => {
+          const r = tl.getBoundingClientRect();
+          const общ = { bubbles: true, pointerId: 1, clientY: r.top + серед(L.words),
+            ctrlKey: !!мод, metaKey: !!мод };
+          tl.dispatchEvent(new PointerEvent('pointerdown', { ...общ, clientX: r.left + x0 }));
+          tl.dispatchEvent(new PointerEvent('pointermove', { ...общ, clientX: r.left + x0 + dx }));
+          tl.dispatchEvent(new PointerEvent('pointerup', { ...общ, clientX: r.left + x0 + dx }));
+        };
+        const опыт = async (мод) => {
+          собрать();
+          await new Promise((r) => setTimeout(r, 120));
+          const до = слова().map((w) => [+w.start.toFixed(2), +w.end.toFixed(2)]);
+          тянуть(tToX(слова()[1].start), 40, мод);
+          await new Promise((r) => setTimeout(r, 120));
+          const после = слова().map((w) => [+w.start.toFixed(2), +w.end.toFixed(2)]);
+          return { до, после, пауза: +(после[1][0] - после[0][1]).toFixed(2) };
+        };
+
+        const просто = await опыт(false);
+        const сМодификатором = await опыт(true);
+        return {
+          просто, сМодификатором,
+          вНорме:
+            /* Обычная протяжка на секунду вправо даёт секундную паузу */
+            просто.пауза > 0.8
+            /* А с модификатором стык уехал целиком и остался стыком */
+            && сМодификатором.пауза < 0.01
+            && сМодификатором.после[0][1] > сМодификатором.до[0][1] + 0.8,
+        };
+      })`);
+
+      /* Картинка фона видна и в просмотре редактора.
+
+         Раньше её показывала только сцена «Караоке»: человек размечал
+         текст на пустом грунте, а потом видел другую картину — светлые
+         места, где текст пропадает, и тёмные, где всё видно. Судить
+         о читаемости надо там же, где правишь.
+
+         Проверяем обе сцены разом и оба пути — и когда картинку ставят
+         (setBgImage), и когда пересчитывают оформление (applyStyle). */
+      report.фонВРедакторе = await win.webContents.executeJavaScript(`__раздел('фонВРедакторе', async () => {
         const c = new OfflineAudioContext(1, 60 * 8000, 8000);
         state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
         state.instrumentalBuffer = state.originalBuffer;
-        audio.duration = 60;
-        state.паузаБыла = false;
-        document.getElementById('lyrics-input').value = 'раз два три';
-        let t0 = 5;
-        state.lines = [{
-          text: 'раз два три', time: 5, end: 11,
-          ручнойКонец: true, ручноеНачало: true, сомнительная: false,
-          /* Слова СВАРЕНЫ встык — ровно такими их приносит нейросеть */
-          words: 'раз два три'.split(' ').map((w) => {
-            const о = { text: w + ' ', time: t0, end: t0 + 2 };
-            t0 += 2;
-            return о;
-          }),
-        }];
-        editor.spansKey = ''; editor.stageKey = ''; editor.stageDrawn = null;
+        document.getElementById('lyrics-input').value = 'раз';
+        state.lines = [{ text: 'раз', time: 5, end: 9 }];
+        const пиксель = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+        setBgImage(пиксель);
         goToStep(3);
-        renderEditList();
-        editor.sel = 0;
-        updateSelInfo();
-        await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, 150));
+        const ред = document.getElementById('edit-stage');
+        const кар = document.getElementById('lyrics-stage');
+        const снять = (el) => ({
+          класс: el.classList.contains('has-bg'),
+          картинка: getComputedStyle(el).backgroundImage.startsWith('url('),
+          размер: getComputedStyle(el).backgroundSize,
+        });
+        const сКартинкой = { ред: снять(ред), кар: снять(кар) };
 
-        const tl = document.getElementById('timeline');
-        const r = tl.getBoundingClientRect();
-        const L = timelineLanes();
-        const узел = document.getElementById('tl-pause-hint');
-        const слова = () => lineWords(spanOfRow(0).line, spanOfRow(0));
-        const серед = (п) => п.y + п.h / 2;
-        const навести = (x, y) => {
-          tl.dispatchEvent(new PointerEvent('pointermove', {
-            bubbles: true, pointerId: 1, clientX: r.left + x, clientY: r.top + y }));
-          return { видно: !узел.classList.contains('hidden'), текст: узел.textContent };
-        };
+        /* Пересчёт оформления не должен терять картинку: он ставит фон
+           сам, и раньше делал это только для сцены караоке. */
+        applyStyle();
+        await new Promise((r) => setTimeout(r, 80));
+        const послеСтиля = снять(ред);
 
-        const наСтык = навести(tToX(слова()[1].start), серед(L.words));
-        const наСередину = навести(
-          (tToX(слова()[1].start) + tToX(слова()[1].end)) / 2, серед(L.words));
-        const наСтроку = навести(tToX(spanOfRow(0).end), серед(L.lines));
+        setBgImage(null);
+        await new Promise((r) => setTimeout(r, 80));
+        const безКартинки = { ред: снять(ред), кар: снять(кар) };
 
-        // Разводим стык — способ найден, приглашение обязано уйти навсегда
-        const общ = { bubbles: true, pointerId: 1, clientY: r.top + серед(L.words),
-          ctrlKey: true, metaKey: true };
-        const x0 = tToX(слова()[1].start);
-        tl.dispatchEvent(new PointerEvent('pointerdown', { ...общ, clientX: r.left + x0 }));
-        tl.dispatchEvent(new PointerEvent('pointermove', { ...общ, clientX: r.left + x0 + 40 }));
-        tl.dispatchEvent(new PointerEvent('pointerup', { ...общ, clientX: r.left + x0 + 40 }));
-        await new Promise((r2) => setTimeout(r2, 150));
-        const пауза = +(слова()[1].start - слова()[0].end).toFixed(2);
-        const послеРазведения = навести(tToX(слова()[0].end), серед(L.words));
-
-        const ждёмМод = ${JSON.stringify(process.platform === 'darwin' ? 'Cmd' : 'Ctrl')};
         return {
-          наСтык, наСередину, наСтроку, послеРазведения, пауза,
-          паузаБыла: state.паузаБыла, ждёмМод,
-          вНорме: наСтык.видно && наСтык.текст.includes(ждёмМод)
-            && !наСередину.видно && !наСтроку.видно
-            // Стык развёлся в настоящую паузу
-            && пауза > 0.5
-            // И приглашение больше не возвращается
-            && state.паузаБыла === true && !послеРазведения.видно,
+          сКартинкой, послеСтиля, безКартинки,
+          вНорме: сКартинкой.ред.класс && сКартинкой.ред.картинка
+            && сКартинкой.ред.размер === 'cover'
+            && сКартинкой.кар.класс && сКартинкой.кар.картинка
+            && послеСтиля.картинка
+            // Сняли картинку — обе сцены снова пустые
+            && !безКартинки.ред.класс && !безКартинки.ред.картинка
+            && !безКартинки.кар.класс,
         };
       })`);
 

@@ -315,6 +315,27 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
 .btn-ghost:not(:disabled):hover { border-color: var(--violet); color: var(--text); }
 .btn-big { font-size: 1.15rem; padding: 1rem 2.4rem; }
 .btn-small { font-size: 0.9rem; padding: 0.55rem 1.2rem; }
+/* Кнопка-значок среди обычных кнопок. Без этого правила значок
+   садился на базовую линию текста (у .btn — inline-block с полями под
+   подпись), и в ряду он стоял заметно выше центра: человек прислал
+   снимок со стрелкой на этот значок. Делаем кнопку квадратной, а значок
+   ставим по центру обеих осей. */
+.btn.icon-btn,
+/* Второй селектор — не про красоту, а про вес. Правило витрины
+   (body.is-desktop .only-desktop { display: revert }) специфичнее
+   двух классов и перебивало бы display, а .export-row .btn — padding.
+   Поэтому здесь тот же вес плюс элемент. */
+body.is-desktop .btn.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  padding: 0;
+}
+.btn.icon-btn .icon,
+body.is-desktop .btn.icon-btn .icon { margin: 0; }
+
 
 /* ============ Значки ============
    Один спрайт (см. index.html, .icon-sprite) на всё приложение вместо
@@ -1344,7 +1365,10 @@ body.is-desktop .steps-tool-group {
   display: grid;
   grid-template-columns:
     var(--list-w, 1.1fr) auto minmax(0, 1fr) auto var(--insp-w, 210px);
-  gap: var(--ed-gap);
+  /* По вертикали зазор нужен, по горизонтали — нет: окна примыкают
+     к разделителю вплотную (см. .ed-vsplitter). */
+  row-gap: var(--ed-gap);
+  column-gap: 0;
   flex: 1 1 0;
   min-height: 80px;
 }
@@ -1353,9 +1377,18 @@ body.is-desktop .steps-tool-group {
    Тянется мышью, как граница окон и дорожки под ним. Полоска узкая,
    а брать её удобно: сама колонка 8 px, а видимая черта внутри —
    3 px посередине. */
+/* Разделители стоят ВПЛОТНУЮ между окнами: своей ширины у них почти
+   нет, а зазор сетки вокруг них убран (column-gap: 0 у .editor-grid).
+   Так сделано в Final Cut: окна примыкают друг к другу, между ними
+   тонкая черта. Прежние восемь точек плюс два зазора съедали под
+   тридцать точек ширины на каждой границе — а ширина в редакторе
+   и есть самое дорогое. Тянуть при этом удобно по-прежнему: сама
+   черта в пару точек, а невидимая зона захвата шире её впятеро
+   (::after ниже). */
 .ed-vsplitter,
 .ed-lsplitter {
-  width: 8px;
+  position: relative;
+  width: 2px;
   align-self: stretch;
   display: flex;
   align-items: center;
@@ -1364,6 +1397,17 @@ body.is-desktop .steps-tool-group {
   /* Отменяем прокрутку страницы пальцем на самом разделителе: иначе
      на ноутбуке с тачскрином тянущий жест уезжал бы в прокрутку */
   touch-action: none;
+}
+/* Зона захвата: невидимая, шире самой черты — иначе в двухточечную
+   полоску пришлось бы целиться. */
+.ed-vsplitter::after,
+.ed-lsplitter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  right: -5px;
 }
 .ed-vsplitter::before,
 .ed-lsplitter::before {
@@ -2162,15 +2206,6 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   white-space: nowrap;
   pointer-events: none;
 }
-/* Приглашение у стыка слов — не число, а слова: шрифт обычный,
-   и стоит оно чуть ниже подписи времени, чтобы не спорить с ней. */
-.tl-hint {
-  font-family: inherit;
-  font-variant-numeric: normal;
-  top: 22px;
-  white-space: nowrap;
-  pointer-events: none;
-}
 #timeline {
   display: block;
   width: 100%;
@@ -2337,13 +2372,18 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   margin: 0;
 }
 
-.lyrics-stage.has-bg {
+/* Картинка фона — и в просмотре редактора: размечать текст на пустом
+   грунте, а потом видеть другую картину на шаге «Караоке» — значит
+   судить о читаемости не там, где правишь. */
+.lyrics-stage.has-bg,
+.edit-stage.has-bg {
   background-size: cover;
   background-position: center;
 }
 /* Читаемость поверх картинки: мягкая полоса ровно под строками,
    а не общее затемнение всего кадра — картинка остаётся видна */
-.lyrics-stage.has-bg::before {
+.lyrics-stage.has-bg::before,
+.edit-stage.has-bg::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -2354,7 +2394,9 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
 /* Строки — над подложкой. Отсчёт сюда не берём: у него своё
    абсолютное позиционирование, и position: relative его ломает */
 .lyrics-stage > .stage-line,
-.lyrics-stage > .stage-empty { position: relative; z-index: 1; }
+.lyrics-stage > .stage-empty,
+.edit-stage > .stage-line,
+.edit-stage > .stage-empty { position: relative; z-index: 1; }
 .lyrics-stage.has-bg .stage-line:not(.current) { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
 .stage-line {
   font-family: var(--st-font);

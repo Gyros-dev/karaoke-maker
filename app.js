@@ -192,11 +192,6 @@ const state = {
      (см. drawOrigLane): один раз оно объясняет, дальше просто занимает
      рабочую область. Живёт в проекте, а не в сессии. */
   отрезокБыл: false,
-  /* Разводил ли человек стык слов в паузу. Пока не разводил, при
-     наведении на стык показываем подсказку с модификатором: без неё
-     об этом способе догадаться нельзя, и человек честно решает, что
-     паузу поставить нечем (так и было — он об этом написал). */
-  паузаБыла: false,
   vocalMix: 0,              // 0..1 — громкость вокала в караоке
   bgImage: null,            // dataURL картинки-фона для караоке
   eq: { low: 0, mid: 0, high: 0 }, // эквалайзер, дБ (−12…+12)
@@ -2212,7 +2207,6 @@ function собратьПроект() {
        проект мог прийти из версии, которая про признак не знала. */
     origHintDone: !!(state.отрезокБыл || отрезкиОригинала().length
       || (keepPrev && prev.origHintDone)),
-    pauseHintDone: !!(state.паузаБыла || (keepPrev && prev.pauseHintDone)),
     bg: state.bgImage,
     // Огибающая голоса: по ней сцена знает конец строки и проигрыши
     voice: voice.level ? voiceToText(voice.level) : ((keepPrev && prev.voice) || null),
@@ -2395,7 +2389,6 @@ function применитьЧерновик(проект) {
   state.lines = linesFromProject(проект);
   state.origSpans = нормОтрезки(проект.origSpans, длит);
   state.отрезокБыл = !!(проект.origHintDone || state.origSpans.length);
-  state.паузаБыла = !!проект.pauseHintDone;
   state.eq = {
     low: +(проект.eq && проект.eq.low) || 0,
     mid: +(проект.eq && проект.eq.mid) || 0,
@@ -3025,7 +3018,6 @@ async function handleFile(file) {
       // Отрезки оригинала: длину знаем только сейчас — по ней и обрезаем
       state.origSpans = нормОтрезки(saved.origSpans, buffer.duration);
       state.отрезокБыл = !!(saved.origHintDone || state.origSpans.length);
-      state.паузаБыла = !!saved.pauseHintDone;
       // Огибающая голоса от прошлого разделения этой же песни
       if (saved.voice) restoreVoiceTrack(saved.voice, buffer.duration);
       if (saved.eq) {
@@ -3206,22 +3198,29 @@ function shrinkImage(file) {
 
 function setBgImage(dataUrl) {
   state.bgImage = dataUrl || null;
-  const stage = $('lyrics-stage');
+  /* Обе сцены разом: караоке и просмотр в редакторе. Просмотр —
+     уменьшенная копия будущего кадра, и картинка к нему относится
+     так же (см. applyStyle). */
+  const сцены = [$('lyrics-stage'), $('edit-stage')].filter(Boolean);
   const preview = $('bg-preview');
   if (dataUrl) {
-    stage.classList.add('has-bg');
-    // Затемнения всего кадра нет — читаемость даёт подложка под текстом
-    if (state.style.bgMode !== 'color') {
-      stage.style.backgroundImage = `url("${dataUrl}")`;
-    }
-    stage.style.setProperty('--st-scrim', scrimCss(state.style));
+    сцены.forEach((stage) => {
+      stage.classList.add('has-bg');
+      // Затемнения всего кадра нет — читаемость даёт подложка под текстом
+      if (state.style.bgMode !== 'color') {
+        stage.style.backgroundImage = `url("${dataUrl}")`;
+      }
+      stage.style.setProperty('--st-scrim', scrimCss(state.style));
+    });
     preview.src = dataUrl;
     preview.classList.remove('hidden');
     $('btn-bg-remove').classList.remove('hidden');
     $('btn-bg-add').textContent = t('минусовка.заменить');
   } else {
-    stage.classList.remove('has-bg');
-    stage.style.backgroundImage = '';
+    сцены.forEach((stage) => {
+      stage.classList.remove('has-bg');
+      stage.style.backgroundImage = '';
+    });
     preview.removeAttribute('src');
     preview.classList.add('hidden');
     $('btn-bg-remove').classList.add('hidden');
@@ -5065,17 +5064,25 @@ function applyStyle() {
     stage.dataset.anim = s.anim;
   });
 
-  // Фон сцены плеера: либо картинка/градиент как раньше, либо сплошной цвет
-  const stage = $('lyrics-stage');
-  // Подложка-градиент под текстом вместо затемнения всего кадра
-  stage.style.setProperty('--st-scrim', scrimCss(s));
-  if (s.bgMode === 'color') {
-    stage.style.backgroundColor = s.bgColor;
-    stage.style.backgroundImage = 'none';
-  } else {
-    stage.style.backgroundColor = '';
-    stage.style.backgroundImage = state.bgImage ? `url("${state.bgImage}")` : '';
-  }
+  /* Фон — обеим сценам: и караоке, и просмотру в редакторе.
+
+     Просмотр в редакторе — уменьшенная копия будущего кадра, и картинка
+     фона к нему относится ровно так же: без неё человек размечает текст
+     на пустом грунте, а потом на шаге «Караоке» видит другую картину —
+     светлые места, где текст пропадает, и тёмные, где всё видно. Судить
+     о читаемости лучше там же, где правишь. */
+  [$('lyrics-stage'), $('edit-stage')].forEach((stage) => {
+    if (!stage) return;
+    // Подложка-градиент под текстом вместо затемнения всего кадра
+    stage.style.setProperty('--st-scrim', scrimCss(s));
+    if (s.bgMode === 'color') {
+      stage.style.backgroundColor = s.bgColor;
+      stage.style.backgroundImage = 'none';
+    } else {
+      stage.style.backgroundColor = '';
+      stage.style.backgroundImage = state.bgImage ? `url("${state.bgImage}")` : '';
+    }
+  });
 
   /* Цвета партий — всему документу разом: ими красятся ряды списка
      строк, кнопки выбора партии и строки на сцене, а живут они
@@ -5806,7 +5813,14 @@ const editor = {
      ровно как магнит. */
   слышнаяПеремотка: false, // играть звук под указателем (см. скраб)
   безМагнита: false, // зажат Alt — магнит отключён на время
-  одинКрай: false,   // зажат Cmd/Ctrl — тянем один край стыка, а не оба
+  /* Зажат Cmd/Ctrl. Стык слов тянется ОДНИМ краем — так между словами
+     сама собой получается пауза, ради которой это и делают. Модификатор
+     нужен для обратного: увести оба края разом, не меняя длины паузы.
+     Раньше было наоборот, и человек честно решил, что паузу поставить
+     нечем: «невозможно растянуть слова и поставить пропуск между ними».
+     Догадаться о модификаторе было неоткуда, а частое действие должно
+     делаться без секретов. */
+  обаКрая: false,
   snapped: null,  // { t, вид } — куда притянулось, для направляющей
   hearVocal: true, // в редакторе по умолчанию звучит оригинал с вокалом
   solo: null,      // 'orig' | 'voice' | 'inst' — слушаем только одну дорожку
@@ -9726,13 +9740,11 @@ function applyDrag(t) {
     const words = ensureWords(line, sp);
     const k = d.k;
     if (!words[k]) return;
-    if (d.kind === 'word-edge' && editor.одинКрай && d.стыкWas != null) {
-      /* Cmd/Ctrl разводит стык на два края: влево уезжает конец левого
-         слова, вправо — начало правого, второй край стоит там, где был.
-         Так же в Logic Pro и Final Cut: обычное перетаскивание двигает
-         стык, с модификатором — только один край. */
-      /* Способ найден — приглашение больше не нужно (см. паузаБыла) */
-      if (!state.паузаБыла) { state.паузаБыла = true; saveProject(); }
+    if (d.kind === 'word-edge' && !editor.обаКрая && d.стыкWas != null) {
+      /* Обычная протяжка разводит стык на два края: влево уезжает конец
+         левого слова, вправо — начало правого, второй край стоит там,
+         где был. Так между словами и получается пауза — ради этого сюда
+         и тянутся. Оба края разом уводит модификатор (см. обаКрая). */
       const цель = примагнитить(t, {
         кромеСтроки: d.row, свои: d.row, безНачала: k, безКонца: k - 1,
       });
@@ -9800,22 +9812,6 @@ function hideDragTip() {
   if (tip) tip.classList.add('hidden');
 }
 
-/* Приглашение у стыка слов. Отдельный узел, а не подпись времени:
-   подпись живёт во время перетаскивания, а это — до него. */
-function показатьПриглашениеПаузы(x) {
-  const узел = $('tl-pause-hint');
-  if (!узел) return;
-  писать(узел, t('ред.стык.пауза', { 'мод': МОД }));
-  const слева = `${tl.offsetLeft + x}px`;
-  if (узел.style.left !== слева) узел.style.left = слева;
-  узел.classList.remove('hidden');
-}
-
-function скрытьПриглашениеПаузы() {
-  const узел = $('tl-pause-hint');
-  if (узел && !узел.classList.contains('hidden')) узел.classList.add('hidden');
-}
-
 /* Перемотка щелчком по пустому месту дорожки */
 function seekTo(t) {
   const пос = Math.min(Math.max(0, t), audio.duration);
@@ -9833,7 +9829,7 @@ tl.addEventListener('pointerdown', (e) => {
   const y = e.clientY - rect.top;
   const hit = timelineHit(x, y);
   editor.безМагнита = !!e.altKey;
-  editor.одинКрай = !!(e.metaKey || e.ctrlKey);
+  editor.обаКрая = !!(e.metaKey || e.ctrlKey);
   if (hit && hit.kind === 'orig-del') {
     удалитьОтрезок(hit.i);
     return;
@@ -9889,7 +9885,7 @@ tl.addEventListener('pointermove', (e) => {
   /* Cmd/Ctrl разводит стык слов на два края. Читаем на каждом движении,
      а не только при нажатии: модификатор можно взять и посреди
      перетаскивания — как в монтажных программах */
-  editor.одинКрай = !!(e.metaKey || e.ctrlKey);
+  editor.обаКрая = !!(e.metaKey || e.ctrlKey);
   if (editor.drag) {
     // Холст перерисуем один раз к кадру, а не на каждое движение мыши
     откладыватьОтрисовку = true;
@@ -9927,22 +9923,6 @@ tl.addEventListener('pointermove', (e) => {
      звучит песня, а указатель воспроизведения стоит на месте. */
   скиммировать(xToT(x));
   const hit = timelineHit(x, y);
-  /* Приглашение у стыка слов: «Ctrl — пауза».
-
-     Беда была не в коде, а в том, что о способе нельзя догадаться.
-     Сваренный стык двигается одной ручкой — оба края едут вместе, —
-     и человек честно решает, что паузу между словами поставить нечем.
-     Ровно так и вышло: «невозможно поставить пропуск, стрелочка
-     не появляется». Стрелочка появлялась, а вот модификатор угадать
-     было неоткуда.
-
-     Показываем, пока человек ни разу не развёл стык. Развёл — способ
-     найден, и приглашение исчезает навсегда (как у полосы оригинала). */
-  if (hit && hit.kind === 'word-edge' && !state.паузаБыла) {
-    показатьПриглашениеПаузы(x);
-  } else {
-    скрытьПриглашениеПаузы();
-  }
   tl.style.cursor = !hit ? 'pointer'
     : hit.kind === 'orig-del' ? 'pointer'
       : hit.kind === 'orig-new' || hit.kind === 'range-new' ? 'crosshair'
