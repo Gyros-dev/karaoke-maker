@@ -1,7 +1,7 @@
 {
   "name": "karaoke-punch",
   "productName": "Karaoke Punch",
-  "version": "1.25.0",
+  "version": "1.26.0",
   "description": "Караоке-студия с удалением вокала нейросетью",
   "main": "main.js",
   "author": "Gyros-dev",
