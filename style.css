@@ -2162,6 +2162,15 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   white-space: nowrap;
   pointer-events: none;
 }
+/* Приглашение у стыка слов — не число, а слова: шрифт обычный,
+   и стоит оно чуть ниже подписи времени, чтобы не спорить с ней. */
+.tl-hint {
+  font-family: inherit;
+  font-variant-numeric: normal;
+  top: 22px;
+  white-space: nowrap;
+  pointer-events: none;
+}
 #timeline {
   display: block;
   width: 100%;

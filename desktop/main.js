@@ -7594,6 +7594,84 @@ function createWindow() {
         };
       })`);
 
+      /* Приглашение у стыка слов.
+
+         Человек написал: «невозможно поставить пропуск между словами,
+         стрелочка не появляется» — и потом сам уточнил: «забыл про
+         Ctrl, пытался без него». Стрелочка появлялась, и код работал;
+         догадаться о модификаторе было неоткуда. Поэтому у стыка теперь
+         висит приглашение, и оно исчезает навсегда, как только человек
+         развёл стык хоть раз.
+
+         Проверяем ровно это: приглашение у стыка есть и зовёт нужную
+         клавишу (Cmd на Маке, Ctrl на Windows), в других местах его
+         нет, а после первого разведения оно не возвращается. */
+      report.приглашениеПаузы = await win.webContents.executeJavaScript(`__раздел('приглашениеПаузы', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        state.паузаБыла = false;
+        document.getElementById('lyrics-input').value = 'раз два три';
+        let t0 = 5;
+        state.lines = [{
+          text: 'раз два три', time: 5, end: 11,
+          ручнойКонец: true, ручноеНачало: true, сомнительная: false,
+          /* Слова СВАРЕНЫ встык — ровно такими их приносит нейросеть */
+          words: 'раз два три'.split(' ').map((w) => {
+            const о = { text: w + ' ', time: t0, end: t0 + 2 };
+            t0 += 2;
+            return о;
+          }),
+        }];
+        editor.spansKey = ''; editor.stageKey = ''; editor.stageDrawn = null;
+        goToStep(3);
+        renderEditList();
+        editor.sel = 0;
+        updateSelInfo();
+        await new Promise((r) => setTimeout(r, 200));
+
+        const tl = document.getElementById('timeline');
+        const r = tl.getBoundingClientRect();
+        const L = timelineLanes();
+        const узел = document.getElementById('tl-pause-hint');
+        const слова = () => lineWords(spanOfRow(0).line, spanOfRow(0));
+        const серед = (п) => п.y + п.h / 2;
+        const навести = (x, y) => {
+          tl.dispatchEvent(new PointerEvent('pointermove', {
+            bubbles: true, pointerId: 1, clientX: r.left + x, clientY: r.top + y }));
+          return { видно: !узел.classList.contains('hidden'), текст: узел.textContent };
+        };
+
+        const наСтык = навести(tToX(слова()[1].start), серед(L.words));
+        const наСередину = навести(
+          (tToX(слова()[1].start) + tToX(слова()[1].end)) / 2, серед(L.words));
+        const наСтроку = навести(tToX(spanOfRow(0).end), серед(L.lines));
+
+        // Разводим стык — способ найден, приглашение обязано уйти навсегда
+        const общ = { bubbles: true, pointerId: 1, clientY: r.top + серед(L.words),
+          ctrlKey: true, metaKey: true };
+        const x0 = tToX(слова()[1].start);
+        tl.dispatchEvent(new PointerEvent('pointerdown', { ...общ, clientX: r.left + x0 }));
+        tl.dispatchEvent(new PointerEvent('pointermove', { ...общ, clientX: r.left + x0 + 40 }));
+        tl.dispatchEvent(new PointerEvent('pointerup', { ...общ, clientX: r.left + x0 + 40 }));
+        await new Promise((r2) => setTimeout(r2, 150));
+        const пауза = +(слова()[1].start - слова()[0].end).toFixed(2);
+        const послеРазведения = навести(tToX(слова()[0].end), серед(L.words));
+
+        const ждёмМод = ${JSON.stringify(process.platform === 'darwin' ? 'Cmd' : 'Ctrl')};
+        return {
+          наСтык, наСередину, наСтроку, послеРазведения, пауза,
+          паузаБыла: state.паузаБыла, ждёмМод,
+          вНорме: наСтык.видно && наСтык.текст.includes(ждёмМод)
+            && !наСередину.видно && !наСтроку.видно
+            // Стык развёлся в настоящую паузу
+            && пауза > 0.5
+            // И приглашение больше не возвращается
+            && state.паузаБыла === true && !послеРазведения.видно,
+        };
+      })`);
+
       /* Витрины сайта в приложении не видно НИ МИГА.
 
          Жалоба повторялась трижды: «при открытии приложения на секунду
@@ -7709,7 +7787,12 @@ function createWindow() {
         const жди = () => new Promise((r) => setTimeout(r, 80));
 
         editor.sel = 0; editor.wordSel = -1; editor.origSel = -1;
-        updateSelInfo(); await жди();
+        /* Обновляем ВСЕ три окна, а не только строку. Иначе окно слова
+           остаётся заполненным от прошлого раздела: раздел «Слово»
+           прячется, только когда в нём пусто (.sel-word.empty в CSS),
+           и панель мерилась на состоянии, которого у человека
+           не бывает. Признак должен мерить то, что видит человек. */
+        updateSelInfo(); updateWordInfo(); обновитьОтрезок(); await жди();
         const строка = снимок();
         editor.wordSel = 1; updateWordInfo(); await жди();
         const слово = снимок();

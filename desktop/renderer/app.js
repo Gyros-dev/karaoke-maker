@@ -192,6 +192,11 @@ const state = {
      (см. drawOrigLane): один раз оно объясняет, дальше просто занимает
      рабочую область. Живёт в проекте, а не в сессии. */
   отрезокБыл: false,
+  /* Разводил ли человек стык слов в паузу. Пока не разводил, при
+     наведении на стык показываем подсказку с модификатором: без неё
+     об этом способе догадаться нельзя, и человек честно решает, что
+     паузу поставить нечем (так и было — он об этом написал). */
+  паузаБыла: false,
   vocalMix: 0,              // 0..1 — громкость вокала в караоке
   bgImage: null,            // dataURL картинки-фона для караоке
   eq: { low: 0, mid: 0, high: 0 }, // эквалайзер, дБ (−12…+12)
@@ -2207,6 +2212,7 @@ function собратьПроект() {
        проект мог прийти из версии, которая про признак не знала. */
     origHintDone: !!(state.отрезокБыл || отрезкиОригинала().length
       || (keepPrev && prev.origHintDone)),
+    pauseHintDone: !!(state.паузаБыла || (keepPrev && prev.pauseHintDone)),
     bg: state.bgImage,
     // Огибающая голоса: по ней сцена знает конец строки и проигрыши
     voice: voice.level ? voiceToText(voice.level) : ((keepPrev && prev.voice) || null),
@@ -2389,6 +2395,7 @@ function применитьЧерновик(проект) {
   state.lines = linesFromProject(проект);
   state.origSpans = нормОтрезки(проект.origSpans, длит);
   state.отрезокБыл = !!(проект.origHintDone || state.origSpans.length);
+  state.паузаБыла = !!проект.pauseHintDone;
   state.eq = {
     low: +(проект.eq && проект.eq.low) || 0,
     mid: +(проект.eq && проект.eq.mid) || 0,
@@ -3018,6 +3025,7 @@ async function handleFile(file) {
       // Отрезки оригинала: длину знаем только сейчас — по ней и обрезаем
       state.origSpans = нормОтрезки(saved.origSpans, buffer.duration);
       state.отрезокБыл = !!(saved.origHintDone || state.origSpans.length);
+      state.паузаБыла = !!saved.pauseHintDone;
       // Огибающая голоса от прошлого разделения этой же песни
       if (saved.voice) restoreVoiceTrack(saved.voice, buffer.duration);
       if (saved.eq) {
@@ -9723,6 +9731,8 @@ function applyDrag(t) {
          слова, вправо — начало правого, второй край стоит там, где был.
          Так же в Logic Pro и Final Cut: обычное перетаскивание двигает
          стык, с модификатором — только один край. */
+      /* Способ найден — приглашение больше не нужно (см. паузаБыла) */
+      if (!state.паузаБыла) { state.паузаБыла = true; saveProject(); }
       const цель = примагнитить(t, {
         кромеСтроки: d.row, свои: d.row, безНачала: k, безКонца: k - 1,
       });
@@ -9788,6 +9798,22 @@ function showDragTip(x, sec) {
 function hideDragTip() {
   const tip = $('tl-tip');
   if (tip) tip.classList.add('hidden');
+}
+
+/* Приглашение у стыка слов. Отдельный узел, а не подпись времени:
+   подпись живёт во время перетаскивания, а это — до него. */
+function показатьПриглашениеПаузы(x) {
+  const узел = $('tl-pause-hint');
+  if (!узел) return;
+  писать(узел, t('ред.стык.пауза', { 'мод': МОД }));
+  const слева = `${tl.offsetLeft + x}px`;
+  if (узел.style.left !== слева) узел.style.left = слева;
+  узел.classList.remove('hidden');
+}
+
+function скрытьПриглашениеПаузы() {
+  const узел = $('tl-pause-hint');
+  if (узел && !узел.classList.contains('hidden')) узел.classList.add('hidden');
 }
 
 /* Перемотка щелчком по пустому месту дорожки */
@@ -9901,6 +9927,22 @@ tl.addEventListener('pointermove', (e) => {
      звучит песня, а указатель воспроизведения стоит на месте. */
   скиммировать(xToT(x));
   const hit = timelineHit(x, y);
+  /* Приглашение у стыка слов: «Ctrl — пауза».
+
+     Беда была не в коде, а в том, что о способе нельзя догадаться.
+     Сваренный стык двигается одной ручкой — оба края едут вместе, —
+     и человек честно решает, что паузу между словами поставить нечем.
+     Ровно так и вышло: «невозможно поставить пропуск, стрелочка
+     не появляется». Стрелочка появлялась, а вот модификатор угадать
+     было неоткуда.
+
+     Показываем, пока человек ни разу не развёл стык. Развёл — способ
+     найден, и приглашение исчезает навсегда (как у полосы оригинала). */
+  if (hit && hit.kind === 'word-edge' && !state.паузаБыла) {
+    показатьПриглашениеПаузы(x);
+  } else {
+    скрытьПриглашениеПаузы();
+  }
   tl.style.cursor = !hit ? 'pointer'
     : hit.kind === 'orig-del' ? 'pointer'
       : hit.kind === 'orig-new' || hit.kind === 'range-new' ? 'crosshair'
