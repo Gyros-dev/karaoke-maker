@@ -639,8 +639,7 @@ I18N.EN = {
   'asr.отменить': 'Cancel',
 
   /* ---------- Шаг 2 ---------- */
-  'шаг2.подсказка': 'Paste the lyrics. One line of text is one karaoke line. Empty lines don’t count.',
-  'шаг2.поле': 'Paste the lyrics here…\n\nEach line is\na separate karaoke line',
+  'шаг2.поле': 'Paste the lyrics here…\n\nOne line is one karaoke line.\nEmpty lines don’t count.',
   'шаг2.назад': '← Back',
   'шаг2.дальше': 'To the editor →',
   'шаг2.назад.подсказка': 'Back to step 1: song, instrumental and background',

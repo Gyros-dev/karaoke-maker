@@ -1181,27 +1181,22 @@ body.is-desktop .steps-tool-group {
 #step-2.active:has(> .asr-block) {
   display: grid;
   grid-template-columns: clamp(18rem, 54%, 40rem) minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
 }
-/* Подсказка идёт НАД обоими окнами, а не только над полем текста:
-   пока она стояла в правой колонке, левое окно начиналось выше
-   правого — два окна одного шага разной высоты и с разным верхом.
-   Человек так и спросил: «зачем?». Незачем. */
-#step-2.active:has(> .asr-block) > .panel-hint {
-  grid-area: 1 / 1 / 2 / 3;
-  align-self: start;
-  text-align: left;
-}
+/* Подсказки-строки над окнами больше нет вовсе: она делала два окна
+   шага разной высоты и с разным верхом, а говорила то же, что и пустое
+   поле текста. Теперь её слова стоят в самом поле подсказкой (см.
+   placeholder у #lyrics-input) и уходят, как только вставлен текст. */
 #step-2.active:has(> .asr-block) > .asr-block {
-  grid-area: 2 / 1 / 3 / 2;
+  grid-area: 1 / 1 / 2 / 2;
   margin-bottom: 0;
   min-height: 0;
   /* Прокрутка остаётся страховкой на совсем низкое окно, но в рабочих
      размерах содержимое помещается целиком и полосы не видно */
   overflow-y: auto;
 }
-#step-2.active:has(> .asr-block) > #lyrics-input { grid-area: 2 / 2 / 3 / 3; }
-#step-2.active:has(> .asr-block) > .panel-actions { grid-area: 3 / 1 / 4 / 3; }
+#step-2.active:has(> .asr-block) > #lyrics-input { grid-area: 1 / 2 / 2 / 3; }
+#step-2.active:has(> .asr-block) > .panel-actions { grid-area: 2 / 1 / 3 / 3; }
 .panel-hint { color: var(--text-dim); margin-bottom: 1rem; text-align: center; }
 .panel-actions { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap; }
 

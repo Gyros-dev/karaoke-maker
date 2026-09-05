@@ -2950,7 +2950,9 @@ function createWindow() {
               // Текст песни и всё, что набрал человек, не переводится
               // Имя песни в чипе памяти и в заметке над зоной загрузки —
               // тоже данные человека: это имя его файла
-              if (p.closest('#edit-list, #lyrics-stage, #edit-stage, #tap-mode, #word-tap, #proj-chip, #mem-note')) continue;
+              /* Список недавних проектов — тоже слова человека: он сам
+                 назвал папки, и переводить их нам нечего. */
+              if (p.closest('#edit-list, #lyrics-stage, #edit-stage, #tap-mode, #word-tap, #proj-chip, #mem-note, #recent-list')) continue;
               if (КИР.test(t) && !ждёмКириллицу) {
                 счёт++;
                 следы.push((p.id || p.className || p.tagName) + ': ' + t.slice(0, 60));
