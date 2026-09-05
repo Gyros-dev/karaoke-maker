@@ -875,6 +875,65 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   font-weight: 600;
 }
 .proj-chip .icon { flex: none; opacity: 0.7; }
+/* Чип стал кнопкой с меню: своя семья шрифта (у button её нет),
+   курсор и уголок — как у переключателей темы и языка в шапке. */
+.proj-chip { font-family: inherit; cursor: pointer; background: transparent; }
+.proj-chip:hover { color: var(--text); }
+.proj-chip[aria-expanded="true"] { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+.proj-chip .pick-caret { width: 0.6em; height: 0.6em; opacity: 0.7; }
+/* Точка несохранённого. Цветом акцента темы, а не красным: это
+   не ошибка, а «на диске этого ещё нет». */
+.proj-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sel-ring, #4d9fff);
+}
+/* Список чипа растёт вправо: чип стоит слева в ряду шагов, и список,
+   прижатый к правому краю (как у переключателей в шапке), уехал бы
+   под сами шаги. */
+.proj-menu { right: auto; left: 0; }
+
+/* Недавние проекты на первом шаге */
+.recent { margin: 0.9rem auto 0; max-width: 560px; width: 100%; text-align: left; }
+.recent-head {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+.recent-list { display: flex; flex-direction: column; gap: 0.3rem; }
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.recent-item:hover { border-color: var(--sel-ring); }
+.recent-item .icon { flex: none; opacity: 0.7; }
+.recent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-path {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+  text-align: right;
+}
 /* Имя песни бывает длинным — обрезаем многоточием, целиком оно
    всё равно написано в подсказке */
 .proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -560,6 +560,7 @@ I18N.EN = {
   'как.экспорт.lrc': '<b>.lrc</b> is the standard synced-lyrics format: a line and its time. Plenty of players read it. Next to it, “.lrc with words” — the extended variant with a timestamp on every word.',
   'как.экспорт.wav': '<b>Instrumental .wav</b> — the audio without vocals as a single file, including the stretches where you kept the original.',
   'как.экспорт.видео': '<b>Video</b> — a finished clip with background, text and instrumental in HD, Full HD or 2K, as a <b>.webm</b> file. It records in real time, so it takes exactly as long as the song; you can minimise the window and recording carries on.',
+  'как.экспорт.чип': '<b>Where the work lives.</b> On the left of the step row there is a chip with the project name: click it and everything you can do with the project is there — save, save as, open another one, show the folder in the system. A dot next to the name means there are changes that aren’t in the folder yet. And on the first step, while no song is open, recent projects are listed under the drop zone — one click back to yesterday’s work.',
   'как.экспорт.сохранение': 'Lyrics, timings, word timing and the look are saved automatically and survive closing the <span class="only-web">tab</span><span class="only-desktop">app</span>. The only thing you have to pick again is the audio file itself.',
 
   /* ---------- Студия: шаги ---------- */
@@ -864,14 +865,8 @@ I18N.EN = {
   'ред.началоСлова.подсказка': 'Word start as minutes:seconds, the way the timeline reads it (plain seconds work too). The first word has a start of its own: push it later and a pause appears before it — a singer does not always come in at once',
   'ред.конецСлова.подсказка': 'Word end as minutes:seconds, the way the timeline reads it (plain seconds work too). The last word’s end stretches to the end of the line by itself — that is the melisma; set it by hand and the tail stays with the line, bring it back flush and it stretches again',
   'ред.слово.поКругу.подсказка': 'Play this word round and round, with a short run-up and tail (key L)',
-  'проект.сохранить': 'Save the project',
-  'проект.сохранить.подсказка': 'Save the project as a folder: the song, the instrumental, the background and all the timing (Cmd+S; Shift+Cmd+S to save a copy)',
-  'проект.открыть': 'Open a project',
-  'проект.открыть.подсказка': 'Open a project folder — with the audio, the instrumental and the timing (Cmd+O)',
-  'черновик.сохранить': 'Save a draft',
-  'черновик.сохранить.подсказка': 'Save a draft file: the lyrics, the timing, the original stretches and the look',
-  'черновик.открыть': 'Open a draft',
-  'черновик.открыть.подсказка': 'Open a draft file',
+  'проект.меню.aria': 'What to do with this work',
+  'недавние.заголовок': 'Recent projects',
   'ред.назад': '← Lyrics',
   'ред.дальше': 'Karaoke →',
   'ред.назад.подсказка': 'Back to step 2: the song lyrics',
@@ -1107,6 +1102,51 @@ I18N.СТРОКИ = {
   'проект.чип': {
     ru: 'Проект: {путь}',
     en: 'Project: {путь}',
+  },
+  /* Подписи проекта и черновика. Лежат в СТРОКАХ, а не в словаре
+     разметки, потому что их зовёт КОД — меню чипа (собратьМенюПроекта).
+     Кнопки рядом читают те же ключи, поэтому меню и кнопки называют
+     одно и то же одними словами. */
+  'проект.сохранить': { ru: 'Сохранить проект', en: 'Save the project' },
+  'проект.сохранить.подсказка': {
+    ru: 'Сохранить проект папкой: песня, минусовка, фон и вся разметка '
+      + '(Cmd+S; Shift+Cmd+S — сохранить копию)',
+    en: 'Save the project as a folder: the song, the instrumental, the background '
+      + 'and all the timing (Cmd+S; Shift+Cmd+S to save a copy)',
+  },
+  'проект.сохранитьКак': { ru: 'Сохранить как…', en: 'Save as…' },
+  'проект.сохранитьКак.подсказка': {
+    ru: 'Сохранить работу новой папкой проекта, оставив нынешнюю как есть (Shift+Cmd+S)',
+    en: 'Save the work as a new project folder, leaving the current one as it is (Shift+Cmd+S)',
+  },
+  'проект.открыть': { ru: 'Открыть проект', en: 'Open a project' },
+  'проект.открыть.подсказка': {
+    ru: 'Открыть проект из папки — со звуком, минусовкой и разметкой (Cmd+O)',
+    en: 'Open a project folder — with the audio, the instrumental and the timing (Cmd+O)',
+  },
+  'проект.показать': { ru: 'Показать папку', en: 'Show in folder' },
+  'проект.показать.подсказка': {
+    ru: 'Показать папку проекта там, где её видит система',
+    en: 'Show the project folder in the system file manager',
+  },
+  'черновик.сохранить': { ru: 'Сохранить черновик', en: 'Save a draft' },
+  'черновик.сохранить.подсказка': {
+    ru: 'Сохранить черновик файлом: текст, разметка, отрезки оригинала и оформление',
+    en: 'Save a draft file: the lyrics, the timing, the original stretches and the look',
+  },
+  'черновик.открыть': { ru: 'Открыть черновик', en: 'Open a draft' },
+  'черновик.открыть.подсказка': { ru: 'Открыть черновик из файла', en: 'Open a draft file' },
+  'проект.несохранено': {
+    ru: 'Есть изменения, которых ещё нет в папке проекта',
+    en: 'There are changes that aren’t in the project folder yet',
+  },
+  'проект.пропал': {
+    ru: 'Папки проекта больше нет на месте: {путь}',
+    en: 'The project folder isn’t there any more: {путь}',
+  },
+  'недавние.открыть': {
+    ru: 'Открыть этот проект: {путь}',
+    en: 'Open this project: {путь}',
   },
   /* Подписи файла разметки В ПРИЛОЖЕНИИ. Ставит их код (см.
      обновитьПодписиЧерновика), поэтому обе стороны лежат здесь,

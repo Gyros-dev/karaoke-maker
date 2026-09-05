@@ -1149,6 +1149,12 @@
         <p data-i18n-html="как.экспорт.сохранение">Текст, времена, разметка слов и оформление сохраняются сами и переживают закрытие
           <span class="only-web">вкладки</span><span class="only-desktop">приложения</span>.
           Заново выбрать придётся только сам аудиофайл.</p>
+        <p data-i18n-html="как.экспорт.чип" class="only-desktop"><b>Где лежит работа.</b> Слева в ряду шагов
+          стоит чип с именем проекта: нажми — и там всё, что с ним можно сделать: сохранить,
+          сохранить как, открыть другой, показать папку в системе. Точка рядом с именем значит,
+          что в памяти есть изменения, которых в папке ещё нет. А на первом шаге, пока песня
+          не открыта, под зоной загрузки перечислены недавние проекты — чтобы вернуться
+          ко вчерашней работе одним нажатием.</p>
       </div>
     </details>
   </div>
@@ -1174,12 +1180,25 @@
          потока), а узнать, чья работа открыта, нужно ДО того, как
          поверх неё загрузят другую песню. -->
     <div class="proj-box">
-      <span class="proj-chip hidden" id="proj-chip">
-        <svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg>
-        <span class="proj-name" id="proj-name"></span>
-        <!-- Выбранная тональность. Ноль не показываем вовсе: чип
-             узкий, и раздувать его ради «0» незачем. -->
-        <span class="proj-key hidden" id="proj-key"></span>
+      <!-- Чип — не подпись, а кнопка с меню: он называет открытую работу
+           и говорит, куда уйдёт «сохранить». Точка рядом с именем значит
+           «на диске это ещё не лежит» — так помечают несохранённое
+           монтажные программы и текстовые редакторы. Пункты меню
+           собирает код (собратьМенюПроекта в app.js): в приложении это
+           проект папкой, на сайте — черновик файлом. -->
+      <span class="proj-switch pick-switch hidden" id="proj-switch"
+        data-i18n-aria="проект.меню.aria" aria-label="Что сделать с этой работой">
+        <button type="button" class="proj-chip pick-btn" id="proj-chip"
+          aria-haspopup="menu" aria-expanded="false">
+          <svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg>
+          <span class="proj-dot hidden" id="proj-dot" aria-hidden="true"></span>
+          <span class="proj-name" id="proj-name"></span>
+          <!-- Выбранная тональность. Ноль не показываем вовсе: чип
+               узкий, и раздувать его ради «0» незачем. -->
+          <span class="proj-key hidden" id="proj-key"></span>
+          <svg class="icon pick-caret" aria-hidden="true"><use href="#i-caret"></use></svg>
+        </button>
+        <div class="pick-menu proj-menu hidden" id="proj-menu" role="menu"></div>
       </span>
       <!-- Проект папкой — только в приложении: писать папку на диск
            умеет оно, а браузеру такого не дают. На сайте остаётся
@@ -1233,6 +1252,15 @@
       <p class="dropzone-title" data-i18n-html="шаг1.перетащи">Перетащи сюда аудиофайл<br>или нажми, чтобы выбрать</p>
       <p class="dropzone-hint" data-i18n="шаг1.форматы">MP3 · WAV · OGG · M4A</p>
       <input type="file" id="file-input" accept="audio/*" hidden>
+    </div>
+    <!-- Недавние проекты. Только в приложении и только пока песня
+         не открыта: это способ вернуться ко вчерашней работе, а не
+         украшение первого шага. Список собирает отрисоватьНедавние
+         в app.js из того же хранилища, куда его кладут сохранение
+         и открытие проекта. -->
+    <div class="recent hidden only-desktop" id="recent">
+      <div class="recent-head" data-i18n="недавние.заголовок">Недавние проекты</div>
+      <div class="recent-list" id="recent-list"></div>
     </div>
     <div class="processing hidden" id="processing">
       <div class="spinner"></div>

@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('desktop', {
   projectWrite: (dir, files) => ipcRenderer.invoke('project-write', { dir, files }),
   projectOpenPick: () => ipcRenderer.invoke('project-open-pick'),
   projectRead: (dir, name) => ipcRenderer.invoke('project-read', { dir, name }),
+  projectReveal: (dir) => ipcRenderer.invoke('project-reveal', dir),
 
   /* Язык интерфейса. Меню приложения собирается в главном процессе,
      и о выборе, который живёт в хранилище страницы, он узнаёт только

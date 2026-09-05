@@ -1277,7 +1277,7 @@ function createWindow() {
             const времена = state.lines.map((l) => l.time);
             const п = сведенияОПамяти();
             обновитьПамять();
-            const чип = document.getElementById('proj-chip');
+            const чип = document.getElementById('proj-switch');
             return {
               времена,
               текст: document.getElementById('lyrics-input').value,
@@ -6797,6 +6797,109 @@ function createWindow() {
         try { fs.rmSync(папкаПроекта, { recursive: true, force: true }); } catch (e) { /* и ладно */ }
       }
 
+      /* Видно ли, ЧТО открыто и сохранено ли оно.
+
+         Проект папкой был работой вслепую: имя в чипе — от файла песни,
+         про папку знала одна подсказка, а сохранено ли то, что на
+         экране, не говорило ничто. Теперь чип называет сам проект,
+         точка рядом значит «в папке этого ещё нет», а меню чипа —
+         то же, что кнопки рядом, только словами.
+
+         Проверяем и подписи меню: они зовутся кодом, а ключи подписей
+         жили в словаре разметки — там русского нет вовсе, и по-русски
+         в меню встали бы сами ключи. */
+      report.видимостьПроекта = await win.webContents.executeJavaScript(`__раздел('видимостьПроекта', () => {
+        const былиНедавние = localStorage.getItem('karaoke-recent');
+        const былПуть = проектНаДиске.путь;
+        const былоИмя = проектНаДиске.имя;
+        const былаГрязь = проектНаДиске.грязный;
+        let показано = null;
+        try {
+          I18N.установить('ru');
+          localStorage.removeItem('karaoke-recent');
+          state.fileName = 'проба.mp3';
+          state.lines = [{ text: 'раз', time: 1, end: 3 }];
+          проектНаДиске.путь = '/tmp/моя-песня.karaokeproj';
+          проектНаДиске.имя = 'моя-песня';
+          проектНаДиске.грязный = false;
+          обновитьПамять();
+          const чистое = {
+            имя: document.getElementById('proj-name').textContent,
+            точка: !document.getElementById('proj-dot').classList.contains('hidden'),
+          };
+          // Любая правка — и папка отстала: точка обязана появиться сама
+          saveProject();
+          const послеПравки = !document.getElementById('proj-dot').classList.contains('hidden');
+
+          // Меню: пункты, их подписи и «показать папку» без папки
+          const пункты = () => [...document.querySelectorAll('#proj-menu .pick-item')]
+            .map((к) => ({ текст: к.querySelector('span').textContent, мертва: к.disabled }));
+          const сПапкой = пункты();
+          проектНаДиске.путь = null;
+          собратьМенюПроекта();
+          const безПапки = пункты();
+          проектНаДиске.путь = '/tmp/моя-песня.karaokeproj';
+          собратьМенюПроекта();
+
+          // Список недавних: пополняется, открывается и забывается
+          запомнитьПроект('/tmp/моя-песня.karaokeproj', 'моя-песня');
+          запомнитьПроект('/tmp/вторая.karaokeproj', 'вторая');
+          const строки = () => [...document.querySelectorAll('#recent-list .recent-item')]
+            .map((к) => к.querySelector('.recent-name').textContent);
+          const вСписке = строки();
+          забытьПроект('/tmp/вторая.karaokeproj');
+          const послеЗабвения = строки();
+
+          // «Показать папку» доходит до мостика с тем самым путём
+          let спросили = null;
+          window.__мостПроекта = {
+            projectReveal: async (п) => { спросили = п; return { ok: true }; },
+          };
+          показатьПапкуПроекта();
+
+          // Чип — кнопка: по нажатию открывается меню
+          document.getElementById('proj-chip').click();
+          const открылось = document.getElementById('proj-chip')
+            .getAttribute('aria-expanded') === 'true';
+          показатьСписок(document.getElementById('proj-switch'), false);
+
+          показано = {
+            чистое, послеПравки,
+            меню: сПапкой.map((п) => п.текст),
+            показатьМертва: (безПапки.find((п) => п.текст === 'Показать папку') || {}).мертва,
+            вСписке, послеЗабвения, спросили, открылось,
+          };
+          показано.вНорме =
+            // Чип называет проект, а не файл песни
+            чистое.имя === 'моя-песня' && !чистое.точка
+            // Правка зажигает точку
+            && послеПравки
+            /* Подписи — по-русски, а не ключами. Точка в подписи и есть
+               признак ключа: «проект.сохранить» вместо «Сохранить проект». */
+            && показано.меню.length === 6
+            && показано.меню.every((т) => т && !/^[а-яё]+\\./i.test(т))
+            && показано.меню[0] === 'Сохранить проект'
+            && показано.меню[1] === 'Сохранить как…'
+            && показано.меню[3] === 'Показать папку'
+            // Без папки показывать нечего — пункт мёртв
+            && показано.показатьМертва === true
+            // Недавние: свежий сверху, забытый исчез
+            && вСписке.length === 2 && вСписке[0] === 'вторая'
+            && послеЗабвения.length === 1 && послеЗабвения[0] === 'моя-песня'
+            // Показать папку дошло до мостика
+            && спросили === '/tmp/моя-песня.karaokeproj'
+            && открылось;
+          return показано;
+        } finally {
+          window.__мостПроекта = null;
+          проектНаДиске.путь = былПуть;
+          проектНаДиске.имя = былоИмя;
+          проектНаДиске.грязный = былаГрязь;
+          if (былиНедавние == null) localStorage.removeItem('karaoke-recent');
+          else localStorage.setItem('karaoke-recent', былиНедавние);
+        }
+      })`, true);
+
       /* Громкость отрезка оригинала.
 
          «Оставить оригинальный кусок, но потише» — то, ради чего она
@@ -7131,7 +7234,11 @@ function createWindow() {
         });
         try {
           const коробка = document.querySelector('.proj-box');
-          const кнопки = [...коробка.querySelectorAll('button')].map((b) => b.id);
+          /* Считаем ряд инструментов, а не всё подряд: в коробке теперь
+             ещё и чип — он стал кнопкой с меню, и его пункты тоже
+             кнопки. Порядок сторожим у того ряда, ради которого раздел
+             и заведён. */
+          const кнопки = [...коробка.querySelectorAll('.steps-tool')].map((b) => b.id);
           const группа = document.getElementById('draft-tools');
           const черта = getComputedStyle(группа).borderLeftWidth;
           const видны = ['btn-proj-save', 'btn-proj-open'].every((id) =>
@@ -8425,6 +8532,22 @@ function createWindow() {
               await new Promise((r) => setTimeout(r, 400));
               return 'ок';
             }
+            /* Работа и её место: чип с открытым меню и список недавних
+               проектов на первом шаге. Числа говорят, что подписи верны,
+               но не показывают, не разъехалось ли меню под чипом. */
+            if (сцена === 'проект') {
+              проектНаДиске.путь = '/Users/kto-to/Music/Моя песня.karaokeproj';
+              проектНаДиске.имя = 'Моя песня';
+              проектНаДиске.грязный = true;
+              запомнитьПроект(проектНаДиске.путь, 'Моя песня');
+              запомнитьПроект('/Users/kto-to/Music/Вторая песня.karaokeproj', 'Вторая песня');
+              state.originalBuffer = null;
+              goToStep(1);
+              обновитьПамять();
+              показатьСписок(document.getElementById('proj-switch'), true);
+              await new Promise((r) => setTimeout(r, 400));
+              return 'ок';
+            }
             /* Настройки караоке: снимок нужен, чтобы глазом увидеть,
                влезает ли закладка в колонку. Числа про высоту врут
                реже, но не показывают, не стало ли тесно. */
@@ -9342,6 +9465,21 @@ ipcMain.handle('project-open-pick', async () => {
   if (canceled || !filePaths || !filePaths[0]) return { ok: false };
   const п = filePaths[0];
   return { ok: true, path: п, name: path.basename(п).replace(/\.[^.]+$/, '') };
+});
+
+/* Показать папку проекта в системе. Ничего не открывает и не пишет —
+   только подсвечивает папку там, где человек привык её видеть; так же
+   делает «Show in Finder» в любой монтажной программе. Путь берём
+   не на веру: показываем только то, что и правда есть на диске. */
+ipcMain.handle('project-reveal', async (_evt, dir) => {
+  if (typeof dir !== 'string' || !dir) return { ok: false, error: 'плохой вызов' };
+  try {
+    if (!fs.existsSync(dir)) return { ok: false, error: 'нет папки' };
+    shell.showItemInFolder(dir);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
 });
 
 ipcMain.handle('project-read', async (_evt, { dir, name }) => {
