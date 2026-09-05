@@ -392,108 +392,6 @@ function createWindow() {
       win.webContents.focus();
     }
   };
-  /* Дневник клавиатуры: KARAOKE_KEYLOG=<файл>.
-
-     Жалоба, которую иначе не поймать: «на Windows после разметки текст
-     не редактируется — мышь работает, текст выделяется, а буквы никуда
-     не идут». На Маке не повторяется, виртуалка недоступна, а гадать
-     по третьему разу — только время терять.
-
-     Дневник отвечает на один вопрос: ДОХОДЯТ ли нажатия до страницы.
-     Раз в полсекунды пишем строку: видит ли страница себя в фокусе,
-     на каком элементе стоит курсор, сколько нажатий пришло с начала
-     и какое было последним. Если человек стучит по клавишам, а счётчик
-     стоит — беда снаружи страницы (фокус у окна, а не у неё). Если
-     счётчик растёт, а буквы не появляются — беда внутри, и виноват
-     обработчик, который их съедает. Третьего не дано. */
-  if (process.env.KARAOKE_KEYLOG) {
-    const файл = process.env.KARAOKE_KEYLOG;
-    const счётчик = `(() => {
-      if (!window.__клавиши) {
-        window.__клавиши = { всего: 0, последняя: null, вПоле: 0 };
-        window.addEventListener('keydown', (e) => {
-          window.__клавиши.всего++;
-          window.__клавиши.последняя = e.key;
-          const у = document.activeElement;
-          if (у && (у.tagName === 'TEXTAREA' || у.tagName === 'INPUT')) {
-            window.__клавиши.вПоле++;
-          }
-        }, true);
-      }
-      const у = document.activeElement;
-      const поле = document.getElementById('lyrics-input');
-      return {
-        фокусСтраницы: document.hasFocus(),
-        жёсткихКругов: window.__жёсткихКругов || 0,
-        курсорНа: у ? (у.tagName + (у.id ? '#' + у.id : '')) : '(нет)',
-        нажатий: window.__клавиши.всего,
-        изНихВПоле: window.__клавиши.вПоле,
-        последняя: window.__клавиши.последняя,
-        знаковВПоле: поле ? поле.value.length : null,
-        шаг: [...document.querySelectorAll('.step-panel.active')].map((п) => п.id).join(),
-      };
-    })()`;
-    let прежняя = '';
-    setInterval(async () => {
-      if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
-      try {
-        const с = await win.webContents.executeJavaScript(счётчик);
-        const строка = JSON.stringify({
-          время: new Date().toTimeString().slice(0, 8),
-          окноВФокусе: win.isFocused(),
-          страницаВФокусе: win.webContents.isFocused(),
-          ...с,
-        });
-        /* Пишем только изменения: иначе за пять минут набежит шестьсот
-           одинаковых строк, и в них утонет то самое место, где человек
-           начал стучать по клавишам. */
-        const без = строка.replace(/"время":"[^"]*",/, '');
-        if (без !== прежняя) {
-          прежняя = без;
-          fs.appendFileSync(файл, строка + '\n');
-        }
-      } catch (e) { /* страница перезагружается — пропускаем такт */ }
-    }, 500);
-  }
-
-  /* Что видно в первую секунду после запуска: KARAOKE_SHOTS=<путь-без-
-     расширения>. Имя переменной латиницей нарочно: zsh не отдаёт
-     процессу переменные с кириллицей в имени — на этом уже спотыкались. Снимает окно очередью с самого начала загрузки и пишет
-     кадры <путь>-0.png, -1.png…
-
-     Заведено по жалобе «при открытии приложения на секунду появляется
-     изображение сайта». На глаз это не поймать, а спорить о том, что
-     мелькнуло, бессмысленно: надо смотреть кадры. */
-  if (process.env.KARAOKE_SHOTS) {
-    const путь = process.env.KARAOKE_SHOTS;
-    win.webContents.on('did-start-loading', async () => {
-      /* Окно НЕ показываем сами: смысл снимков в том, чтобы увидеть
-         запуск таким, каким его видит человек, — включая момент,
-         когда окна ещё нет на экране. */
-      for (let к = 0; к < 14; к++) {
-        try {
-          const снимок = await win.webContents.capturePage();
-          const байты = снимок.toPNG();
-          if (байты.length) fs.writeFileSync(`${путь}-${String(к).padStart(2, '0')}.png`, байты);
-          const что = await win.webContents.executeJavaScript(`(() => {
-            const h = document.querySelector('.hero');
-            const s = document.querySelector('.studio');
-            return {
-              мс: Math.round(performance.now()),
-              стилей: document.styleSheets.length,
-              классБоди: document.body ? document.body.className : '(нет body)',
-              герой: h ? getComputedStyle(h).display : '(нет)',
-              студия: s ? getComputedStyle(s).display : '(нет)',
-              шаг: [...document.querySelectorAll('.step-panel.active')].map((p) => p.id).join(),
-            };
-          })()`).catch(() => null);
-          console.log('КАДР', к, 'видно=' + win.isVisible(), JSON.stringify(что));
-        } catch (e) { console.log('КАДР', к, 'сбой ' + ((e && e.message) || e)); }
-        await new Promise((r) => setTimeout(r, 90));
-      }
-      app.quit();
-    });
-  }
   win.on('focus', вернутьФокусСтранице);
   win.on('restore', вернутьФокусСтранице);
   win.on('show', вернутьФокусСтранице);
@@ -7626,6 +7524,66 @@ function createWindow() {
         };
       })`);
 
+      /* Полоса обновления не даёт остаться на старой версии.
+
+         Беда, о которой рассказал человек: у знакомого на macOS стояла
+         старая версия, а уведомления он не видел. Разгадка в «Позже»:
+         щелчок по нему записывал пропуск НАВСЕГДА — и полоса больше
+         не появлялась ни при каком запуске. Один случайный щелчок,
+         и человек остался без починок, о которых сам же и просил.
+
+         Теперь пропуск живёт до конца сеанса, а тому, кто отстал
+         на три выпуска и больше, «Позже» не предлагают вовсе.
+         Проверяем оба конца на выдуманных ответах: настоящую проверку
+         не позовёшь — там сеть и живой GitHub. */
+      report.полосаОбновления = await win.webContents.executeJavaScript(`__раздел('полосаОбновления', () => {
+        const полоса = document.getElementById('update-bar');
+        const позже = document.getElementById('update-dismiss');
+        const текст = document.getElementById('update-text');
+        try { sessionStorage.removeItem('karaoke-skip-version'); } catch (e) { /* нет хранилища */ }
+        try { localStorage.removeItem('karaoke-skip-version'); } catch (e) { /* нет хранилища */ }
+
+        // Отстал на один выпуск: полоса мягкая, «Позже» на месте
+        window.__показатьПолосуОбновления({
+          latest: '9.9.9', current: '9.9.8', отставание: 1, настойчиво: false, url: '' });
+        const мягкая = {
+          видна: !полоса.classList.contains('hidden'),
+          позжеЕсть: !позже.classList.contains('hidden'),
+          текст: текст.textContent,
+        };
+
+        // Щелчок по «Позже» прячет полосу — и только до конца сеанса
+        позже.click();
+        const послеПозже = {
+          спрятана: полоса.classList.contains('hidden'),
+          вСеансе: (() => { try { return sessionStorage.getItem('karaoke-skip-version'); } catch (e) { return null; } })(),
+          вПамятиНавсегда: (() => { try { return localStorage.getItem('karaoke-skip-version'); } catch (e) { return null; } })(),
+        };
+
+        // Отстал на семь: полоса настойчивая, «Позже» нет вовсе
+        window.__показатьПолосуОбновления({
+          latest: '9.9.9', current: '9.2.0', отставание: 7, настойчиво: true, url: '' });
+        const настойчивая = {
+          видна: !полоса.classList.contains('hidden'),
+          позжеЕсть: !позже.classList.contains('hidden'),
+          текст: текст.textContent,
+        };
+
+        полоса.classList.add('hidden');
+        позже.classList.remove('hidden');
+        try { sessionStorage.removeItem('karaoke-skip-version'); } catch (e) { /* нет хранилища */ }
+        return {
+          мягкая, послеПозже, настойчивая,
+          вНорме: мягкая.видна && мягкая.позжеЕсть
+            && послеПозже.спрятана
+            // Пропуск — только на сеанс: в долгой памяти его быть не должно
+            && послеПозже.вСеансе === '9.9.9' && послеПозже.вПамятиНавсегда === null
+            // Отставшему на семь выпусков «Позже» не предлагаем, и число видно
+            && настойчивая.видна && !настойчивая.позжеЕсть
+            && настойчивая.текст.includes('7'),
+        };
+      })`);
+
       /* Витрины сайта в приложении не видно НИ МИГА.
 
          Жалоба повторялась трижды: «при открытии приложения на секунду
@@ -8571,9 +8529,21 @@ function compareVersions(a, b) {
   return 0;
 }
 
+/* Сколько выпусков человек пропустил. Спрашиваем список, а не только
+   последний: «вышла новая версия» человек читает вполглаза и жмёт
+   «Позже», а «ты отстал на семь выпусков» читается иначе. По этому же
+   числу решаем, можно ли вообще предлагать «Позже» (см. настойчиво). */
+function fetchReleaseList() {
+  return новыйЗапрос(RELEASES_API.replace(/\/latest$/, '') + '?per_page=30');
+}
+
 function fetchLatestRelease() {
+  return новыйЗапрос(RELEASES_API);
+}
+
+function новыйЗапрос(адрес) {
   return new Promise((resolve, reject) => {
-    const req = https.get(RELEASES_API, {
+    const req = https.get(адрес, {
       headers: { 'User-Agent': 'karaoke-punch', Accept: 'application/vnd.github+json' },
       timeout: 10000,
     }, (res) => {
@@ -8592,6 +8562,22 @@ function fetchLatestRelease() {
   });
 }
 
+/* На сколько выпусков человек отстал. Считаем настоящие выпуски
+   приложения: черновики и предварительные (зеркало весов модели) —
+   не выпуски, и попадать в счёт им незачем. */
+const ОТСТАВАНИЕ_НАСТОЙЧИВО = 3;
+
+async function посчитатьОтставание(current) {
+  try {
+    const список = await fetchReleaseList();
+    if (!Array.isArray(список)) return 0;
+    return список.filter((р) => !р.draft && !р.prerelease
+      && compareVersions(String(р.tag_name || '').replace(/^v/, ''), current) > 0).length;
+  } catch (e) {
+    return 0;   // не сочлось — не беда, полоса всё равно выйдет
+  }
+}
+
 ipcMain.handle('check-update', async () => {
   try {
     const rel = await fetchLatestRelease();
@@ -8599,6 +8585,7 @@ ipcMain.handle('check-update', async () => {
     if (!latest) return { ok: false };
     const current = app.getVersion();
     if (compareVersions(latest, current) <= 0) return { ok: true, hasUpdate: false, current };
+    const отставание = await посчитатьОтставание(current);
     // Ищем файл под текущую систему
     const assets = rel.assets || [];
     const wanted = process.platform === 'darwin' ? '.dmg' : '.exe';
@@ -8608,6 +8595,12 @@ ipcMain.handle('check-update', async () => {
       hasUpdate: true,
       current,
       latest,
+      отставание,
+      /* Настойчиво — значит без «Позже». Человек, отставший на три
+         выпуска и больше, уже показал, что откладывает; а откладывает
+         он ровно то, ради чего эти выпуски и делались — починки того,
+         на что он же и жаловался. */
+      настойчиво: отставание >= ОТСТАВАНИЕ_НАСТОЙЧИВО,
       notes: (rel.body || '').slice(0, 400),
       url: (asset && asset.browser_download_url) || rel.html_url,
     };

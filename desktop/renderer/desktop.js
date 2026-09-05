@@ -41,7 +41,6 @@
          фокус не мгновенно, и первая проверка бывает слишком ранней. */
       const проверить = () => {
         if (document.hasFocus()) return;
-        window.__жёсткихКругов = (window.__жёсткихКругов || 0) + 1;
         if (window.desktop && window.desktop.focusPage) window.desktop.focusPage(true);
       };
       проверить();
@@ -188,15 +187,37 @@
     try {
       const res = await window.desktop.checkUpdate();
       if (!res.ok || !res.hasUpdate) return;
-      if (localStorage.getItem('karaoke-skip-version') === res.latest) return;
-      updater.latest = res.latest;
-      updateUrl = res.url;
-      updater.перерисовать = () => showUpdateBar(
-        t('обновление.версия', { v: res.latest, 'текущая': res.current }),
-        t('обновление.скачать'));
-      updater.перерисовать();
+      /* «Позже» прячет полосу до следующего запуска, а не навсегда.
+
+         Беда была ровно в «навсегда»: один случайный щелчок — и человек
+         сидел на старой версии, ничего об этом не зная. Пропуск живёт
+         в sessionStorage: закрыл приложение — при следующем запуске
+         напомним. А тому, кто отстал на три выпуска и больше,
+         не предлагаем «Позже» вовсе. */
+      if (sessionStorage.getItem('karaoke-skip-version') === res.latest
+        && !res.настойчиво) return;
+      показатьПолосу(res);
     } catch (e) { /* нет сети — не мешаем работать */ }
   }
+
+  /* Рисуем полосу по ответу проверки. Вынесено отдельно, чтобы
+     самопроверка могла показать её на выдуманном ответе: настоящую
+     проверку она позвать не может — там сеть и живой GitHub. */
+  function показатьПолосу(res) {
+    updater.latest = res.latest;
+    updateUrl = res.url;
+    updater.перерисовать = () => {
+      showUpdateBar(
+        res.отставание > 1
+          ? t('обновление.отставание', { v: res.latest, n: res.отставание })
+          : t('обновление.версия', { v: res.latest, 'текущая': res.current }),
+        t('обновление.скачать'));
+      const позже = document.getElementById('update-dismiss');
+      if (позже) позже.classList.toggle('hidden', !!res.настойчиво);
+    };
+    updater.перерисовать();
+  }
+  window.__показатьПолосуОбновления = показатьПолосу;
 
   /* Windows умеет обновляться сам: там показываем не ссылку,
      а кнопку, которая скачивает и ставит новую версию. */

@@ -11483,7 +11483,7 @@ async function checkWebUpdate() {
     if (!res.ok) return;
     const data = await res.json();
     if (!data.version || data.version === APP_VERSION) return;
-    if (localStorage.getItem('karaoke-skip-version') === data.version) return;
+    if (sessionStorage.getItem('karaoke-skip-version') === data.version) return;
     updater.latest = data.version;
     updater.перерисовать = () => showUpdateBar(
     t('обновление.вышла', { v: data.version }), t('обновление.обновить'));
@@ -11498,7 +11498,12 @@ $('update-action').addEventListener('click', () => {
 });
 
 $('update-dismiss').addEventListener('click', () => {
-  if (updater.latest) localStorage.setItem('karaoke-skip-version', updater.latest);
+  /* «Позже» — это ПОЗЖЕ, а не «никогда». Пропуск живёт до конца сеанса:
+     один случайный щелчок раньше прятал полосу навсегда, и человек
+     оставался на старой версии, ничего об этом не зная. */
+  try {
+    if (updater.latest) sessionStorage.setItem('karaoke-skip-version', updater.latest);
+  } catch (e) { /* нет хранилища — просто скроем полосу */ }
   $('update-bar').classList.add('hidden');
 });
 
