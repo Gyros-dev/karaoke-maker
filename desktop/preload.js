@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('desktop', {
      но после долгой работы (разметка текста, удаление вокала) окно
      никуда не уходило — значит, и вернуться не могло. Поэтому студия
      просит фокус сама, когда работа кончилась. */
-  focusPage: () => ipcRenderer.invoke('focus-page'),
+  focusPage: (жёстко) => ipcRenderer.invoke('focus-page', !!жёстко),
   saveFile: (name, data) => ipcRenderer.invoke('save-file', { name, data }),
 
   /* Проект папкой: выбрать место, записать файлы, выбрать папку,
