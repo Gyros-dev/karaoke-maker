@@ -789,7 +789,10 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   background: var(--bg-soft);
   border: 1px solid var(--border);
   border-radius: 24px;
-  padding: 1.25rem 1.5rem 1rem;
+  /* Боковое поле — переменной: дорожка выходит из него в край окна
+     отрицательным полем ровно на эту величину (см. .timeline-wrap). */
+  --studio-pad-x: 1.5rem;
+  padding: 1.25rem var(--studio-pad-x) 1rem;
   margin-top: 1rem;
   margin-bottom: 2rem;
 }
@@ -1986,12 +1989,21 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
    в app.js), её же тянет разделитель. Запасное значение — прежняя
    высота дорожки: если код почему-то не отработал, редактор
    выглядит как до правки, а не разъезжается. */
+/* Дорожка идёт от края до края рабочего места — как в монтажной
+   программе, где линейка времени всегда во всю ширину окна. Боковое
+   поле студии она отыгрывает обратно отрицательным полем, поэтому
+   и рамка по бокам ей не нужна: там край окна. Полсотни пикселей,
+   которые от этого достаются дорожке, — это полсекунды песни
+   на обычном приближении. */
 .timeline-wrap {
   flex: none;
   height: var(--tl-h, 140px);
   display: flex;
+  margin-inline: calc(-1 * var(--studio-pad-x, 1.5rem));
   border: 1px solid var(--border);
-  border-radius: var(--ed-radius);
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
   background: var(--bg-card);
   overflow: hidden;
 }
@@ -2753,14 +2765,22 @@ input[type="range"]::-moz-range-thumb {
    Раскладка как в монтажной программе. Раньше настройки лежали длинным
    списком под сценой: сцена уезжала за край экрана, и человек, двигая
    ползунок, не видел, что меняется. */
+/* Панель настроек стоит СПРАВА — там же, где инспектор редактора.
+   Раньше на «Караоке» она была слева, и человек, перейдя с прошлого
+   шага, искал параметры не на той стороне: в монтажных программах
+   инспектор всегда с одной стороны, и это не украшение, а привычка
+   руки. В разметке она идёт первой (порядок чтения: сначала чем
+   управляем, потом что видим), а место ей назначает сетка. */
 .karaoke-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
   gap: 1rem;
   flex: 1;
   min-height: 0;
   text-align: left;
 }
+.karaoke-layout > .karaoke-side { grid-column: 2; grid-row: 1; }
+.karaoke-layout > .stage-wrap { grid-column: 1; grid-row: 1; }
 .karaoke-side {
   display: flex;
   flex-direction: column;
@@ -3072,7 +3092,8 @@ body.is-desktop .studio {
   margin: 0;
   border: none;
   border-radius: 0;
-  padding: 0.9rem 1.2rem 0.8rem;
+  --studio-pad-x: 1.2rem;
+  padding: 0.9rem var(--studio-pad-x) 0.8rem;
 }
 
 /* Руководство в приложении — окно поверх студии, а не раздел страницы:
@@ -3304,6 +3325,9 @@ body.is-desktop .site-header .footer-link {
      встаёт в поток отдельной строкой, а не поверх кнопок */
   .steps-help { position: static; transform: none; }
   .karaoke-layout { grid-template-columns: minmax(0, 1fr); }
+  /* В одну колонку места для сторон нет — порядок обычный, разметочный */
+  .karaoke-layout > .karaoke-side,
+  .karaoke-layout > .stage-wrap { grid-column: auto; grid-row: auto; }
   /* Предпросмотр сверху: на телефоне важнее видеть, что получается */
   .karaoke-main { order: -1; }
   .karaoke-side { margin-bottom: 1rem; }

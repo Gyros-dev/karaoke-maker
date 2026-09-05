@@ -7603,8 +7603,14 @@ function updateEditStage() {
    дорожке прежнего роста раскладка выходит прежняя.
 
    Линейка — исключение: у неё внутри строка цифр в 10 px, и расти ей
-   некуда и незачем. Её высота так и осталась числом. */
-const LANE_RULER = 16;
+   некуда и незачем. Её высота так и осталась числом.
+
+   Двадцать, а не прежние шестнадцать: линейка — не полоска над
+   полосами, а СВОЯ зона, по которой перематывают и выделяют кусок.
+   В монтажной программе она поэтому отделена от дорожек и цветом,
+   и чертой, и ростом; в шестнадцать её цифры, полоса выделения
+   и часы у указателя стояли впритык друг к другу. */
+const LANE_RULER = 20;
 const ВЕС_ПОЛОС = { orig: 18, voice: 28, wave: 38, lines: 30, words: 20 };
 /* Порядок полос сверху вниз. Голос вставляется, только когда огибающая
    есть (приложение, после удаления вокала нейросетью). */
@@ -8722,6 +8728,14 @@ function drawTimeline() {
   // Высота полосы, а не сама полоса: раньше здесь стоял объект L.ruler,
   // высота выходила NaN — и линейка рисовалась поверх старого кадра
   g.fillRect(0, 0, W, L.ruler.h);
+  /* Своя подложка и черта под ней: линейка — отдельная зона, где
+     щелчок перематывает, а протяжка выделяет кусок. Пока она была
+     того же цвета, что и полосы, это читалось как ещё одна полоса,
+     и по ней щёлкали наугад. */
+  g.fillStyle = 'rgba(255, 255, 255, 0.05)';
+  g.fillRect(0, 0, W, L.ruler.h);
+  g.fillStyle = 'rgba(255, 255, 255, 0.16)';
+  g.fillRect(0, L.ruler.h - 1, W, 1);
   /* Полоса выделения с двумя ручками — как «цикл» в монтажной программе.
      Ручки стоят ровно на метках первой и последней выделенной строки:
      край, за который тянут, встаёт туда, куда его привели. */
@@ -8730,10 +8744,10 @@ function drawTimeline() {
     const x1 = tToX(диап.b);
     const w = Math.max(2, x1 - x0);
     g.fillStyle = ЦВЕТ_ДИАПАЗОНА.полоса;
-    g.fillRect(x0, L.ruler.y, w, L.ruler.h);
+    g.fillRect(x0, L.ruler.y, w, L.ruler.h - 1);
     g.fillStyle = ЦВЕТ_ДИАПАЗОНА.ручка;
-    g.fillRect(x0, L.ruler.y, 3, L.ruler.h);
-    g.fillRect(x1 - 3, L.ruler.y, 3, L.ruler.h);
+    g.fillRect(x0, L.ruler.y, 3, L.ruler.h - 1);
+    g.fillRect(x1 - 3, L.ruler.y, 3, L.ruler.h - 1);
   }
   g.fillStyle = '#9a9ab0';
   // Моноширинный: время бежит вперёд, и цифры не должны подрагивать
@@ -8742,8 +8756,10 @@ function drawTimeline() {
   g.textAlign = 'left';
   for (let t = Math.ceil(editor.scrollT / step) * step; t <= editor.scrollT + viewDur; t += step) {
     const x = tToX(t);
-    g.fillRect(x, 0, 1, 5);
-    g.fillText(fmtTime(t), x + 3, 12);
+    // Засечка от НИЖНЕГО края линейки: она указывает на дорожку,
+    // а не висит в воздухе, — так же в любой монтажной программе
+    g.fillRect(x, L.ruler.h - 6, 1, 5);
+    g.fillText(fmtTime(t), x + 3, L.ruler.h - 8);
   }
 
   /* Направляющая магнита: там, где граница примагнитилась, встаёт
@@ -9282,6 +9298,51 @@ function wordEdgeOneCore(row, idx, край, t) {
   const hi = (w.end != null ? w.end : sp.end) - MIN_SPAN;
   const nt = Math.min(Math.max(t, lo), Math.max(lo, hi));
   w.time = nt;
+  return nt;
+}
+
+/* Слово целиком: обе границы едут вместе, ширина сохраняется — как
+   клип в монтажной программе. Соседей за собой не тянем: слово ходит
+   в своём промежутке и упирается в соседей, а паузы, если они есть,
+   остаются паузами.
+
+   Одна на всех нарочно: этим ходят и мышь, и клавиши «,» и «.».
+   Пока код жил внутри перетаскивания, у клавиш выбора не было —
+   либо повторить его слово в слово, либо не двигать слово вовсе.
+
+   «стыки» — разница между мышью и клавишами. Мышь двигает слово
+   в его промежутке: человек целится сам и видит, куда осталось место.
+   А клавишам такого промежутка чаще всего нет вовсе: слова размечены
+   встык, и сдвиг на кадр упёрся бы в соседа и не сделал НИЧЕГО —
+   клавиша, которая молчит, хуже отсутствующей. Поэтому у клавиш
+   сваренный сосед едет своим краем следом, ужимаясь: это «slide»
+   из монтажной программы, где клип двигают внутри сплошного ряда. */
+function двинутьСловоЦеликом(row, k, цельНачала, ширина, стыки) {
+  const sp = spanOfRow(row);
+  if (!sp) return null;
+  const words = ensureWords(sp.line, sp);
+  const w = words[k];
+  if (!w) return null;
+  const пред = words[k - 1];
+  const след = words[k + 1];
+  const конецПред = пред ? (пред.end != null ? пред.end : пред.time + MIN_SPAN) : null;
+  const конец = w.end != null ? w.end : (след ? след.time : sp.end);
+  const слеваСварен = !!(стыки && пред && стыкли(конецПред, w.time));
+  const справаСварен = !!(стыки && след && стыкли(конец, след.time));
+  const lo = слеваСварен ? пред.time + MIN_SPAN : (пред ? конецПред : sp.start);
+  const hi = (справаСварен
+    ? (след.end != null ? след.end : sp.end) - MIN_SPAN
+    : (след ? след.time : sp.end)) - ширина;
+  const nt = Math.min(Math.max(цельНачала, lo), Math.max(lo, hi));
+  w.time = nt;
+  w.end = nt + ширина;
+  if (слеваСварен) пред.end = nt;
+  if (справаСварен) след.time = nt + ширина;
+  /* Последнее слово тянется до конца строки, пока конец не выставлен
+     руками (распев, см. lineWords). Уехало вместе с блоком — значит
+     выставлен: без этой пометки на дорожке двигалось бы одно начало,
+     а хвост упрямо возвращался к концу строки. */
+  if (k === words.length - 1) w.ручнойКонец = !стыкли(w.end, sp.end);
   return nt;
 }
 
@@ -9887,24 +9948,14 @@ function applyDrag(t) {
       if (nt != null) words[k].time = nt;
       editor.dragTip = words[k].time;
     } else {
-      /* Слово целиком: обе границы едут вместе, ширина сохраняется —
-         как клип в монтажной программе. Соседей за собой не тянем:
-         слово ходит в своём промежутке и упирается в соседей, а паузы,
-         если они есть, остаются паузами. */
       const src = d.words && d.words[k] ? d.words[k] : words[k];
       const delta = t - d.grabT;
       const width = (src.end != null ? src.end : src.time + 0.3) - src.time;
-      const пред = words[k - 1];
-      const след = words[k + 1];
-      const lo = пред ? (пред.end != null ? пред.end : пред.time + MIN_SPAN) : sp.start;
-      const hi = (след ? след.time : sp.end) - width;
       const raw = примагнитить(src.time + delta, {
         кромеСтроки: d.row, свои: d.row, безНачала: k, безКонца: k,
       });
-      const nt = Math.min(Math.max(raw, lo), Math.max(lo, hi));
-      words[k].time = nt;
-      words[k].end = nt + width;
-      editor.dragTip = nt;
+      const nt = двинутьСловоЦеликом(d.row, k, raw, width);
+      if (nt != null) editor.dragTip = nt;
     }
   }
   editor.spansKey = '';
@@ -10513,6 +10564,11 @@ function followPlayhead() {
 const NUDGE_STEP = 0.1;
 const NUDGE_FINE = 0.02;
 const NUDGE_COARSE = 1;
+/* Кадр готового видео: тридцать в секунду (см. makeTicker в экспорте).
+   Клавиши «,» и «.» двигают выбранное ровно на кадр — как в монтажной
+   программе, где мельче единицы времени просто нет. С Shift — десять
+   кадров, тоже как там. */
+const КАДР = 1 / 30;
 
 /* Клавиша по её месту на клавиатуре, а не по букве: у русской раскладки
    Cmd+Z — это Cmd+я, и по букве такое не поймать. Обычно место называет
@@ -10522,6 +10578,8 @@ const KEY_ALIASES = {
   l: 'KeyL', 'д': 'KeyL', s: 'KeyS', 'ы': 'KeyS',
   '[': 'BracketLeft', 'х': 'BracketLeft',
   ']': 'BracketRight', 'ъ': 'BracketRight',
+  i: 'KeyI', 'ш': 'KeyI', o: 'KeyO', 'щ': 'KeyO',
+  ',': 'Comma', 'б': 'Comma', '.': 'Period', 'ю': 'Period',
   '=': 'Equal', '+': 'Equal', '-': 'Minus', '_': 'Minus',
   ' ': 'Space',
 };
@@ -10585,6 +10643,76 @@ function nudgeSelected(what, delta) {
   else nudgeLineEnd(editor.sel, delta);
   dropEmptyHistory();   // сдвиг упёрся в соседнюю строку — отменять нечего
   renderEditList();
+  editor.stageKey = '';
+  renderEditStage();
+  drawTimeline();
+}
+
+/* Начало и конец — по указателю воспроизведения, клавишами I и O.
+
+   Так ставят точки входа и выхода во всех монтажных программах:
+   довёл указатель до места на слух и нажал клавишу, вместо того чтобы
+   целиться мышью в пиксель на дорожке. Выбрано слово — правится край
+   слова, иначе строки: та же грамматика, что у стрелок и скобок. */
+function крайПоУказателю(что) {
+  const t = audio.position();
+  if (editor.wordSel >= 0) {
+    const info = selectedWord();
+    if (!info) return;
+    pushHistory();
+    wordEdgeOneCore(info.row, info.k, что, t);
+  } else {
+    if (editor.sel < 0) return;
+    pushHistory();
+    if (что === 'start') setLineTime(editor.sel, t);
+    else setLineEnd(editor.sel, t);
+  }
+  refreshTimes();
+  saveProject();
+  dropEmptyHistory();
+  renderEditList();
+  editor.spansKey = '';
+  editor.stageKey = '';
+  renderEditStage();
+  drawTimeline();
+}
+
+/* Сдвиг выбранного ЦЕЛИКОМ — клавишами «,» и «.». Стрелки и скобки
+   двигают по одному краю, а здесь блок едет не меняя длины: строка
+   вместе со своим концом, слово вместе со своей шириной. Раньше такое
+   умела только мышь. */
+function сдвинутьВыбранное(delta) {
+  if (editor.wordSel >= 0) {
+    const info = selectedWord();
+    if (!info) return;
+    const sp = spanOfRow(info.row);
+    if (!sp) return;
+    // Ширину берём ПОКАЗАННУЮ: у последнего слова записанного конца
+    // может не быть вовсе (распев), и слово схлопнулось бы в треть секунды
+    const пок = lineWords(sp.line, sp)[info.k];
+    if (!пок) return;
+    pushHistory();
+    двинутьСловоЦеликом(info.row, info.k, пок.start + delta, пок.end - пок.start, true);
+  } else {
+    if (editor.sel < 0) return;
+    const line = state.lines[editor.sel];
+    if (!line || line.time == null) return;
+    const synced = syncedLines();
+    const j = synced.indexOf(line);
+    const было = j >= 0 ? lineStart(synced, j) : line.time;
+    const концыРучные = line.ручнойКонец;
+    const конецБыл = j >= 0 ? lineEnd(synced, j) : line.end;
+    pushHistory();
+    setLineTime(editor.sel, было + delta);
+    // Конец едет за строкой, только если человек уже задавал его руками:
+    // иначе он и так пересчитается от нового начала (см. line-move)
+    if (концыРучные && конецБыл != null) setLineEnd(editor.sel, конецБыл + delta);
+  }
+  refreshTimes();
+  saveProject();
+  dropEmptyHistory();
+  renderEditList();
+  editor.spansKey = '';
   editor.stageKey = '';
   renderEditStage();
   drawTimeline();
@@ -10683,6 +10811,11 @@ document.addEventListener('keydown', (e) => {
       setLoop(!(editor.loop && editor.loopScope === scope), scope);
       break;
     }
+    // I и O — начало и конец по указателю; «,» и «.» — сдвиг на кадр
+    case 'KeyI': e.preventDefault(); крайПоУказателю('start'); break;
+    case 'KeyO': e.preventDefault(); крайПоУказателю('end'); break;
+    case 'Comma': e.preventDefault(); сдвинутьВыбранное(-(e.shiftKey ? 10 : 1) * КАДР); break;
+    case 'Period': e.preventDefault(); сдвинутьВыбранное((e.shiftKey ? 10 : 1) * КАДР); break;
     case 'KeyS': e.preventDefault(); setSnap(!editor.snap); break;
     // Сетка долей — рядом с магнитом и на клавише рядом же
     case 'KeyG': e.preventDefault(); setBeatGrid(!state.сетка.вкл); break;
@@ -11812,7 +11945,13 @@ document.addEventListener('keydown', (e) => {
    отрисовки дорожки getComputedStyle звать не по карману. */
 const ТЕМЫ = ['signature', 'neutral', 'steel'];
 const КЛЮЧ_ТЕМЫ = 'karaoke-theme';
-const ТЕМА_ПО_УМОЛЧАНИЮ = 'signature';
+/* По умолчанию — стальная, а не фирменная. Рабочее место должно быть
+   спокойным: в Final Cut и Logic Pro студия серая, а цветом отмечено
+   только то, что выбрано, — глаз тогда цепляется за работу, а не за
+   оформление. Зелень фирменной темы никуда не делась: она осталась
+   на витрине (переменные тем видны только внутри .studio) и в одном
+   нажатии на значок темы для тех, кому она нравилась. */
+const ТЕМА_ПО_УМОЛЧАНИЮ = 'steel';
 
 function прочитатьТему() {
   try {
