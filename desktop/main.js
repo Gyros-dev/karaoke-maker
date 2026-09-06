@@ -6799,11 +6799,12 @@ function createWindow() {
             && послеПравки
             /* Подписи — по-русски, а не ключами. Точка в подписи и есть
                признак ключа: «проект.сохранить» вместо «Сохранить проект». */
-            && показано.меню.length === 6
+            && показано.меню.length === 7
             && показано.меню.every((т) => т && !/^[а-яё]+\\./i.test(т))
             && показано.меню[0] === 'Сохранить проект'
             && показано.меню[1] === 'Сохранить как…'
             && показано.меню[3] === 'Показать папку'
+            && показано.меню[6] === 'Очистить проект'
             // Без папки показывать нечего — пункт мёртв
             && показано.показатьМертва === true
             // Недавние: свежий сверху, забытый исчез
@@ -6928,7 +6929,10 @@ function createWindow() {
         const считать = (e) => { дошло++; e.preventDefault(); };
         поле2.addEventListener('click', считать);
         показатьСписок(document.getElementById('proj-switch'), true);
-        const пункт = [...меню.querySelectorAll('.pick-item')].pop();
+        /* Щёлкаем по «Открыть разметку из файла», а не по последнему:
+           последним теперь стоит «Очистить проект», и он спрашивает. */
+        const пункт = [...меню.querySelectorAll('.pick-item')]
+          .find((к) => /разметку из файла/i.test(к.textContent));
         итог.пунктМёртв = пункт.disabled;
         пункт.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
         пункт.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -6960,7 +6964,8 @@ function createWindow() {
           const поле = document.getElementById('draft-input');
           window.__счётчикЩелчков = (e) => { window.__щелчков++; e.preventDefault(); };
           поле.addEventListener('click', window.__счётчикЩелчков);
-          const пункт = [...document.querySelectorAll('#proj-menu .pick-item')].pop();
+          const пункт = [...document.querySelectorAll('#proj-menu .pick-item')]
+            .find((к) => /разметку из файла/i.test(к.textContent));
           const r = пункт.getBoundingClientRect();
           return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2),
             мёртв: пункт.disabled, текст: пункт.textContent.trim() };
@@ -6989,7 +6994,8 @@ function createWindow() {
           window.__щелчков = 0;
           document.getElementById('draft-input')
             .addEventListener('click', window.__счётчикЩелчков);
-          const пункт = [...document.querySelectorAll('#proj-menu .pick-item')].pop();
+          const пункт = [...document.querySelectorAll('#proj-menu .pick-item')]
+            .find((к) => /разметку из файла/i.test(к.textContent));
           const r = пункт.getBoundingClientRect();
           return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
         })()`);
@@ -7558,6 +7564,227 @@ function createWindow() {
           // И у строк то же правило
           && итог.поТонкойСтроке === 'line-move';
         return итог;
+      })`, true);
+
+      /* Подсветка совпадает на всех трёх поверхностях.
+
+         Их три: просмотр в редакторе, сцена «Караоке» и кадр видео.
+         Раскладку они уже считают одним кодом, а вот закраску — нет:
+         просмотр закрашивал ноты проигрыша целыми нотами и без доли
+         (при заливке они не закрашивались вовсе), а кадр зажигал все
+         пять нот разом. Человек просил проверить, что видно ОДНО И ТО
+         ЖЕ, и это ровно то место, где расходилось.
+
+         Сверяем в трёх точках песни (строка, её середина, проигрыш)
+         и при обоих эффектах: «заливка» и «подсветка». С кадра снимаем
+         не картинку, а то, что он рисует: подменяем контекст холста
+         соглядатаем и записываем каждый fillText с его цветом. */
+      report.подсветкаСовпадает = await win.webContents.executeJavaScript(`__раздел('подсветкаСовпадает', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        audio.playing = false;
+        document.getElementById('lyrics-input').value = 'раз два три\\nчетыре пять шесть';
+        state.lines = [
+          { text: 'раз два три', time: 5, end: 8, ручнойКонец: true, ручноеНачало: true,
+            words: [
+              { text: 'раз ', time: 5, end: 6 },
+              { text: 'два ', time: 6, end: 7 },
+              { text: 'три ', time: 7, end: 8, ручнойКонец: true },
+            ] },
+          { text: 'четыре пять шесть', time: 30, end: 33, ручнойКонец: true, ручноеНачало: true,
+            words: [
+              { text: 'четыре ', time: 30, end: 31 },
+              { text: 'пять ', time: 31, end: 32 },
+              { text: 'шесть ', time: 32, end: 33, ручнойКонец: true },
+            ] },
+        ];
+        state.style.swapLines = false;
+
+        /* Что показывает поверхность DOM: текст видимых строк с их
+           ролью и, у горящей строки, доля закраски каждого слова. */
+        const снятьDOM = (id) => [...document.getElementById(id)
+          .querySelectorAll('.stage-line, .break-line')].map((стр) => ({
+            текст: стр.textContent,
+            роль: стр.classList.contains('current') ? 'cur'
+              : стр.classList.contains('near') ? 'near' : 'off',
+            слова: [...стр.querySelectorAll('.w')].map((w) => ({
+              t: w.textContent,
+              доля: Math.round(parseFloat(w.style.getPropertyValue('--wfill')) || 0),
+              горит: w.classList.contains('sung'),
+            })),
+          }));
+
+        /* Что рисует кадр: соглядатай поверх настоящего контекста.
+           Записываем каждый fillText — текст, цвет и был ли он внутри
+           обрезки (так рисуется закрашенная часть слова). */
+        const снятьКадр = (pos) => {
+          const хол = document.createElement('canvas');
+          хол.width = 960; хол.height = 540;
+          const g = хол.getContext('2d');
+          const записи = [];
+          let вОбрезке = 0;
+          const прокси = new Proxy(g, {
+            get(t, k) {
+              const v = t[k];
+              if (k === 'fillText') {
+                return (текст, x, y) => {
+                  записи.push({ текст, цвет: String(t.fillStyle).toLowerCase(), обрезка: вОбрезке > 0 });
+                  return v.call(t, текст, x, y);
+                };
+              }
+              if (k === 'clip') return (...a) => { вОбрезке++; return v.apply(t, a); };
+              if (k === 'save') return (...a) => v.apply(t, a);
+              if (k === 'restore') return (...a) => { if (вОбрезке > 0) вОбрезке--; return v.apply(t, a); };
+              return typeof v === 'function' ? v.bind(t) : v;
+            },
+            set(t, k, v) { t[k] = v; return true; },
+          });
+          drawVideoFrame(прокси, 960, 540, null, pos, null);
+          return записи;
+        };
+
+        const точки = [
+          { имя: 'середина слова', t: 6.5 },
+          { имя: 'конец строки', t: 7.9 },
+          { имя: 'проигрыш', t: 20 },
+        ];
+        const итоги = [];
+        for (const эффект of ['fill', 'highlight']) {
+          setStyle('effect', эффект);
+          for (const точка of точки) {
+            audio.offset = точка.t;
+            goToStep(4);
+            renderStage();
+            updateStageFill();
+            const сцена = снятьDOM('lyrics-stage');
+            goToStep(3);
+            openEditor();
+            editor.stageKey = ''; editor.stageDrawn = null;
+            renderEditStage();
+            updateEditStage();
+            const просмотр = снятьDOM('edit-stage');
+            const кадр = снятьКадр(точка.t);
+            const акцент = String(state.style.accent).toLowerCase();
+            итоги.push({
+              эффект, точка: точка.имя,
+              сцена, просмотр,
+              вКадре: кадр.filter((з) => з.текст.trim()).map((з) =>
+                з.текст.trim() + (з.цвет === акцент || з.обрезка ? '+' : '')),
+            });
+          }
+        }
+
+        /* Сравниваем то, что видно: набор строк с их ролями и доли
+           закраски слов. Просмотр и сцена обязаны совпасть до числа. */
+        const расхождения = [];
+        for (const и of итоги) {
+          const сцена = JSON.stringify(и.сцена);
+          const просмотр = JSON.stringify(и.просмотр);
+          if (сцена !== просмотр) {
+            расхождения.push({ где: 'просмотр против сцены', эффект: и.эффект, точка: и.точка,
+              сцена: и.сцена, просмотр: и.просмотр });
+            continue;
+          }
+          /* Кадр рисует те же слова в том же порядке, и загоревшимися
+             в нём оказываются ровно те, что горят на сцене. */
+          const горящие = [];
+          for (const стр of и.сцена) {
+            for (const w of стр.слова) if (w.горит) горящие.push(w.t.trim());
+          }
+          const вКадреГорят = и.вКадре.filter((x) => x.endsWith('+')).map((x) => x.slice(0, -1));
+          const мало = горящие.filter((w) => w && !вКадреГорят.includes(w));
+          if (мало.length) {
+            расхождения.push({ где: 'кадр против сцены', эффект: и.эффект, точка: и.точка,
+              горятНаСцене: горящие, горятВКадре: вКадреГорят });
+          }
+        }
+
+        setStyle('effect', 'fill');
+        return {
+          точек: итоги.length,
+          примерСцены: итоги[0] && итоги[0].сцена,
+          примерКадра: итоги[0] && итоги[0].вКадре,
+          расхождения,
+          вНорме: расхождения.length === 0 && итоги.length === 6,
+        };
+      })`, true);
+
+      /* «Очистить проект» — начать песню заново.
+
+         Человек написал: «загружаю ту же песню, что уже была, но хочу,
+         чтоб не сохранилась старая разметка». Черновик привязан к имени
+         песни и возвращался сам, а стереть его было нечем.
+
+         Проверяем не только память, но и хранилище: без этого та же
+         песня подняла бы прежнюю разметку обратно. */
+      report.очиститьПроект = await win.webContents.executeJavaScript(`__раздел('очиститьПроект', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        state.fileName = 'проба.mp3';
+        document.getElementById('lyrics-input').value = 'раз\\nдва';
+        state.lines = [
+          { text: 'раз', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true },
+          { text: 'два', time: 10, end: 14, ручнойКонец: true, ручноеНачало: true },
+        ];
+        state.origSpans = нормОтрезки([{ start: 20, end: 30 }], 60);
+        тон.выбран = 2;
+        проектНаДиске.путь = '/tmp/старый.karaokeproj';
+        проектНаДиске.имя = 'старый';
+        saveProject();
+        const было = {
+          строк: state.lines.length,
+          отрезков: отрезкиОригинала().length,
+          вХранилище: !!(loadProject() || {}).times,
+        };
+
+        const былConfirm = window.confirm;
+        let спросили = '';
+        try {
+          // Сначала отказ: работа обязана остаться нетронутой
+          window.confirm = (м) => { спросили = м; return false; };
+          await очиститьПроект();
+          const послеОтказа = {
+            строк: state.lines.length,
+            текст: document.getElementById('lyrics-input').value,
+          };
+
+          window.confirm = () => true;
+          await очиститьПроект();
+          const после = {
+            строк: state.lines.length,
+            текст: document.getElementById('lyrics-input').value,
+            отрезков: отрезкиОригинала().length,
+            тон: тон.выбран,
+            путьПроекта: проектНаДиске.путь,
+            шаг: [...document.querySelectorAll('.step-panel')]
+              .findIndex((п) => п.classList.contains('active')) + 1,
+            вХранилище: ((loadProject() || {}).times || []).filter((t) => t != null).length,
+            песняНаМесте: !!state.originalBuffer,
+            минусовкаНаМесте: !!state.instrumentalBuffer,
+          };
+          return {
+            было, послеОтказа, после,
+            спросилиПро: спросили.slice(0, 40),
+            вНорме:
+              // Спросили — и на «нет» ничего не тронули
+              !!спросили && послеОтказа.строк === 2 && послеОтказа.текст === 'раз\\nдва'
+              // На «да» работа ушла целиком
+              && после.строк === 0 && после.текст === '' && после.отрезков === 0
+              && после.тон === 0 && после.путьПроекта === null
+              // И из хранилища тоже: та же песня не поднимет её обратно
+              && после.вХранилище === 0
+              // А песня и минусовка остались, и мы на шаге «Текст»
+              && после.песняНаМесте && после.минусовкаНаМесте && после.шаг === 2,
+          };
+        } finally {
+          window.confirm = былConfirm;
+          проектНаДиске.путь = null;
+          проектНаДиске.имя = null;
+        }
       })`, true);
 
       /* Двойной щелчок по ползунку возвращает умолчание — у ВСЕХ.

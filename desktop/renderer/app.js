@@ -2990,7 +2990,74 @@ async function показатьПапкуПроекта() {
   if (!ответ || !ответ.ok) alert(t('проект.пропал', { 'путь': проектНаДиске.путь }));
 }
 
-/* ---------- Меню чипа ----------
+/* Очистить проект — начать эту песню заново.
+
+   Человек написал: «загружаю ту же песню, что уже была, но хочу, чтоб
+   не сохранилась старая разметка». Раньше это было нечем сделать:
+   черновик привязан к имени песни и возвращается сам, а стереть его
+   можно было только через настройки браузера.
+
+   Что уходит: текст, времена, разметка слов, отрезки оригинала, фон,
+   выбранная тональность, найденный темп и огибающая голоса — то есть
+   вся работа. Что остаётся: сама песня и её минусовка (перечитывать
+   файл незачем) и оформление текста — это настройки вида, а не работа.
+
+   Спрашиваем обязательно: вернуть стёртое нечем, отмена сюда
+   не дотягивается. */
+async function очиститьПроект() {
+  const п = сведенияОПамяти();
+  if (!п.есть) return false;
+  const имя = (п.имя || t('память.безИмени')).replace(/\.[^.]+$/, '');
+  if (!confirm(t('проект.очистить.вопрос', { 'имя': имя, n: п.размечено }))) return false;
+
+  state.lines = [];
+  state.origSpans = [];
+  state.отрезокБыл = false;
+  $('lyrics-input').value = '';
+  setBgImage(null);
+  clearVoiceTrack();
+  state.сетка = сеткаПоУмолчанию();
+  editor.sel = -1;
+  editor.wordSel = -1;
+  editor.origSel = -1;
+  editor.peaks = null;
+  editor.spansKey = '';
+  editor.stageKey = '';
+  editor.stageDrawn = null;
+  editor.темпАвто = null;
+  editor.темпИсточник = null;
+  editor.темпЖдём = null;
+  снятьДиапазон();
+  clearHistory();
+  /* Выбранная тональность — тоже часть работы над этой песней:
+     сбрасываем её тем же путём, что и при смене звука. */
+  тон.выбран = 0;
+  тон.изПамяти = false;
+  обновитьТон();
+  /* Черновик в хранилище тоже стираем: он привязан к имени песни,
+     и без этого та же песня подняла бы прежнюю разметку обратно. */
+  try { localStorage.removeItem('karaoke-project'); } catch (e) { /* нечего чистить */ }
+  /* Связь с папкой проекта рвём: следующее «сохранить» не должно
+     молча переписать прежнюю работу пустотой. */
+  проектНаДиске.путь = null;
+  проектНаДиске.имя = null;
+  проектНаДиске.грязный = false;
+
+  saveProject();
+  renderEditList();
+  renderEditStage();
+  updateSelInfo();
+  updateWordInfo();
+  обновитьОтрезок();
+  updateWordExportBtn();
+  обновитьСетку(true);
+  обновитьПамять();
+  drawTimeline();
+  goToStep(state.originalBuffer ? 2 : 1);
+  return true;
+}
+
+/* ---------- Меню чипа ----------/* ---------- Меню чипа ----------
 
    Что можно сделать с открытой работой — одним списком там же, где
    написано её имя. В приложении это проект папкой (главный способ
@@ -3023,6 +3090,8 @@ function собратьМенюПроекта() {
     значок: 'upload', дело: () => $('draft-input').click(),
     ключ: вПриложении ? 'черновик.разметкаОткрыть' : 'черновик.открыть',
   });
+  // Начать эту песню заново. Стоит последним: это то, что делают редко
+  пункты.push({ значок: 'trash', ключ: 'проект.очистить', дело: () => очиститьПроект() });
 
   меню.textContent = '';
   for (const п of пункты) {
@@ -4536,6 +4605,23 @@ function applyWordFill(el, line, span, pos) {
   }
 }
 
+/* Заливка НОТ ПРОИГРЫША — одна на все поверхности.
+
+   Беда, которую это лечит: сцена караоке закрашивала ноты плавно, нота
+   за нотой (каждая своей долей --wfill), а просмотр в редакторе — целыми
+   нотами через Math.round и вовсе без --wfill: при эффекте «заливка»
+   ноты в просмотре не закрашивались никак. Человек видел в редакторе
+   не то, что получит. Теперь обе поверхности зовут одно и то же. */
+function заливкаНот(el, pos, от, до) {
+  const p = до > от ? Math.min(1, Math.max(0, (pos - от) / (до - от))) : 1;
+  const spans = el.querySelectorAll('.w');
+  for (let i = 0; i < spans.length; i++) {
+    const доля = Math.min(1, Math.max(0, p * spans.length - i));
+    spans[i].style.setProperty('--wfill', `${(доля * 100).toFixed(1)}%`);
+    spans[i].classList.toggle('sung', доля >= 0.5);
+  }
+}
+
 /* Значок инструментального проигрыша. Нот пять, а не три: три читались
    как «многоточие», а не как «здесь играет музыка», — и на длинном
    проигрыше закраска по нотам шла слишком крупными шагами.
@@ -5083,16 +5169,7 @@ function updateStageFill() {
   if (!el) return;
 
   if (ph.mode === 'break') {
-    // Ноты — три «слова»: закрашиваем их по ходу проигрыша
-    const start = ph.start;
-    const end = ph.until;
-    const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
-    const spans = el.querySelectorAll('.w');
-    for (let i = 0; i < spans.length; i++) {
-      const share = Math.min(1, Math.max(0, p * spans.length - i));
-      spans[i].style.setProperty('--wfill', `${(share * 100).toFixed(1)}%`);
-      spans[i].classList.toggle('sung', share >= 0.5);
-    }
+    заливкаНот(el, pos, ph.start, ph.until);
     return;
   }
   applyWordFill(el, lines[ph.cur], ph, pos);
@@ -7868,13 +7945,8 @@ function updateEditStage() {
   const el = $('edit-stage').querySelector(
     ph.mode === 'break' ? '.break-line' : '.stage-line.current');
   if (!el) return;
-  const start = ph.start;
-  const end = ph.mode === 'break' ? ph.until : ph.end;
   if (ph.mode === 'break' || ph.cur < 0) {
-    const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
-    const spans = el.children;
-    const sung = Math.round(spans.length * p);
-    for (let i = 0; i < spans.length; i++) spans[i].classList.toggle('sung', i < sung);
+    заливкаНот(el, pos, ph.start, ph.mode === 'break' ? ph.until : ph.end);
     return;
   }
   // Подсветка по словам — как на большой сцене
@@ -11643,6 +11715,21 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
       const start = ph.start;
       const end = ph.mode === 'break' ? ph.until : ph.end;
       const p = end > start ? Math.min(1, Math.max(0, (pos - start) / (end - start))) : 1;
+      /* Ноты закрашиваются ПО ОДНОЙ, как на сцене (см. заливкаНот).
+         Раньше в кадре они были одним куском: при эффекте «подсветка»
+         все пять загорались разом на половине проигрыша, тогда как
+         на экране они зажигались одна за другой. Заливкой разницы
+         не видно, а подсветкой — видно сразу. */
+      /* Режем вместе с промежутками: в кадре ноты разведены пробелами
+         (BREAK_TEXT_FRAME), и потерять их значило бы сжать весь ряд. */
+      const ноты = text.match(/\S+\s*/g) || [];
+      if (ноты.length > 1) {
+        const шаг = 1 / ноты.length;
+        return ноты.map((н, i) => ({
+          text: i === ноты.length - 1 ? н.trimEnd() : н,
+          p: Math.min(1, Math.max(0, (p - i * шаг) / шаг)),
+        }));
+      }
       return [{ text, p }];
     }
     return fit.wrap.has(text)

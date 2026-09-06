@@ -1138,6 +1138,21 @@ I18N.СТРОКИ = {
     ru: 'Открыть проект из папки — со звуком, минусовкой и разметкой (Cmd+O)',
     en: 'Open a project folder — with the audio, the instrumental and the timing (Cmd+O)',
   },
+  'проект.очистить': { ru: 'Очистить проект', en: 'Clear the project' },
+  'проект.очистить.подсказка': {
+    ru: 'Начать эту песню заново: убрать текст, времена, разметку слов, '
+      + 'отрезки оригинала, фон и выбранную тональность. Песня и минусовка останутся',
+    en: 'Start this song over: remove the lyrics, the timings, the word timing, '
+      + 'the original stretches, the background and the chosen key. The song and the instrumental stay',
+  },
+  'проект.очистить.вопрос': {
+    ru: 'Очистить работу по песне «{имя}»?\n\nУйдут текст, времена ({n} размеченных строк), '
+      + 'разметка слов, отрезки оригинала, фон и выбранная тональность. '
+      + 'Песня и минусовка останутся.\n\nВернуть это будет нечем.',
+    en: 'Clear the work on “{имя}”?\n\nThe lyrics, the timings ({n} timed lines), the word timing, '
+      + 'the original stretches, the background and the chosen key will go. '
+      + 'The song and the instrumental stay.\n\nThere will be no way to bring it back.',
+  },
   'проект.показать': { ru: 'Показать папку', en: 'Show in folder' },
   'проект.показать.подсказка': {
     ru: 'Показать папку проекта там, где её видит система',
