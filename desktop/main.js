@@ -7898,6 +7898,60 @@ function createWindow() {
         };
       }
 
+      /* Пробел — всегда пуск и пауза, даже с кнопки под фокусом.
+
+         Человек написал: «ставлю паузу, нажимаю магнит, хочу так же
+         пробелом запустить трек, а он снова нажимает магнит». Щелчок
+         оставляет на кнопке фокус, а пробел по правилам браузера жмёт
+         кнопку под фокусом. В монтажной программе пробел — транспорт,
+         и отнимать его у себя не должно ничто, кроме набора текста. */
+      report.пробелЭтоТранспорт = await win.webContents.executeJavaScript(`__раздел('пробелЭтоТранспорт', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        document.getElementById('lyrics-input').value = 'раз';
+        state.lines = [{ text: 'раз', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true }];
+        goToStep(3);
+        openEditor();
+        audio.pause();
+
+        const магнит = document.getElementById('tl-snap');
+        const былМагнит = editor.snap;
+        const пробел = () => {
+          const e = new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true, cancelable: true });
+          document.dispatchEvent(e);
+          return e.defaultPrevented;
+        };
+
+        // Фокус на кнопке магнита — как после щелчка по ней мышью
+        магнит.focus();
+        const наКнопке = document.activeElement === магнит;
+        const взяли = пробел();
+        const итог = {
+          наКнопке, взяли,
+          магнитДо: былМагнит, магнитПосле: editor.snap,
+          играет: audio.playing,
+        };
+        audio.pause();
+
+        // А в правке текста строки пробел остаётся буквой
+        const поле = document.querySelector('#edit-list .edit-text');
+        правитьТекстСтроки(поле);
+        итог.вПоле = document.activeElement === поле;
+        const вПоле = пробел();
+        закончитьПравкуТекста(поле);
+        итог.вПолеВзяли = вПоле;
+
+        итог.вНорме =
+          наКнопке && взяли
+          // Магнит не переключился, а песня пошла
+          && итог.магнитДо === итог.магнитПосле && итог.играет
+          // В правке текста пробел остался буквой
+          && итог.вПоле && !вПоле;
+        return итог;
+      })`, true);
+
       /* Двойной щелчок по ползунку возвращает умолчание — у ВСЕХ.
 
          Так ведут себя фейдеры в монтажных программах, и у нас это
