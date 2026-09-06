@@ -391,6 +391,7 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.границыОтрезка': '<b>The bounds of an original stretch are written out in full.</b> The label “0:37.81 → 0:44.15” didn’t fit the parameters row and was cut off with an ellipsis right at the second time — the very thing you read it for. It showed more on Windows, where the same text is wider.',
   'новости.простор': '<b>The studio got roomier.</b> The editor panes now run the full width of the window — exactly like the timeline below them. The toolbar has moved down, right against the timeline: everything on it is about the timeline. And the bars between panes are gone from sight: a line appears under the cursor, where you can drag it.',
   'новости.лишнееУбрано': '<b>Less clutter on screen.</b> The “Original” section in the parameters only shows up once a stretch exists. Searching the lines is gone altogether. And the hint on the “Lyrics” step has moved into the field itself and disappears as soon as you paste — so both panes of the step are now the same height.',
   'новости.менюНеПросвечивает': '<b>The menu by the song name no longer shows through.</b> The pane behind it could be read through the open list — the list was ending up in someone else’s paint layer because of the way the box was centred.',
