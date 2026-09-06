@@ -3952,6 +3952,73 @@ function кРедактору() {
   goToStep(3);
 }
 
+/* ============================================================
+   Открыть готовый .lrc
+
+   Готовых .lrc в сети тысячи, и это самый короткий путь к размеченной
+   песне: текст и времена приходят вместе, размечать заново нечего.
+   Разбор — в timing.js (чистая арифметика, её гоняют быстрые проверки),
+   здесь только то, что касается студии: спросить, заменить, показать.
+
+   Времена из файла считаем РУЧНЫМИ: их поставил человек (пусть и не
+   этот), и подтягивать их к вступлению голоса незачем — иначе первое же
+   открытие сдвинуло бы всё на свой лад. Поправить руками, как обычно,
+   никто не мешает. */
+function применитьLrc(текстФайла) {
+  const разбор = разобратьLrc(текстФайла);
+  const строки = разбор.строки;
+  if (!строки.length) { alert(t('lrc.пусто')); return false; }
+
+  // Есть чему пропасть — спрашиваем. Отмена на шаге разметки всё вернёт
+  const естьРазметка = state.lines.some((l) => l.time != null);
+  if (естьРазметка && !confirm(t('lrc.заменить', { n: строки.length }))) return false;
+  if (state.lines.length) pushHistory();
+
+  state.lines = строки.map((л) => {
+    const line = { text: л.text, time: л.time, ручноеНачало: true };
+    if (л.end != null) { line.end = л.end; line.ручнойКонец = true; }
+    if (л.words && л.words.length) {
+      line.words = л.words.map((w) => ({
+        text: w.text,
+        time: w.time,
+        end: w.end == null ? undefined : w.end,
+      }));
+    }
+    return line;
+  });
+  $('lyrics-input').value = строки.map((л) => л.text).join('\n');
+
+  /* Времена ушли за конец песни — почти наверняка это .lrc другой
+     записи. Не отказываем (может, песню ещё не открыли), но говорим:
+     иначе человек будет искать свои строки на дорожке и не найдёт. */
+  const последняя = строки[строки.length - 1];
+  const мимо = state.originalBuffer && audio.duration
+    && последняя.time > audio.duration + 5;
+
+  editor.spansKey = '';
+  editor.показатьВсё = true;      // разметка пришла целиком — покажем всю
+  editor.sel = state.lines.length ? 0 : -1;
+  editor.wordSel = -1;
+  saveProject();
+  renderEditList();
+  goToStep(3);
+  refreshTimes();
+  if (мимо) alert(t('lrc.мимоПесни', { 'конец': fmtTime(audio.duration) }));
+  return true;
+}
+
+$('btn-import-lrc').addEventListener('click', () => $('lrc-input').click());
+$('lrc-input').addEventListener('change', async (e) => {
+  const файл = e.target.files && e.target.files[0];
+  e.target.value = '';                     // тот же файл можно открыть снова
+  if (!файл) return;
+  try {
+    применитьLrc(await файл.text());
+  } catch (err) {
+    alert(t('lrc.неПрочитался', { 'ошибка': (err && err.message) || String(err) }));
+  }
+});
+
 $('btn-to-editor').addEventListener('click', кРедактору);
 
 /* Настольная версия умеет размечать текст песни нейросетью и кладёт

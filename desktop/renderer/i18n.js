@@ -667,6 +667,8 @@ I18N.EN = {
 
   /* ---------- Шаг 2 ---------- */
   'шаг2.поле': 'Paste the lyrics here…\n\nOne line is one karaoke line.\nEmpty lines don’t count.',
+  'шаг2.lrc': 'Open an .lrc',
+  'шаг2.lrc.подсказка': 'Open a ready .lrc: the lyrics and the line timings fall into place on their own',
   'шаг2.назад': '← Back',
   'шаг2.дальше': 'To the editor →',
   'шаг2.назад.подсказка': 'Back to step 1: song, instrumental and background',
@@ -1734,6 +1736,26 @@ I18N.СТРОКИ = {
   'журнал.неОткрылся': {
     ru: 'Не получилось открыть папку с журналом.',
     en: 'Could not open the folder with the log.',
+  },
+  'lrc.пусто': {
+    ru: 'В этом файле нет ни одной строки со временем. Это точно .lrc?',
+    en: 'There is not a single timed line in this file. Is it really an .lrc?',
+  },
+  'lrc.заменить': {
+    ru: 'Открыть .lrc: {n} строк со временем. Нынешние текст и разметка заменятся (отменить можно на шаге «Разметка»).',
+    en: 'Open the .lrc: {n} timed lines. The current lyrics and timing will be replaced (undo is available on the “Timing” step).',
+  },
+  'lrc.мимоПесни': {
+    ru: 'Времена из файла уходят за конец песни ({конец}). Похоже, это .lrc другой записи — разметка всё равно открыта, посмотри на дорожке.',
+    en: 'The timings in the file run past the end of the song ({конец}). This looks like an .lrc for a different recording — the timing was opened anyway, take a look at the timeline.',
+  },
+  'lrc.открыт': {
+    ru: 'Открыто строк: {n}',
+    en: 'Lines opened: {n}',
+  },
+  'lrc.неПрочитался': {
+    ru: 'Не получилось прочитать файл: {ошибка}',
+    en: 'Could not read the file: {ошибка}',
   },
   'asr.сначалаПесня': { ru: 'Сначала загрузи песню.', en: 'Load a song first.' },
   'asr.сначалаТекст': { ru: 'Сначала вставь текст песни в поле ниже.', en: 'Paste the lyrics into the field below first.' },

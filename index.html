@@ -1583,6 +1583,12 @@
     <textarea id="lyrics-input" data-i18n-placeholder="шаг2.поле" placeholder="Вставь сюда текст песни…&#10;&#10;Одна строка — одна строка караоке.&#10;Пустые строки не считаются."></textarea>
     <div class="panel-actions">
       <button class="btn btn-ghost" id="btn-back-1" data-i18n-title="шаг2.назад.подсказка" title="Вернуться к шагу 1: песня, минусовка и фон" data-i18n="шаг2.назад">← Назад</button>
+      <!-- Готовый .lrc: текст и времена сразу. Их в сети тысячи, и это
+           куда быстрее, чем размечать песню заново. -->
+      <input type="file" id="lrc-input" accept=".lrc,.txt,text/plain" hidden>
+      <button class="btn btn-ghost" id="btn-import-lrc"
+        data-i18n-title="шаг2.lrc.подсказка"
+        title="Открыть готовый .lrc: текст и времена строк встанут на место сами"><svg class="icon" aria-hidden="true"><use href="#i-upload"></use></svg><span data-i18n="шаг2.lrc">Открыть .lrc</span></button>
       <button class="btn btn-primary" id="btn-to-editor" data-i18n-title="шаг2.дальше.подсказка" title="Разбить текст на строки и перейти к разметке времени" data-i18n="шаг2.дальше">К редактору →</button>
     </div>
   </div>
