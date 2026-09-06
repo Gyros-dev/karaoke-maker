@@ -7197,6 +7197,261 @@ function createWindow() {
         };
       })`, true);
 
+      /* Ещё три находки: стык строк, клавиши против выделенного куска
+         и кнопки, которые обещают то, чего не делают. */
+      report.стыкСтрок = await win.webContents.executeJavaScript(`__раздел('стыкСтрок', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        const собрать = () => {
+          state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+          state.instrumentalBuffer = state.originalBuffer;
+          audio.duration = 60;
+          document.getElementById('lyrics-input').value = 'раз\\nдва';
+          state.lines = [
+            { text: 'раз', time: 5, end: 7, ручнойКонец: true, ручноеНачало: true },
+            { text: 'два', time: 7, end: 9, ручнойКонец: true, ручноеНачало: true },
+          ];
+          editor.spansKey = ''; editor.stageKey = '';
+          renderEditList();
+          editor.sel = 0;
+          updateSelInfo();
+        };
+        goToStep(3);
+        const tl = document.getElementById('timeline');
+        const L = timelineLanes();
+        const серед = (п) => п.y + п.h / 2;
+        const тянуть = (x0, dx, мод) => {
+          const r = tl.getBoundingClientRect();
+          const общ = { bubbles: true, pointerId: 1, clientY: r.top + серед(L.lines),
+            ctrlKey: !!мод, metaKey: !!мод };
+          tl.dispatchEvent(new PointerEvent('pointerdown', { ...общ, clientX: r.left + x0 }));
+          tl.dispatchEvent(new PointerEvent('pointermove', { ...общ, clientX: r.left + x0 + dx }));
+          tl.dispatchEvent(new PointerEvent('pointerup', { ...общ, clientX: r.left + x0 + dx }));
+        };
+        const снять = () => state.lines.map((l) => [
+          +l.time.toFixed(2), +lineEnd(syncedLines(), syncedLines().indexOf(l)).toFixed(2)]);
+
+        const опыт = async (dx, мод) => {
+          собрать();
+          await new Promise((r) => setTimeout(r, 120));
+          const до = снять();
+          тянуть(tToX(7), dx, мод);
+          await new Promise((r) => setTimeout(r, 120));
+          const после = снять();
+          return { до, после, пауза: +(после[1][0] - после[0][1]).toFixed(2) };
+        };
+
+        const вправо = await опыт(40, false);
+        const влево = await опыт(-40, false);
+        const сМодификатором = await опыт(40, true);
+        const шагВправо = +(вправо.после[1][0] - вправо.до[1][0]).toFixed(2);
+        const шагМод = +(сМодификатором.после[0][1] - сМодификатором.до[0][1]).toFixed(2);
+        return {
+          вправо, влево, сМодификатором, шагВправо, шагМод,
+          вНорме:
+            /* Тянем вправо — вправо и едет: пауза ровно та, на сколько
+               увели. Раньше конец левой уезжал ВЛЕВО на 0,05 с, сколько
+               ни тяни, и пауза всегда выходила самой маленькой. */
+            шагВправо > 0.3 && Math.abs(вправо.пауза - шагВправо) < 0.03
+            // Конец левой строки остался на месте (с точностью до зазора)
+            && Math.abs(вправо.после[0][1] - вправо.до[0][1]) <= 0.03
+            // Влево едет конец левой строки, начало правой стоит
+            && влево.пауза > 0.3
+            && влево.после[1][0] === влево.до[1][0]
+            /* С модификатором стык уехал целиком и остался стыком:
+               между блоками только рисовальный зазор в 0,02 с. */
+            && сМодификатором.пауза <= 0.03 && шагМод > 0.3,
+        };
+      })`, true);
+
+      report.клавишиИДиапазон = await win.webContents.executeJavaScript(`__раздел('клавишиИДиапазон', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        document.getElementById('lyrics-input').value = 'раз\\nдва\\nтри';
+        state.lines = [
+          { text: 'раз', time: 5, end: 7, ручнойКонец: true, ручноеНачало: true },
+          { text: 'два', time: 10, end: 12, ручнойКонец: true, ручноеНачало: true },
+          { text: 'три', time: 20, end: 22, ручнойКонец: true, ручноеНачало: true },
+        ];
+        goToStep(3);
+        openEditor();
+        selectLine(0, {});
+        const нажать = (code, opts) => document.dispatchEvent(
+          new KeyboardEvent('keydown', Object.assign({ code, bubbles: true }, opts)));
+
+        // Выделяем три строки и двигаем клавишей — обязан ехать весь кусок
+        нажать('ArrowDown', { shiftKey: true });
+        нажать('ArrowDown', { shiftKey: true });
+        const выделено = строкиДиапазона().length;
+        const до = state.lines.map((l) => +l.time.toFixed(3));
+        нажать('Period');
+        const после = state.lines.map((l) => +l.time.toFixed(3));
+        const сдвиги = после.map((v, i) => +(v - до[i]).toFixed(3));
+        снятьДиапазон();
+
+        // Кнопка «простучать заново» без строк мертва, как и соседи
+        const былиСтроки = state.lines;
+        state.lines = [];
+        editor.sel = -1;
+        updateSelInfo();
+        const безСтрок = {
+          простучать: document.getElementById('btn-sel-tap').disabled,
+          удалить: document.getElementById('btn-sel-del').disabled,
+        };
+        state.lines = былиСтроки;
+        updateSelInfo();
+
+        return {
+          выделено, сдвиги, безСтрок,
+          вНорме:
+            выделено === 3
+            // Все три строки уехали на один и тот же кадр
+            && сдвиги.every((v) => Math.abs(v - сдвиги[0]) < 1e-9 && v > 0.03)
+            && безСтрок.простучать && безСтрок.удалить,
+        };
+      })`, true);
+
+      report.короткаяМинусовка = await win.webContents.executeJavaScript(`__раздел('короткаяМинусовка', () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        audio.duration = 60;
+        const строка = () => !document.getElementById('inst-short').classList.contains('hidden');
+
+        // Своя минусовка на всю песню — молчим
+        state.instrumentalBuffer = state.originalBuffer;
+        state.customInst = true;
+        state.instName = 'полная.wav';
+        updateInstUI();
+        const полная = строка();
+
+        // Своя минусовка на треть песни — предупреждаем сразу
+        state.instrumentalBuffer = c.createBuffer(1, 20 * 8000, 8000);
+        updateInstUI();
+        const короткая = строка();
+
+        // Встроенное приглушение короче не бывает — и строки быть не должно
+        state.customInst = false;
+        updateInstUI();
+        const своейНет = строка();
+
+        return {
+          полная, короткая, своейНет,
+          вНорме: !полная && короткая && !своейНет,
+        };
+      })`, true);
+
+      /* Шаг редактора на низком окне.
+
+         Проверяющий увидел: на 1200×760 кнопка «К тексту» уходит ниже
+         сгиба. Панель при этом прокручивается, но на macOS полосы
+         прокрутки не видно, пока её не тронешь, — со стороны шаг
+         выглядит без выхода. Мерим то, чем это лечится: помещается ли
+         содержимое шага в подложку студии на самом низком окне,
+         на которое мы рассчитываем. */
+      {
+        const [бш, бв] = win.getSize();
+        win.setSize(1200, 760);
+        await new Promise((r) => setTimeout(r, 400));
+        report.шагНаНизкомОкне = await win.webContents.executeJavaScript(`__раздел('шагНаНизкомОкне', async () => {
+          const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+          state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+          state.instrumentalBuffer = state.originalBuffer;
+          audio.duration = 60;
+          document.getElementById('lyrics-input').value = 'раз\\nдва';
+          state.lines = [
+            { text: 'раз', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true },
+            { text: 'два', time: 10, end: 14, ручнойКонец: true, ручноеНачало: true },
+          ];
+          goToStep(3);
+          openEditor();
+          await new Promise((r) => setTimeout(r, 300));
+          const шаг = document.getElementById('step-3');
+          const снять = () => {
+            const студия = document.querySelector('.studio').getBoundingClientRect();
+            const кнопки = шаг.querySelector(':scope > .panel-actions').getBoundingClientRect();
+            const дорожка = document.querySelector('.timeline-wrap').getBoundingClientRect();
+            return {
+              выступ: Math.round(кнопки.bottom - студия.bottom),
+              прокрутка: шаг.scrollHeight - шаг.clientHeight,
+              дорожка: Math.round(дорожка.height),
+            };
+          };
+          const обычно = снять();
+          /* И с дорожкой, растянутой до предела: долю человек тянет сам,
+             она помнится между сеансами, и на низком окне именно она
+             выталкивала кнопки шага за подложку. */
+          const былаДоля = доляДорожки;
+          доляДорожки = 0.85;
+          resizeTimeline();
+          drawTimeline();
+          await new Promise((r) => setTimeout(r, 200));
+          const наПределе = снять();
+          доляДорожки = былаДоля;
+          resizeTimeline();
+          drawTimeline();
+          await new Promise((r) => setTimeout(r, 150));
+          return {
+            окно: [window.innerWidth, window.innerHeight],
+            обычно, наПределе,
+            вНорме: обычно.выступ <= 1 && обычно.прокрутка <= 1 && обычно.дорожка >= 100
+              && наПределе.выступ <= 1 && наПределе.прокрутка <= 1,
+          };
+        })`, true);
+        win.setSize(бш, бв);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+
+      /* У выгруженного видео обязана быть длина.
+
+         Проверяющий увидел: у ролика duration === Infinity, и плеер
+         считает его «прямым эфиром» — полоса времени бесполезна,
+         перемотки нет, часть сервисов такой файл не принимает.
+         Виновата была нарезка записи по секундам: получив срок
+         нарезки, браузер отдаёт заголовок первым же куском и вписать
+         в него длину потом не может.
+
+         Проверяем не сам экспорт (он идёт в реальном времени и занял
+         бы минуты), а то самое место, где беда и жила: запись тем же
+         MediaRecorder с теми же настройками, полторы секунды. */
+      report.видеоСДлиной = await win.webContents.executeJavaScript(`__раздел('видеоСДлиной', async () => {
+        const холст = document.createElement('canvas');
+        холст.width = 320; холст.height = 180;
+        const g = холст.getContext('2d');
+        const поток = холст.captureStream(30);
+        const mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+          .find((m) => MediaRecorder.isTypeSupported(m)) || '';
+        const rec = new MediaRecorder(поток, mime ? { mimeType: mime } : undefined);
+        const куски = [];
+        rec.ondataavailable = (e) => { if (e.data.size) куски.push(e.data); };
+        const готово = new Promise((r) => { rec.onstop = r; });
+        rec.start();              // ровно как в экспорте: без нарезки
+        const тик = setInterval(() => {
+          g.fillStyle = '#' + Math.floor(Math.random() * 4096).toString(16).padStart(3, '0');
+          g.fillRect(0, 0, 320, 180);
+        }, 33);
+        await new Promise((r) => setTimeout(r, 1500));
+        clearInterval(тик);
+        rec.stop();
+        await готово;
+        const blob = new Blob(куски, { type: mime || 'video/webm' });
+        const el = document.createElement('video');
+        el.src = URL.createObjectURL(blob);
+        const длина = await new Promise((r) => {
+          el.onloadedmetadata = () => r(el.duration);
+          setTimeout(() => r(null), 5000);
+        });
+        const перемотка = el.seekable.length ? el.seekable.end(0) : null;
+        URL.revokeObjectURL(el.src);
+        return {
+          mime, размер: blob.size, кусков: куски.length,
+          длина: длина == null ? null : +длина.toFixed(2),
+          перемотка: перемотка == null ? null : +перемотка.toFixed(2),
+          вНорме: !!blob.size && Number.isFinite(длина) && длина > 0.5
+            && Number.isFinite(перемотка) && перемотка > 0.5,
+        };
+      })`, true);
+
       /* Двойной щелчок по ползунку возвращает умолчание — у ВСЕХ.
 
          Так ведут себя фейдеры в монтажных программах, и у нас это
