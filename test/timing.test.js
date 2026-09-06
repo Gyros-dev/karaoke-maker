@@ -192,3 +192,42 @@ test('lrc: строки возвращаются по возрастанию в�
   const { строки } = разобратьLrc('[00:30.00]третья\n[00:10.00]первая\n[00:20.00]вторая');
   assert.deepStrictEqual(строки.map((л) => л.text), ['первая', 'вторая', 'третья']);
 });
+
+/* ---------- QR-код для «петь с телефона» ---------- */
+const { qrКод, qrВерсияПод } = require('../qr.js');
+const crypto = require('node:crypto');
+
+// Слепок кода той самой ссылки, что стоит в примерах. Считан один раз
+// и проверен распознавателем macOS: если он поехал — поехал и код.
+const СЛЕПОК_QR = '0ad161e408074371';
+
+test('qr: размер растёт версиями, длинное не влезает', () => {
+  assert.strictEqual(qrКод('https://karaoke.punch/x').length, 25);      // версия 2
+  assert.strictEqual(qrКод('http://192.168.1.42:8731/a7f3c1').length, 29); // версия 3
+  assert.strictEqual(qrВерсияПод(200), 0);        // шестой версии не хватит
+  assert.strictEqual(qrКод('я'.repeat(200)), null);
+});
+
+test('qr: глаза, линейки и чёрная точка на местах', () => {
+  const m = qrКод('http://192.168.1.42:8731/a7f3c1');
+  const n = m.length;
+  // Три угловых глаза: чёрная рамка 7×7 с белым кольцом внутри
+  for (const [cy, cx] of [[0, 0], [0, n - 7], [n - 7, 0]]) {
+    assert.strictEqual(m[cy][cx], 1);
+    assert.strictEqual(m[cy + 1][cx + 1], 0);
+    assert.strictEqual(m[cy + 3][cx + 3], 1);
+  }
+  // Линейки между глазами чередуются
+  for (let i = 8; i < n - 8; i++) assert.strictEqual(m[6][i], i % 2 === 0 ? 1 : 0);
+  assert.strictEqual(m[n - 8][8], 1);             // всегда чёрная точка
+  // Пустых клеток не осталось
+  assert.ok(m.every((р) => р.every((v) => v === 0 || v === 1)));
+});
+
+test('qr: код не меняется от запуска к запуску', () => {
+  /* Сам код проверен настоящим распознавателем macOS (см. README,
+     «Пение с телефона»); здесь стережём, чтобы он не поехал от правок. */
+  const слепок = (s) => crypto.createHash('sha256')
+    .update(qrКод(s).map((р) => р.join('')).join('')).digest('hex').slice(0, 16);
+  assert.strictEqual(слепок('http://192.168.1.42:8731/a7f3c1'), СЛЕПОК_QR);
+});

@@ -3563,3 +3563,14 @@ body.is-desktop .site-header .footer-link {
 .queue-row.done .queue-state { color: var(--ok, #10b981); }
 .queue-row.bad .queue-state { color: var(--bad, #ef4444); overflow: hidden; text-overflow: ellipsis; }
 .queue-note { margin: 0.6rem 0 0; font-size: 0.82rem; color: var(--muted); }
+
+/* ---------- Пение с телефона ---------- */
+.sing-box { max-width: 380px; text-align: center; }
+.sing-hint { margin: 0.2rem 0 0.8rem; font-size: 0.82rem; color: var(--muted); line-height: 1.45; }
+/* Код рисуем чёрным по белому всегда, в любой теме: распознаватели
+   телефонов ждут именно этого, а не «тёмного варианта». */
+#sing-qr { background: #fff; border-radius: 10px; padding: 10px; width: 264px; height: 264px; }
+.sing-url {
+  margin: 0.7rem 0 0.9rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem; color: var(--text); user-select: all; word-break: break-all;
+}

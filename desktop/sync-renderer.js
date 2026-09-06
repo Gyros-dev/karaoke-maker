@@ -211,6 +211,7 @@ function patchHtml(src) {
     ASR_OVERLAY +
     '<script src="ort/ort.min.js"></script>\n' +
     scriptTag +
+    '\n<script src="qr.js"></script>' +
     '\n<script src="align.js"></script>' +
     '\n<script src="desktop.js"></script>' +
     '\n<script src="speedtest.js"></script>');
@@ -347,10 +348,11 @@ try {
        tempo.js        — счётчик темпа: и модуль для окна, и сам поток;
        fft.js          — общее для них БПФ;
        timing.js       — арифметика разметки: её зовёт app.js, и без неё
-                         редактор падает на первой же строке.
+                         редактор падает на первой же строке;
+       qr.js           — код со ссылкой для пения с телефона.
      Без любого из них приложение молча падало бы: тональность — на
      попытке создать Worker, темп — на попытке подтянуть fft.js. */
-  for (const имя of ['pitch-worker.js', 'tempo.js', 'fft.js', 'timing.js']) {
+  for (const имя of ['pitch-worker.js', 'tempo.js', 'fft.js', 'timing.js', 'qr.js']) {
     const исходник = path.join(WEB, имя);
     if (!fs.existsSync(исходник)) throw new Error(`нет ${имя} в веб-версии`);
     fs.copyFileSync(исходник, path.join(OUT, имя));

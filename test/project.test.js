@@ -106,7 +106,7 @@ test('в СТРОКАХ обе стороны — и русская, и англ
 });
 
 test('все наши скрипты разбираются', () => {
-  const файлы = ['app.js', 'timing.js', 'i18n.js', 'fft.js', 'tempo.js', 'pitch-worker.js',
+  const файлы = ['app.js', 'timing.js', 'qr.js', 'i18n.js', 'fft.js', 'tempo.js', 'pitch-worker.js',
     'bump-version.js', 'check-release.js', 'downloads.js',
     'desktop/main.js', 'desktop/preload.js', 'desktop/sync-renderer.js',
     'desktop/renderer/align.js', 'desktop/renderer/desktop.js'];
