@@ -82,6 +82,18 @@
      Показывается один раз после обновления и по ссылке в подвале.
      Пункты с классом only-desktop видны только в приложении,
      only-web — только на сайте (переключает CSS по классу body). -->
+<!-- Ход очереди: список песен и что с каждой сейчас. Окно того же
+     устройства, что и прочие окна ожидания (.export-overlay), — значит,
+     и клавиши редактора под ним молчат (см. окноПоверхСтудии). -->
+<div class="export-overlay hidden" id="queue-overlay">
+  <div class="export-box queue-box">
+    <h3 data-i18n="очередь.заголовок">Очередь</h3>
+    <div class="queue-list" id="queue-list"></div>
+    <p class="queue-note" id="queue-note"></p>
+    <button class="btn btn-ghost" id="queue-cancel" data-i18n="очередь.отменить">Отменить</button>
+  </div>
+</div>
+
 <div class="whatsnew hidden" id="whatsnew">
   <div class="whatsnew-box" role="dialog" aria-modal="true" aria-labelledby="whatsnew-title">
     <!-- Прокручивается СОДЕРЖИМОЕ, а не всё окно: пока прокручивалось
@@ -1493,6 +1505,20 @@
       <p class="dropzone-hint" data-i18n="шаг1.форматы">MP3 · WAV · OGG · M4A</p>
       <input type="file" id="file-input" accept="audio/*" hidden>
     </div>
+    <!-- Очередь: несколько песен подряд, без человека у экрана.
+         Разделение и разметка — минуты на песню; заряжаешь папку
+         и возвращаешься к готовым проектам. Только в приложении:
+         на сайте нет ни нейросетей, ни папок. -->
+    <div class="queue-start hidden only-desktop" id="queue-start">
+      <input type="file" id="queue-input" accept="audio/*,.txt,.lrc" multiple hidden>
+      <button class="btn btn-ghost btn-small" id="btn-queue"
+        data-i18n-title="очередь.кнопка.подсказка"
+        title="Выбери несколько песен — студия разделит их и разметит по очереди, а готовые проекты положит в выбранную папку"><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg><span data-i18n="очередь.кнопка">Очередь из нескольких песен…</span></button>
+      <p class="queue-hint" data-i18n-html="очередь.подсказка">Выбирай сразу и песни, и тексты к ним:
+        <b>песня.mp3</b> и рядом <b>песня.txt</b> (или <b>песня.lrc</b>) — тогда разметка тоже
+        встанет сама.</p>
+    </div>
+
     <!-- Недавние проекты. Только в приложении и только пока песня
          не открыта: это способ вернуться ко вчерашней работе, а не
          украшение первого шага. Список собирает отрисоватьНедавние

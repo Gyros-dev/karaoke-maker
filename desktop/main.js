@@ -7994,6 +7994,53 @@ function createWindow() {
         };
       }
 
+      /* Очередь из нескольких песен.
+
+         Настоящий прогон (разделение плюс разметка) идёт минуты
+         на песню — ему здесь не место. Проверяем то, из чего очередь
+         состоит и на чём ломается: как песни сходятся с текстами
+         по имени, что кнопка и окно на месте и что пустой выбор
+         не запускает ничего. Сам ход — прямая склейка кусков,
+         у каждого из которых свой раздел. */
+      report.очередь = await win.webContents.executeJavaScript(`__раздел('очередь', async () => {
+        const о = window.__очередь;
+        const файл = (имя) => new File(['x'], имя, { type: 'application/octet-stream' });
+        const дела = о.сопоставить([
+          файл('Ленинград - Луна.mp3'),
+          файл('ленинград - луна.txt'),
+          файл('Вторая.wav'),
+          файл('Вторая.LRC'),
+          файл('Третья.m4a'),
+          файл('Ничья.txt'),
+        ]);
+        const итог = {
+          песен: дела.length,
+          // Регистр в имени не важен: в папке лежат и «Песня.MP3», и «песня.txt»
+          текстПоИмени: дела[0].текст ? дела[0].текст.вид : null,
+          lrcУзнан: дела[1].текст ? дела[1].текст.вид : null,
+          безТекста: дела[2].текст === null,
+          кнопка: !!document.getElementById('btn-queue'),
+          кнопкаВидна: !document.getElementById('queue-start').classList.contains('hidden'),
+          поле: !!document.getElementById('queue-input'),
+          окно: !!document.getElementById('queue-overlay'),
+          окноСпрятано: document.getElementById('queue-overlay').classList.contains('hidden'),
+        };
+
+        // Пустой выбор ничего не запускает и говорит об этом
+        const прежний = window.alert;
+        let сказано = '';
+        window.alert = (текст) => { сказано = String(текст); };
+        await о.пустить([файл('текст.txt')]);
+        window.alert = прежний;
+        итог.пустаяОчередь = сказано.length > 10 && !о.состояние.идёт;
+
+        итог.вНорме = итог.песен === 3 && итог.текстПоИмени === 'txt'
+          && итог.lrcУзнан === 'lrc' && итог.безТекста
+          && итог.кнопка && итог.кнопкаВидна && итог.поле
+          && итог.окно && итог.окноСпрятано && итог.пустаяОчередь;
+        return итог;
+      })`, true);
+
       /* Готовый .lrc открывается: текст и времена приходят вместе.
 
          Разбор проверяют быстрые проверки (test/timing.test.js), здесь
@@ -11026,6 +11073,19 @@ ipcMain.handle('focus-page', (_evt, жёстко) => {
     win.webContents.focus();
   }
   return { ok: true };
+});
+
+/* Куда складывать готовые проекты очереди. Спрашиваем ОДИН раз
+   на всю очередь: спрашивать про каждую песню — значит держать
+   человека у экрана, ради чего очередь и заводилась. */
+ipcMain.handle('queue-folder', async () => {
+  const { canceled, filePaths } = await сОкном(() => dialog.showOpenDialog(win, {
+    title: языкМеню === 'ru' ? 'Куда складывать готовые проекты' : 'Where to put the finished projects',
+    buttonLabel: языкМеню === 'ru' ? 'Сюда' : 'Here',
+    properties: ['openDirectory', 'createDirectory'],
+  }));
+  if (canceled || !filePaths || !filePaths.length) return { ok: false };
+  return { ok: true, dir: filePaths[0], sep: path.sep };
 });
 
 ipcMain.handle('project-write', async (_evt, { dir, files }) => {

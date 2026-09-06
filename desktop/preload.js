@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('desktop', {
   logError: (текст) => ipcRenderer.invoke('log-error', String(текст || '')),
   logShow: () => ipcRenderer.invoke('log-show'),
   logPath: () => ipcRenderer.invoke('log-path'),
+  queueFolder: () => ipcRenderer.invoke('queue-folder'),
   projectPick: (name) => ipcRenderer.invoke('project-pick', name),
   projectWrite: (dir, files) => ipcRenderer.invoke('project-write', { dir, files }),
   projectOpenPick: () => ipcRenderer.invoke('project-open-pick'),

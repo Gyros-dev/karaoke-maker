@@ -667,6 +667,10 @@ I18N.EN = {
 
   /* ---------- Шаг 2 ---------- */
   'шаг2.поле': 'Paste the lyrics here…\n\nOne line is one karaoke line.\nEmpty lines don’t count.',
+  'очередь.кнопка': 'Queue up several songs…',
+  'очередь.кнопка.подсказка': 'Pick several songs — the studio separates and times them one after another and puts the finished projects into the folder you choose',
+  'очередь.подсказка': 'Pick the songs and their lyrics together: <b>song.mp3</b> with <b>song.txt</b> (or <b>song.lrc</b>) beside it — then the timing falls into place as well.',
+  'очередь.заголовок': 'Queue',
   'шаг2.lrc': 'Open an .lrc',
   'шаг2.lrc.подсказка': 'Open a ready .lrc: the lyrics and the line timings fall into place on their own',
   'шаг2.назад': '← Back',
@@ -1737,6 +1741,40 @@ I18N.СТРОКИ = {
     ru: 'Не получилось открыть папку с журналом.',
     en: 'Could not open the folder with the log.',
   },
+  'очередь.нетПесен': {
+    ru: 'Среди выбранных файлов нет ни одной песни. Выбери аудиофайлы, а рядом с ними — тексты .txt или .lrc, если они есть.',
+    en: 'There is not a single song among the files you picked. Pick audio files, and .txt or .lrc lyrics beside them if you have any.',
+  },
+  'очередь.неОткрылась': {
+    ru: 'Песня не открылась',
+    en: 'The song would not open',
+  },
+  'очередь.состояние.ждёт': { ru: 'ждёт', en: 'waiting' },
+  'очередь.состояние.идёт': { ru: 'идёт…', en: 'working…' },
+  'очередь.состояние.готово': { ru: 'готово', en: 'done' },
+  'очередь.состояние.ошибка': { ru: 'не вышло', en: 'failed' },
+  'очередь.шаг.песня': { ru: 'открываем песню…', en: 'opening the song…' },
+  'очередь.шаг.разделение': { ru: 'убираем вокал…', en: 'removing the vocals…' },
+  'очередь.шаг.разметка': { ru: 'размечаем текст…', en: 'timing the lyrics…' },
+  'очередь.шаг.lrc': { ru: 'читаем .lrc…', en: 'reading the .lrc…' },
+  'очередь.шаг.сохраняем': { ru: 'сохраняем проект…', en: 'saving the project…' },
+  'очередь.итог': {
+    ru: 'Готово: {готово} из {всего}.',
+    en: 'Done: {готово} of {всего}.',
+  },
+  'очередь.остановимся': {
+    ru: 'Остановимся, как только закончим нынешнюю песню.',
+    en: 'We will stop as soon as the current song is finished.',
+  },
+  'очередь.остановлена': {
+    ru: 'Очередь остановлена.',
+    en: 'The queue was stopped.',
+  },
+  /* «Отменить» и «Закрыть» — одна и та же кнопка: пока очередь идёт,
+     она отменяет, а как кончилась — закрывает. Значит, обе строки
+     зовутся кодом и обе живут здесь, а не в разметочном словаре. */
+  'очередь.отменить': { ru: 'Отменить', en: 'Cancel' },
+  'очередь.закрыть': { ru: 'Закрыть', en: 'Close' },
   'lrc.пусто': {
     ru: 'В этом файле нет ни одной строки со временем. Это точно .lrc?',
     en: 'There is not a single timed line in this file. Is it really an .lrc?',
