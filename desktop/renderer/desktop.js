@@ -1084,7 +1084,11 @@
       }
 
       setAsrProgress(99, t('asr.раскладываем'), '');
-      const fit = Align.fit(text, res.words || [], { duration: state.originalBuffer.duration });
+      /* Огибающая голоса — подгонке: по ней свободные слова ложатся
+         на настоящее пение, а не размазываются по проигрышу. */
+      const fit = Align.fit(text, res.words || [], {
+        duration: state.originalBuffer.duration, runs: voice.runs,
+      });
       showAsrOverlay(false);
       asr.busy = false;
 
@@ -1328,7 +1332,9 @@
       const res = await testListen(buffer, language, key, opts);
       if (!res.ok) return { ok: false, error: res.error };
 
-      const fit = Align.fit(text, res.words || [], { duration: buffer.duration });
+      const fit = Align.fit(text, res.words || [], {
+        duration: buffer.duration, runs: voice.runs,
+      });
       if (!fit.ok) return { ok: false, error: fit.error, всеСлова: res.words || [] };
 
       // Тот же путь, что у пользователя: текст в поле, времена рядом
