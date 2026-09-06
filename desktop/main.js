@@ -2453,14 +2453,23 @@ function createWindow() {
             startWordTap(1);
             audio.pause();
             const текст = document.querySelector('#edit-list .edit-row .edit-text');
-            текст.focus();
+            /* В правку входим тем же способом, что и рука: двойным
+               щелчком (или F2). Просто поставить фокус мало — поле
+               теперь не редактируемое, пока правку не открыли, и это
+               нарочно: щелчок по тексту раньше молча выключал все
+               клавиши редактора. */
+            правитьТекстСтроки(текст);
             const вТексте = {
               фокус: document.activeElement === текст,
               редактируемый: !!текст.isContentEditable,
             };
             вТексте.пробелПерехвачен = клавиша('Space');
             вТексте.метокПослеПробела = wordTap.marks.length;
+            /* Enter и Esc теперь заканчивают правку — это их работа
+               в поле, а до редактора они не доходят. Проверяем главное:
+               разметку слов они не трогают. */
             вТексте.enterПерехвачен = клавиша('Enter', 'Enter');
+            правитьТекстСтроки(текст);
             вТексте.escПерехвачен = клавиша('Escape', 'Escape');
             вТексте.режимЖив = wordTap.active;
             // А с кнопки разметка слов пробел по-прежнему берёт себе
@@ -2475,8 +2484,7 @@ function createWindow() {
             const кнопкаБьёт = сКнопки.фокус && сКнопки.пробелПерехвачен
               && сКнопки.ударЗасчитан;
             const текстуПробел = вТексте.фокус && вТексте.редактируемый
-              && !вТексте.пробелПерехвачен && !вТексте.enterПерехвачен
-              && !вТексте.escПерехвачен && вТексте.метокПослеПробела === 0
+              && !вТексте.пробелПерехвачен && вТексте.метокПослеПробела === 0
               && вТексте.режимЖив
               && вТексте.сКнопкиПерехвачен && вТексте.метокСКнопки === 1;
 
@@ -7005,6 +7013,189 @@ function createWindow() {
           вНорме: !место.мёртв && дошло === 1,
         };
       }
+
+      /* Находки проверяющего: текст строки, битый файл, границы.
+
+         Три беды из одного прогона «как живой пользователь». Первая:
+         щелчок по тексту строки ставил курсор в поле, и редактор
+         переставал слышать клавиши — все, включая отмену, — а строка
+         выглядела просто выбранной. Вторая: согласие на другую песню
+         сносило разметку ДО разбора файла, и битый файл оставлял
+         человека без работы и без песни. Третья: начало строки можно
+         было завести за её же конец, и строка уезжала в проект
+         вывернутой наизнанку. */
+      report.правкаТекстаДвойным = await win.webContents.executeJavaScript(`__раздел('правкаТекстаДвойным', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        document.getElementById('lyrics-input').value = 'раз\\nдва';
+        state.lines = [
+          { text: 'раз', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true },
+          { text: 'два', time: 10, end: 14, ручнойКонец: true, ручноеНачало: true },
+        ];
+        goToStep(3);
+        openEditor();
+        selectLine(0, {});
+        const поле = () => document.querySelector('#edit-list .edit-row[data-row="0"] .edit-text');
+        const нажать = (code, opts) => document.dispatchEvent(
+          new KeyboardEvent('keydown', Object.assign({ code, bubbles: true }, opts)));
+
+        // Щелчок по тексту: строка выбрана, а клавиши редактора живы
+        const п = поле();
+        п.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        п.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const доПравки = {
+          правится: п.getAttribute('contenteditable') === 'true',
+          было: state.lines[0].time,
+        };
+        нажать('Period');
+        доПравки.стало = +state.lines[0].time.toFixed(3);
+        доПравки.клавишаРаботает = доПравки.стало !== доПравки.было;
+
+        /* Двойной щелчок — вот теперь правка. Узел берём заново:
+           клавиша выше пересобрала список, и прежний уже не в дереве. */
+        const п2 = поле();
+        п2.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        const вПравке = {
+          правится: п2.getAttribute('contenteditable') === 'true',
+          вФокусе: document.activeElement === п2,
+          было: +state.lines[0].time.toFixed(3),
+        };
+        нажать('Period');
+        вПравке.стало = +state.lines[0].time.toFixed(3);
+        вПравке.клавишаМолчит = вПравке.стало === вПравке.было;
+
+        // Enter заканчивает правку — и клавиши снова свои
+        п2.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        const послеEnter = {
+          правится: поле() && поле().getAttribute('contenteditable') === 'true',
+        };
+        нажать('Period');
+        послеEnter.клавишаВернулась = +state.lines[0].time.toFixed(3) !== вПравке.стало;
+
+        // F2 открывает правку с клавиатуры
+        нажать('F2');
+        const поF2 = поле() && поле().getAttribute('contenteditable') === 'true';
+        if (поле()) поле().blur();
+
+        // Длинная строка обрезается, а не налезает на соседей
+        state.lines[0].text = 'очень длинная строка '.repeat(20).trim();
+        renderEditList();
+        const длинное = поле();
+        const ряд = длинное.closest('.edit-row');
+        const с = getComputedStyle(длинное);
+        const обрезка = {
+          перенос: с.whiteSpace, край: с.textOverflow,
+          высотаРяда: Math.round(ряд.getBoundingClientRect().height),
+        };
+
+        return {
+          доПравки, вПравке, послеEnter, поF2, обрезка,
+          вНорме:
+            // Первый щелчок только выбирает: правки нет, клавиши работают
+            !доПравки.правится && доПравки.клавишаРаботает
+            // Второй — открывает правку, и клавиши редактора молчат
+            && вПравке.правится && вПравке.вФокусе && вПравке.клавишаМолчит
+            // Enter закрывает правку, клавиши возвращаются
+            && !послеEnter.правится && послеEnter.клавишаВернулась
+            && поF2
+            // Длинная строка не переносится и не растит ряд
+            && обрезка.перенос === 'nowrap' && обрезка.край === 'ellipsis'
+            && обрезка.высотаРяда <= 30,
+        };
+      })`, true);
+
+      /* Битый файл не сносит прежнюю работу. */
+      report.битыйФайл = await win.webContents.executeJavaScript(`__раздел('битыйФайл', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        state.fileName = 'прежняя.mp3';
+        document.getElementById('lyrics-input').value = 'раз\\nдва';
+        state.lines = [
+          { text: 'раз', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true },
+          { text: 'два', time: 10, end: 14, ручнойКонец: true, ручноеНачало: true },
+        ];
+        const былAlert = window.alert, былConfirm = window.confirm;
+        let сказали = null;
+        window.alert = (м) => { сказали = м; };
+        window.confirm = () => true;   // «да, открыть другую песню»
+        try {
+          const мусор = new Uint8Array(4096);
+          for (let i = 0; i < мусор.length; i++) мусор[i] = (i * 37) & 255;
+          await handleFile(new File([мусор], 'битый.mp3'));
+          const строк = state.lines.length;
+          const имя = state.fileName;
+          const карточкаВидна = !document.getElementById('track-info')
+            .classList.contains('hidden');
+          const зонаСпрятана = document.getElementById('dropzone')
+            .classList.contains('hidden');
+          return {
+            строк, имя, сказали: (сказали || '').slice(0, 40),
+            карточкаВидна, зонаСпрятана,
+            вНорме: строк === 2 && имя === 'прежняя.mp3' && !!сказали
+              && карточкаВидна && зонаСпрятана,
+          };
+        } finally {
+          window.alert = былAlert;
+          window.confirm = былConfirm;
+        }
+      })`, true);
+
+      /* Границы строки: начало не заходит за собственный конец,
+         а негодный ввод не остаётся на экране вместо времени. */
+      report.границыСтроки = await win.webContents.executeJavaScript(`__раздел('границыСтроки', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        document.getElementById('lyrics-input').value = 'раз\\nдва';
+        state.lines = [
+          { text: 'раз', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true },
+          { text: 'два', time: 20, end: 24, ручнойКонец: true, ручноеНачало: true },
+        ];
+        goToStep(3);
+        openEditor();
+        selectLine(0, {});
+
+        // Конец 5,5 — и следом начало 6,9: наизнанку не выворачивается
+        const конец = document.getElementById('sel-end');
+        const начало = document.getElementById('sel-start');
+        конец.value = '0:05,500';
+        конец.dispatchEvent(new Event('change', { bubbles: true }));
+        начало.value = '0:06,900';
+        начало.dispatchEvent(new Event('change', { bubbles: true }));
+        const наизнанку = {
+          time: +state.lines[0].time.toFixed(3),
+          end: +state.lines[0].end.toFixed(3),
+        };
+
+        // Ерунда в поле: время не трогается, а поле показывает правду
+        state.lines[0].time = 5; state.lines[0].end = 9;
+        updateSelInfo();
+        начало.value = 'абвгд';
+        начало.dispatchEvent(new Event('change', { bubbles: true }));
+        const ерунда = {
+          поле: начало.value, красное: начало.classList.contains('bad'),
+          time: +state.lines[0].time.toFixed(3),
+        };
+        начало.value = '-5';
+        начало.dispatchEvent(new Event('change', { bubbles: true }));
+        const минус = { поле: начало.value, time: +state.lines[0].time.toFixed(3) };
+        начало.blur();
+
+        return {
+          наизнанку, ерунда, минус,
+          вНорме:
+            // Начало осталось левее собственного конца
+            наизнанку.time < наизнанку.end
+            // Ерунду не приняли, и поле говорит настоящее время
+            && ерунда.time === 5 && ерунда.красное && /^0:05/.test(ерунда.поле)
+            && минус.time === 5 && /^0:05/.test(минус.поле),
+        };
+      })`, true);
 
       /* Двойной щелчок по ползунку возвращает умолчание — у ВСЕХ.
 

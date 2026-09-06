@@ -1145,10 +1145,12 @@ body.is-desktop .steps-tool-group {
 #step-1 .track-info > .track-row,
 #step-1 .track-info > .mono-warning,
 #step-1 .track-info > .voice-lost,
+#step-1 .track-info > .inst-short,
 #step-1 .track-info > .panel-actions { grid-column: 1 / -1; }
 /* Просветы задаёт сетка, свои отступы карточкам больше не нужны */
 #step-1 .track-info > .bg-upload,
 #step-1 .track-info > .voice-lost,
+#step-1 .track-info > .inst-short,
 #step-1 .track-info > .mono-warning { margin-top: 0; }
 #step-1 .track-info > .bg-upload { align-content: start; }
 
@@ -1273,7 +1275,24 @@ body.is-desktop .steps-tool-group {
   line-height: 1.5;
   text-align: left;
 }
-.voice-lost .icon { flex: none; margin-top: 0.15em; }
+/* Своя минусовка короче песни — та же тихая строка предупреждения */
+.inst-short {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-left: 3px solid #fbbf24;
+  border-radius: var(--ed-radius);
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  text-align: left;
+}
+.voice-lost .icon,
+.inst-short .icon { flex: none; margin-top: 0.15em; }
 
 .bg-upload {
   display: flex;
@@ -1655,6 +1674,20 @@ body.is-desktop .steps-tool-group {
   /* Цвет курсора здесь больше не задаётся: он приходит из общего
      правила для всех полей ввода (см. «Тёмная гамма и курсор ввода»
      в начале файла) и точно такой же — акцент темы. */
+  /* Длинная строка обрезается многоточием, а не переносится: ряд
+     держит высоту 24 px, и перенос печатал текст ПОВЕРХ соседних
+     рядов — нечитаемыми становились обе строки разом. Целиком
+     длинная строка видна в правке (ниже) и на сцене просмотра. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* В правке поле ведёт себя как поле: курсор ходит, длинный текст
+   прокручивается вбок, многоточие не мешает видеть конец строки. */
+.edit-text[contenteditable="true"] {
+  overflow-x: auto;
+  text-overflow: clip;
+  cursor: text;
 }
 .edit-text:focus { background: rgba(255, 255, 255, 0.07); }
 
@@ -3595,3 +3628,11 @@ body.is-desktop .site-header .footer-link {
   font-size: 0.82rem;
   line-height: 1.5;
 }
+/* «Качество · Один проход» шире своего блока и на узком окне вылезало
+   за карточку, перечёркивая её рамку: у окна 1200 — на шестнадцать
+   точек, у 980 — на девяносто. Ряд переносит строки, а вот сама
+   надпись ужиматься не умела. */
+.ai-more-body > *, .asr-more-body > * { max-width: 100%; min-width: 0; }
+.ai-more-body .export-quality, .asr-more-body .export-quality { overflow: hidden; }
+.ai-more-body .export-quality select,
+.asr-more-body .export-quality select { min-width: 0; }

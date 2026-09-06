@@ -3207,6 +3207,16 @@ async function handleFile(file) {
         return;
       }
     }
+  }
+
+  /* Прежнюю разметку сносим НЕ ЗДЕСЬ, а когда новая песня прочитана
+     (см. ниже, после decodeAudioData). Беда, которую это лечит: файл
+     мог оказаться битым — согласие уже спрошено, разметка уже стёрта,
+     а песня так и не открылась. Человек оставался и без работы,
+     и без песни, причём работа при этом лежала целой в черновике,
+     и вернуть её можно было только неочевидным обходом. */
+  const сброситьПодНовуюПесню = () => {
+    if (!другая) return;
     // Времена прежней песни новой не годятся: строки стоят не на своих местах
     state.lines = [];
     voice.ждёт = null;      // и огибающая из черновика: она про прежнюю песню
@@ -3215,7 +3225,7 @@ async function handleFile(file) {
     editor.sel = -1;
     editor.peaks = null;
     clearHistory();
-  }
+  };
 
   dropzone.classList.add('hidden');
   $('track-info').classList.add('hidden');
@@ -3233,6 +3243,9 @@ async function handleFile(file) {
     $('processing-text').textContent = t('песня.декодируем');
     const ctx = audio.ensureCtx();
     const buffer = await ctx.decodeAudioData(data);
+
+    // Песня прочиталась — вот теперь прежняя работа и правда уступает место
+    сброситьПодНовуюПесню();
 
     $('processing-text').textContent = t('песня.приглушаем');
     const instrumental = await makeInstrumental(buffer);
@@ -3301,16 +3314,27 @@ async function handleFile(file) {
     voice.ждёт = null;
   } catch (err) {
     $('processing').classList.add('hidden');
-    dropzone.classList.remove('hidden');
+    /* Файл не открылся — на экран возвращаем то, что было. Прежняя
+       песня, если она есть, никуда не делась (разметку мы сносим
+       только после удачного разбора), и показывать вместо неё пустую
+       зону перетаскивания значило бы врать: работа-то на месте. */
+    if (state.originalBuffer) $('track-info').classList.remove('hidden');
+    else dropzone.classList.remove('hidden');
     alert(t('песня.неПрочиталась'));
   }
 }
 
-/* Строка под именем песни: длительность, моно или стерео, частота.
+/* Строка под именем песни: длительность, моно или стерео.
    Собирается отдельной функцией, а не на месте загрузки файла, потому
-   что «стерео» и «кГц» — переводимые слова: при смене языка строку
-   надо пересобрать (см. обработчик события i18n). Раньше она
-   оставалась на языке, на котором открыли песню. */
+   что «стерео» — переводимое слово: при смене языка строку надо
+   пересобрать (см. обработчик события i18n). Раньше она оставалась
+   на языке, на котором открыли песню.
+
+   ЧАСТОТЫ ЗДЕСЬ БОЛЬШЕ НЕТ. Она бралась у декодированного буфера,
+   а это частота звуковой карты, а не файла: любой файл показывался
+   как «48.0 кГц», в том числе честные 44,1. Настоящую частоту знает
+   только заголовок файла, а разбирать его ради строки, по которой
+   всё равно нечего решать, незачем. */
 function обновитьСведенияОТреке() {
   const узел = $('track-meta');
   const buffer = state.originalBuffer;
@@ -3319,7 +3343,6 @@ function обновитьСведенияОТреке() {
   узел.textContent = [
     fmtTime(buffer.duration),
     t(buffer.numberOfChannels === 1 ? 'песня.моно' : 'песня.стерео'),
-    t('песня.кгц', { v: (buffer.sampleRate / 1000).toFixed(1) }),
   ].join(' · ');
 }
 
@@ -3332,6 +3355,13 @@ function updateInstUI() {
   $('inst-status').textContent = custom ? `✓ ${state.instName}` : '';
   $('btn-inst-remove').classList.toggle('hidden', !custom);
   $('btn-inst-add').textContent = t(custom ? 'минусовка.заменить' : 'минусовка.выбрать');
+  /* Своя минусовка короче песни — говорим сразу, а не при «проверке
+     звука». Молчать нельзя: ближе к концу песни просто наступит
+     тишина, и человек узнает об этом, уже начав петь. Полсекунды
+     разницы — это разное округление длины, а не беда. */
+  const короче = !!(custom && state.instrumentalBuffer && state.originalBuffer
+    && state.instrumentalBuffer.duration < state.originalBuffer.duration - 0.5);
+  класс($('inst-short'), 'hidden', !короче);
   обновитьПотерюМинусовки();
 }
 
@@ -3927,7 +3957,14 @@ function setLineTime(i, t) {
     ? state.lines[i + 1].time - 0.05
     : audio.duration;
   const was = line.time;
-  line.time = Math.min(Math.max(t, prev), Math.max(prev, next));
+  /* Начало не пускаем за собственный конец, когда конец выставлен
+     руками. Иначе строку можно было вывернуть наизнанку: набрал конец
+     0:05,5, потом начало 0:06,9 — и в памяти лежало time > end.
+     На экране это пряталось (длина показывалась 0,05, поле «конец»
+     рисовало пересчитанное), а в черновик и в .lrc уезжало как есть. */
+  const свой = line.ручнойКонец && line.end != null ? line.end - MIN_SPAN : Infinity;
+  const верх = Math.min(next, свой);
+  line.time = Math.min(Math.max(t, prev), Math.max(prev, верх));
   // Метку поправили руками — сомнений в ней больше нет
   line.сомнительная = false;
   /* И подтяжка к голосу её больше не трогает: человек сказал своё
@@ -6043,6 +6080,13 @@ async function собратьМинусовку() {
 }
 
 $('btn-export-wav').addEventListener('click', async () => {
+  /* Песни нет вовсе — так и говорим. Раньше здесь на любую пустоту
+     отвечали «Для монофайла минусовку сделать нельзя»: файла не было
+     ни моно, ни стерео, а причина называлась выдуманная. */
+  if (!state.originalBuffer) {
+    alert(t('экспорт.нетПесни'));
+    return;
+  }
   if (!state.instrumentalBuffer) {
     alert(t('экспорт.моно'));
     return;
@@ -6900,10 +6944,24 @@ function renderEditList() {
 
     const text = document.createElement('div');
     text.className = 'edit-text';
-    text.contentEditable = 'true';
+    /* Правка начинается ДВОЙНЫМ щелчком, а не первым.
+
+       Беда, которую это лечит: щелчок по тексту строки ставил курсор
+       в поле, и с этой секунды редактор переставал слышать клавиши —
+       все до единой, включая отмену. Строка при этом выглядела ровно
+       так же выбранной, как после щелчка по номеру, а подсказки
+       на панели продолжали обещать «клавиша L» и «Cmd+Z». Так и
+       написал проверяющий: клавиши мертвы, и почему — не видно.
+
+       Теперь первый щелчок только выбирает строку (клавиши работают),
+       а править текст зовут двойным щелчком по нему же или клавишей
+       F2 — как переименовывают файл в системе. Двойной щелчок мимо
+       текста по-прежнему перематывает песню на строку. */
+    text.contentEditable = 'false';
     text.spellcheck = false;
     text.textContent = line.text;
     text.dataset.textI = i;
+    text.title = t('ред.правитьТекст');
 
     /* Тихая пометка про ручную разметку слов. Что именно помечено,
        решает доля: пока разметка редка — помечаем её саму, а когда
@@ -6954,11 +7012,37 @@ $('edit-list').addEventListener('click', (e) => {
   }
 });
 
-/* Двойной клик по строке перематывает песню на её начало.
-   По самому тексту — не перематывает: там двойной клик выделяет слово,
-   и отнимать это у правки текста нельзя. */
+/* Вход в правку текста и выход из неё. Пока поле не в правке, оно
+   обычный текст: клавиши редактора слышны, длинная строка обрезается
+   многоточием. В правке — поле как поле, с курсором и прокруткой. */
+function правитьТекстСтроки(el) {
+  if (!el || el.getAttribute('contenteditable') === 'true') return;
+  el.setAttribute('contenteditable', 'true');
+  el.focus();
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  r.collapse(false);            // курсор в конец, а не выделение всего
+  const s = window.getSelection();
+  s.removeAllRanges();
+  s.addRange(r);
+}
+
+function закончитьПравкуТекста(el) {
+  if (!el) return;
+  el.setAttribute('contenteditable', 'false');
+  const s = window.getSelection();
+  if (s) s.removeAllRanges();
+}
+
+/* Двойной клик по тексту строки открывает её правку, двойной клик
+   по остальному ряду перематывает песню на начало строки. */
 $('edit-list').addEventListener('dblclick', (e) => {
-  if (e.target.closest('.edit-text')) return;
+  const поле = e.target.closest('.edit-text');
+  if (поле) {
+    if (+поле.dataset.textI !== editor.sel) selectLine(+поле.dataset.textI, {});
+    правитьТекстСтроки(поле);
+    return;
+  }
   const row = e.target.closest('.edit-row');
   if (!row) return;
   const i = +row.dataset.row;
@@ -7052,9 +7136,20 @@ function применитьПолеСтроки(какой) {
   const sp = spanOfRow(editor.sel);
   if (!sp) { updateSelInfo(); return; }
   const v = читатьВремя(поле.value);
-  // Не число или отрицательное время — поле краснеет, набранное
-  // остаётся на месте, разметка не трогается
-  if (v == null || v < 0) { поле.classList.add('bad'); return; }
+  /* Не число или отрицательное время — поле краснеет, а на экран
+     возвращается настоящее значение.
+
+     Раньше набранное оставалось лежать в поле как ни в чём не бывало:
+     «абвгд» или «−5» стояли там, где положено быть времени строки,
+     и выглядели её временем — до тех пор, пока не щёлкнешь мимо.
+     Применить это нельзя, а значит и показывать это как значение
+     нельзя: поле обязано говорить правду о том, что в разметке. */
+  if (v == null || v < 0) {
+    поле.classList.add('bad');
+    delete поле.dataset.набирают;
+    поле.value = fmtTimeMs(какой === 'start' ? sp.start : sp.end);
+    return;
+  }
   поле.classList.remove('bad');
   const было = какой === 'start' ? sp.start : sp.end;
   delete поле.dataset.набирают;   // набор закончен, поле снова можно обновлять
@@ -7658,10 +7753,24 @@ $('edit-list').addEventListener('input', (e) => {
 $('edit-list').addEventListener('focusout', (e) => {
   const el = e.target.closest && e.target.closest('.edit-text');
   if (!el) return;
+  закончитьПравкуТекста(el);
   const line = state.lines[+el.dataset.textI];
   if (!line) return;
   if (el.textContent.replace(/\n/g, ' ').trim()) return;
   el.textContent = line.text;   // пользовательский текст — только textContent
+});
+
+/* Enter и Esc заканчивают правку: перевода строки в строке караоке
+   быть не может, а Esc — привычный способ выйти из поля куда угодно.
+   Клавиши редактора после этого снова свои. */
+$('edit-list').addEventListener('keydown', (e) => {
+  const el = e.target.closest && e.target.closest('.edit-text');
+  if (!el || el.getAttribute('contenteditable') !== 'true') return;
+  if (e.key === 'Enter' || e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    el.blur();
+  }
 });
 
 /* --- Мини-сцена просмотра ---
@@ -9091,7 +9200,22 @@ function timelineHit(x, y) {
   // Блоки строк
   if (y >= L.lines.y && y < L.lines.y + L.lines.h) {
     const spans = editorSpans();
-    // Сначала края — они важнее середины соседнего блока
+    /* Сваренный стык двух строк — своя порода, как у слов.
+
+       Раньше он был просто «концом левой строки», и протяжка вправо
+       делала обратное тому, что просит рука: конец упирался в начало
+       следующей строки (оно на месте) и уезжал ВЛЕВО на те самые
+       50 мс зазора. Сколько ни тяни — пауза выходила всегда одна
+       и та же, самая маленькая. Теперь стык разводится так же, как
+       у слов: тянешь вправо — вправо уезжает начало правой строки. */
+    for (let i = 0; i < spans.length - 1; i++) {
+      const a = spans[i], b = spans[i + 1];
+      if (!стыкли(a.end, b.start)) continue;
+      if (Math.abs(x - tToX(a.end)) <= EDGE_GRAB) {
+        return { kind: 'line-edge', row: b.row, левая: a.row };
+      }
+    }
+    // Дальше края — они важнее середины соседнего блока
     for (const sp of spans) {
       if (Math.abs(x - tToX(sp.start)) <= EDGE_GRAB) return { kind: 'line-start', row: sp.row };
       if (Math.abs(x - tToX(sp.end)) <= EDGE_GRAB) return { kind: 'line-end', row: sp.row };
@@ -9348,6 +9472,10 @@ function updateSelInfo() {
     if (кнопка.disabled !== нельзя) кнопка.disabled = нельзя;
   });
   $('btn-sel-del').disabled = !state.lines.length;
+  /* Простукивание начинается с выбранной строки, а нет строк — не с чего.
+     Кнопка оставалась яркой среди пяти приглушённых и на щелчок
+     не отвечала ничем: ни разметки, ни объяснения. */
+  $('btn-sel-tap').disabled = !state.lines.length;
   const marked = !!(line && hasWords(line));
   // Подпись не меняется, меняется только галочка справа от неё (CSS,
   // по классу .marked) — раньше подпись целиком переписывалась текстом
@@ -9596,7 +9724,14 @@ function применитьПолеСлова(какой) {
   if (!info) { updateWordInfo(); return; }
   const idx = какой === 'start' ? info.k : info.k + 1;
   const v = читатьВремя(поле.value);
-  if (v == null || v < 0) { поле.classList.add('bad'); return; }
+  // Отказ виден и полем, и возвратом настоящего времени (см. применитьПолеСтроки)
+  if (v == null || v < 0) {
+    поле.classList.add('bad');
+    delete поле.dataset.набирают;
+    поле.value = fmtTimeMs(какой === 'start'
+      ? info.words[info.k].start : info.words[info.k].end);
+    return;
+  }
   поле.classList.remove('bad');
   const было = какой === 'start' ? info.words[info.k].start : info.words[info.k].end;
   delete поле.dataset.набирают;
@@ -10057,10 +10192,12 @@ function beginDrag(hit, t) {
     const ws = lineWords(sp.line, sp);
     if (ws[hit.k]) стыкWas = ws[hit.k].start;
   }
+  if (hit.kind === 'line-edge') стыкWas = sp.start;
   editor.drag = {
     kind: hit.kind,
     row: hit.row,
     k: hit.k,
+    левая: hit.левая,
     grabT: t,
     стыкWas,
     /* Тянем от того начала, которое ВИДНО, а не от line.time: строку
@@ -10097,6 +10234,31 @@ function applyDrag(t) {
   } else if (d.kind === 'line-end') {
     setLineEnd(d.row, примагнитить(t, { кромеСтроки: d.row }));
     editor.dragTip = lineEnd(syncedLines(), syncedLines().indexOf(line));
+  } else if (d.kind === 'line-edge') {
+    /* Стык строк разводится ровно как стык слов: обычная протяжка
+       делает паузу, Cmd/Ctrl уводит обе границы разом, не размыкая
+       стык (см. обаКрая). */
+    const левая = state.lines[d.левая];
+    const цель = примагнитить(t, { кромеСтроки: d.row });
+    if (editor.обаКрая) {
+      setLineTime(d.row, цель);
+      // Конец левой держится за начало правой: руками он выставлен
+      // или считается сам — в обоих случаях стык остаётся стыком
+      if (левая && левая.ручнойКонец) левая.end = state.lines[d.row].time;
+      editor.dragTip = state.lines[d.row].time;
+    } else if (цель > d.стыкWas) {
+      /* Вправо уезжает начало ПРАВОЙ строки, а конец левой остаётся
+         на прежнем стыке. Порядок важен: сначала двигаем правую,
+         потом прибиваем конец левой — иначе он упёрся бы в неё
+         и не дотянул до стыка полсотни миллисекунд. */
+      setLineTime(d.row, цель);
+      if (левая && !левая.ручнойКонец) setLineEnd(d.левая, d.стыкWas);
+      editor.dragTip = state.lines[d.row].time;
+    } else {
+      setLineEnd(d.левая, цель);
+      const syn = syncedLines();
+      editor.dragTip = lineEnd(syn, syn.indexOf(левая));
+    }
   } else if (d.kind === 'line-move') {
     const hadEnd = line.ручнойКонец;
     // Блок целиком тянется за начало: липнет ведущая граница, как в монтажной
@@ -10301,7 +10463,7 @@ tl.addEventListener('pointermove', (e) => {
   tl.style.cursor = !hit ? 'pointer'
     : hit.kind === 'orig-del' ? 'pointer'
       : hit.kind === 'orig-new' || hit.kind === 'range-new' ? 'crosshair'
-        : hit.kind === 'line-start' || hit.kind === 'line-end'
+        : hit.kind === 'line-edge' || hit.kind === 'line-start' || hit.kind === 'line-end'
           || hit.kind === 'word-edge' || hit.kind === 'word-start' || hit.kind === 'word-end'
           || hit.kind === 'orig-start' || hit.kind === 'orig-end'
           || hit.kind === 'range-start' || hit.kind === 'range-end'
@@ -10883,6 +11045,21 @@ function крайПоУказателю(что) {
    вместе со своим концом, слово вместе со своей шириной. Раньше такое
    умела только мышь. */
 function сдвинутьВыбранное(delta) {
+  /* Выделен кусок песни — двигаем его целиком, как это делают кнопки
+     «−0,1 / +0,1» рядом. Раньше клавиши двигали одну текущую строку,
+     а кнопки — весь диапазон: два способа одного действия расходились
+     в поведении, и заметить это можно было только по числам. */
+  if (границыДиапазона()) {
+    pushHistory();
+    сдвинутьДиапазон(delta);
+    dropEmptyHistory();
+    renderEditList();
+    editor.spansKey = '';
+    editor.stageKey = '';
+    renderEditStage();
+    drawTimeline();
+    return;
+  }
   if (editor.wordSel >= 0) {
     const info = selectedWord();
     if (!info) return;
@@ -11017,6 +11194,17 @@ document.addEventListener('keydown', (e) => {
     case 'KeyO': e.preventDefault(); крайПоУказателю('end'); break;
     case 'Comma': e.preventDefault(); сдвинутьВыбранное(-(e.shiftKey ? 10 : 1) * КАДР); break;
     case 'Period': e.preventDefault(); сдвинутьВыбранное((e.shiftKey ? 10 : 1) * КАДР); break;
+    /* F2 — править текст выбранной строки, как переименовывают файл
+       в системе. Мышью это двойной щелчок по тексту; клавише тоже
+       нужен свой путь, иначе с клавиатуры в правку не попасть. */
+    case 'F2': {
+      if (editor.sel < 0) break;
+      e.preventDefault();
+      const поле = $('edit-list')
+        .querySelector(`.edit-row[data-row="${editor.sel}"] .edit-text`);
+      if (поле) правитьТекстСтроки(поле);
+      break;
+    }
     case 'KeyS': e.preventDefault(); setSnap(!editor.snap); break;
     // Сетка долей — рядом с магнитом и на клавише рядом же
     case 'KeyG': e.preventDefault(); setBeatGrid(!state.сетка.вкл); break;

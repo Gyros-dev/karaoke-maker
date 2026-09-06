@@ -310,6 +310,14 @@ const ASR_CSS = `
   font-size: 0.82rem;
   line-height: 1.5;
 }
+/* «Качество · Один проход» шире своего блока и на узком окне вылезало
+   за карточку, перечёркивая её рамку: у окна 1200 — на шестнадцать
+   точек, у 980 — на девяносто. Ряд переносит строки, а вот сама
+   надпись ужиматься не умела. */
+.ai-more-body > *, .asr-more-body > * { max-width: 100%; min-width: 0; }
+.ai-more-body .export-quality, .asr-more-body .export-quality { overflow: hidden; }
+.ai-more-body .export-quality select,
+.asr-more-body .export-quality select { min-width: 0; }
 `;
 
 function patchCss(src) {

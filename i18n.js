@@ -598,6 +598,7 @@ I18N.EN = {
   'шаг1.форматы': 'MP3 · WAV · OGG · M4A',
   'шаг1.обработка': 'Processing the song…',
   'шаг1.моно': 'The file is mono — vocals can’t be ducked, but lyric timing and karaoke will work.',
+  'шаг1.минусовкаКороче': 'This instrumental is shorter than the song — it will go silent towards the end. Use a file that covers the whole song, or remove your instrumental.',
   'шаг1.минусовкаПотеряна': 'The instrumental made by the neural network is not kept between launches: what you hear now is the built-in ducking, and the vocals come through it. Remove the vocals again — or load your own instrumental from a file.',
   'шаг1.фон.заголовок': 'Karaoke background',
   'шаг1.фон.текст': 'Optional: the picture sits under the text while you sing',
@@ -1232,7 +1233,6 @@ I18N.СТРОКИ = {
   'песня.приглушаем': { ru: 'Приглушаем вокал…', en: 'Ducking the vocals…' },
   'песня.моно': { ru: 'моно', en: 'mono' },
   'песня.стерео': { ru: 'стерео', en: 'stereo' },
-  'песня.кгц': { ru: '{v} кГц', en: '{v} kHz' },
   'песня.неПрочиталась': {
     ru: 'Не удалось прочитать этот файл как аудио. Попробуй другой формат (MP3, WAV, OGG).',
     en: 'Couldn’t read this file as audio. Try another format (MP3, WAV, OGG).',
@@ -1335,6 +1335,10 @@ I18N.СТРОКИ = {
   'экспорт.имяСлова': { ru: '{имя} (по словам).lrc', en: '{имя} (word by word).lrc' },
   'экспорт.имяМинус': { ru: '{имя} (минус).wav', en: '{имя} (instrumental).wav' },
   'экспорт.имяВидео': { ru: '{имя} (караоке).{ext}', en: '{имя} (karaoke).{ext}' },
+  'экспорт.нетПесни': {
+    ru: 'Сначала загрузи песню — минусовку делать не из чего.',
+    en: 'Load a song first — there is nothing to make an instrumental from.',
+  },
   'экспорт.моно': {
     ru: 'Для монофайла минусовку сделать нельзя.',
     en: 'An instrumental can’t be made from a mono file.',
@@ -1409,6 +1413,10 @@ I18N.СТРОКИ = {
   'ред.инсп.слово': { ru: 'слово', en: 'word' },
   'ред.инсп.строка': { ru: 'строка', en: 'line' },
   'ред.инсп.длина': { ru: 'длина', en: 'length' },
+  'ред.правитьТекст': {
+    ru: 'Двойной щелчок — править текст строки (или клавиша F2)',
+    en: 'Double-click to edit the line’s text (or press F2)',
+  },
   'ред.словоНет': { ru: 'не выбрано', en: 'none' },
   'ред.строкаНет': { ru: 'не выбрана', en: 'none' },
   /* Отрезок оригинала: кусок, где вместо минусовки звучит сама запись.
