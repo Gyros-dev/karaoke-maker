@@ -9144,11 +9144,22 @@ function timelineHit(x, y) {
   // Отрезки оригинала
   if (y >= L.orig.y && y < L.orig.y + L.orig.h) {
     const spans = отрезкиОригинала();
+    /* Ближайший край, а не первый попавшийся, и никаких краёв у тонкого
+       отрезка — та же мера, что у слов и строк (см. ниже). */
+    let ближний = null;
     for (let i = 0; i < spans.length; i++) {
       const x0 = tToX(spans[i].start);
       const x1 = tToX(spans[i].end);
-      if (Math.abs(x - x0) <= EDGE_GRAB) return { kind: 'orig-start', i };
-      if (Math.abs(x - x1) <= EDGE_GRAB) return { kind: 'orig-end', i };
+      if (x1 - x0 < EDGE_GRAB * 2) continue;
+      for (const [край, кx] of [['orig-start', x0], ['orig-end', x1]]) {
+        const d = Math.abs(x - кx);
+        if (d <= EDGE_GRAB && (!ближний || d < ближний.d)) ближний = { d, hit: { kind: край, i } };
+      }
+    }
+    if (ближний) return ближний.hit;
+    for (let i = 0; i < spans.length; i++) {
+      const x0 = tToX(spans[i].start);
+      const x1 = tToX(spans[i].end);
       if (x > x0 && x < x1) {
         const крестик = x1 - x0 >= ORIG_DEL_W + 26;
         if (крестик && x >= x1 - ORIG_DEL_W - 4) return { kind: 'orig-del', i };
@@ -9171,29 +9182,60 @@ function timelineHit(x, y) {
          потому что тело слова k уже перехватывало эту точку первым.
          Половина зоны прилипания у границы оказывалась недостижимой:
          подвести курсор можно было только строго справа от неё. */
+      /* Ближайший край, а не первый попавшийся.
+
+         Беда, которую это лечит: края перебирались по порядку, и
+         возвращался первый, попавший в зону захвата. Когда два края
+         оказывались рядом (а после правки они сходятся в одну точку
+         сплошь и рядом), брался левый — даже если курсор стоял вплотную
+         к правому. Со стороны это «дорожка меня не слушается»: целишь
+         в один край, тянешь другой. Теперь считаем расстояние до всех
+         и берём тот, до которого ближе. */
+      const края = [];
       for (let k = 1; k < words.length; k++) {
         /* Сваренные края — одна ручка на двоих («стык»), разошедшиеся —
            две разные: у левого слова конец, у правого начало. Иначе
            паузу между словами нечем было бы ни сделать, ни убрать. */
         if (стыкли(words[k - 1].end, words[k].start)) {
-          if (Math.abs(x - tToX(words[k].start)) <= EDGE_GRAB) return { kind: 'word-edge', row: sp.row, k };
+          края.push({ x: tToX(words[k].start), hit: { kind: 'word-edge', row: sp.row, k } });
         } else {
-          if (Math.abs(x - tToX(words[k - 1].end)) <= EDGE_GRAB) return { kind: 'word-end', row: sp.row, k: k - 1 };
-          if (Math.abs(x - tToX(words[k].start)) <= EDGE_GRAB) return { kind: 'word-start', row: sp.row, k };
+          края.push({ x: tToX(words[k - 1].end), hit: { kind: 'word-end', row: sp.row, k: k - 1 } });
+          края.push({ x: tToX(words[k].start), hit: { kind: 'word-start', row: sp.row, k } });
         }
       }
       /* Крайние края строки: начало ПЕРВОГО слова и конец ПОСЛЕДНЕГО.
          Раньше своей ручки у них не было — первое слово начиналось
          вместе со строкой, конец последнего тянулся до конца строки,
          и подвинуть их было нечем. Но пауза перед первым словом такая
-         же законная, как пауза между словами: певец вступает не сразу.
-         Проверяем ПОСЛЕ внутренних границ — те и раньше были главнее
-         тела слова, и порядок между ними менять незачем. */
+         же законная, как пауза между словами: певец вступает не сразу. */
       if (words.length) {
         const п = words.length - 1;
-        if (Math.abs(x - tToX(words[0].start)) <= EDGE_GRAB) return { kind: 'word-start', row: sp.row, k: 0 };
-        if (Math.abs(x - tToX(words[п].end)) <= EDGE_GRAB) return { kind: 'word-end', row: sp.row, k: п };
+        края.push({ x: tToX(words[0].start), hit: { kind: 'word-start', row: sp.row, k: 0 } });
+        края.push({ x: tToX(words[п].end), hit: { kind: 'word-end', row: sp.row, k: п } });
       }
+      /* Блок, который зоны захвата накрывают ЦЕЛИКОМ, краёв не имеет.
+
+         Слово можно ужать до восьми сотых секунды — это законно,
+         в песне бывают и такие слоги, — но на дорожке от него остаётся
+         полоска в десяток точек. Две зоны захвата по краям съедали её
+         без остатка: подвинуть слово становилось нечем, и человек
+         сказал прямо — «чтоб каждый миллиметр работал». Теперь у такой
+         полоски всё тело — ручка переноса: вытащить её можно всегда.
+
+         Порог ровно в две зоны, не больше: на крупном плане слова
+         и так шире, а на общем — уже, и отнимать у них края незачем,
+         иначе тянуть границы стало бы нечем на всей дорожке. */
+      const тонкое = (k) => tToX(words[k].end) - tToX(words[k].start) < EDGE_GRAB * 2;
+      const годится = (h) => !(h.kind === 'word-start' && тонкое(h.k))
+        && !(h.kind === 'word-end' && тонкое(h.k))
+        && !(h.kind === 'word-edge' && (тонкое(h.k) || тонкое(h.k - 1)));
+      let ближний = null;
+      for (const край of края) {
+        const d = Math.abs(x - край.x);
+        if (d > EDGE_GRAB || !годится(край.hit)) continue;
+        if (!ближний || d < ближний.d) ближний = { d, hit: край.hit };
+      }
+      if (ближний) return ближний.hit;
       for (let k = 0; k < words.length; k++) {
         const x0 = tToX(words[k].start);
         const x1 = tToX(words[k].end);
@@ -9214,6 +9256,10 @@ function timelineHit(x, y) {
        50 мс зазора. Сколько ни тяни — пауза выходила всегда одна
        и та же, самая маленькая. Теперь стык разводится так же, как
        у слов: тянешь вправо — вправо уезжает начало правой строки. */
+    /* Ближайший край, а не первый попавшийся, — та же мера, что и
+       у слов выше: у соседних строк края сходятся, и первый найденный
+       часто оказывался не тем, в который целились. */
+    const края = [];
     for (let i = 0; i < spans.length - 1; i++) {
       const a = spans[i], b = spans[i + 1];
       /* Сваренными считаем и те строки, между которыми стоит один
@@ -9221,16 +9267,30 @@ function timelineHit(x, y) {
          друг друга (см. lineSpan, «докуда − 0,02»), и точного
          совпадения времён здесь не бывает никогда. */
       const щель = b.start - a.end;
-      if (!(щель >= -СТЫК && щель <= ЗАЗОР_БЛОКОВ + СТЫК)) continue;
-      if (Math.abs(x - tToX(a.end)) <= EDGE_GRAB) {
-        return { kind: 'line-edge', row: b.row, левая: a.row };
+      if (щель >= -СТЫК && щель <= ЗАЗОР_БЛОКОВ + СТЫК) {
+        края.push({ x: tToX(a.end), hit: { kind: 'line-edge', row: b.row, левая: a.row } });
       }
     }
-    // Дальше края — они важнее середины соседнего блока
+    const узкая = (sp) => tToX(sp.end) - tToX(sp.start) < EDGE_GRAB * 2;
     for (const sp of spans) {
-      if (Math.abs(x - tToX(sp.start)) <= EDGE_GRAB) return { kind: 'line-start', row: sp.row };
-      if (Math.abs(x - tToX(sp.end)) <= EDGE_GRAB) return { kind: 'line-end', row: sp.row };
+      if (узкая(sp)) continue;   // у тонкого блока краёв нет — только перенос
+      края.push({ x: tToX(sp.start), hit: { kind: 'line-start', row: sp.row } });
+      края.push({ x: tToX(sp.end), hit: { kind: 'line-end', row: sp.row } });
     }
+    /* Стык главнее одиночных краёв: он и есть ручка этих двух блоков,
+       а их собственные края стоят в той же точке и перебивали бы его
+       по случайной разнице в пару точек. */
+    let ближняя = null;
+    for (const край of края) {
+      const d = Math.abs(x - край.x);
+      if (d > EDGE_GRAB) continue;
+      const стык = край.hit.kind === 'line-edge';
+      const лучше = !ближняя
+        || (стык && ближняя.hit.kind !== 'line-edge')
+        || (стык === (ближняя.hit.kind === 'line-edge') && d < ближняя.d);
+      if (лучше) ближняя = { d, hit: край.hit };
+    }
+    if (ближняя) return ближняя.hit;
     for (const sp of spans) {
       if (x >= tToX(sp.start) && x <= tToX(sp.end)) return { kind: 'line-move', row: sp.row };
     }

@@ -7467,6 +7467,99 @@ function createWindow() {
         };
       })`, true);
 
+      /* «Чтоб каждый миллиметр работал».
+
+         Человек прислал запись: слово ужато до самого малого — восьми
+         сотых секунды, — и на дорожке от него осталась полоска в десяток
+         точек. Две зоны захвата по краям накрывают её целиком: подвинуть
+         слово стало нечем, и запись кончилась отменой. Вторая половина
+         той же беды — края перебирались по порядку, и брался ПЕРВЫЙ
+         попавший в зону, даже когда курсор стоял вплотную ко второму.
+
+         Проверяем попадание, а не рисование: что вернёт timelineHit
+         в точке, куда целится рука. */
+      report.каждыйМиллиметр = await win.webContents.executeJavaScript(`__раздел('каждыйМиллиметр', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        document.getElementById('lyrics-input').value = 'раз два три';
+        state.lines = [{
+          text: 'раз два три', time: 5, end: 11,
+          ручнойКонец: true, ручноеНачало: true,
+          // среднее слово ужато до предела — та самая полоска
+          words: [
+            { text: 'раз ', time: 5, end: 7.9 },
+            { text: 'два ', time: 7.9, end: 7.98 },
+            { text: 'три ', time: 7.98, end: 11, ручнойКонец: true },
+          ],
+        }];
+        goToStep(3);
+        openEditor();
+        selectLine(0, {});
+        editor.показатьВсё = false;
+        // Крупный масштаб: полоска в 0,08 с — это десяток точек
+        editor.pxPerSec = 120;
+        editor.scrollT = 4;
+        drawTimeline();
+        await new Promise((r) => setTimeout(r, 120));
+
+        const L = timelineLanes();
+        const yСлов = L.words.y + L.words.h / 2;
+        const yСтрок = L.lines.y + L.lines.h / 2;
+        const слова = lineWords(spanOfRow(0).line, spanOfRow(0));
+
+        // 1. Тонкое слово: где ни ткни в него — это перенос, а не край
+        const серединаТонкого = (tToX(слова[1].start) + tToX(слова[1].end)) / 2;
+        const поТонкому = timelineHit(серединаТонкого, yСлов);
+        const уКраяТонкого = timelineHit(tToX(слова[1].end) - 1, yСлов);
+
+        // 2. Ближайший край: два края в трёх точках друг от друга
+        state.lines[0].words = [
+          { text: 'раз ', time: 5, end: 7.0 },
+          { text: 'два ', time: 7.03, end: 9.0 },
+          { text: 'три ', time: 9.0, end: 11, ручнойКонец: true },
+        ];
+        editor.spansKey = '';
+        drawTimeline();
+        const w = lineWords(spanOfRow(0).line, spanOfRow(0));
+        const левый = tToX(w[0].end);      // конец первого слова
+        const правый = tToX(w[1].start);   // начало второго, в трёх точках правее
+        const уЛевого = timelineHit(левый, yСлов);
+        const уПравого = timelineHit(правый + 1, yСлов);
+
+        // 3. То же у строк: тонкая строка берётся телом
+        const былиСтроки = state.lines;
+        state.lines = [
+          { text: 'раз', time: 5, end: 5.1, ручнойКонец: true, ручноеНачало: true },
+          { text: 'два', time: 8, end: 10, ручнойКонец: true, ручноеНачало: true },
+        ];
+        editor.spansKey = '';
+        drawTimeline();
+        const sp = editorSpans()[0];
+        const поТонкойСтроке = timelineHit((tToX(sp.start) + tToX(sp.end)) / 2, yСтрок);
+        state.lines = былиСтроки;
+        editor.spansKey = '';
+
+        const итог = {
+          масштаб: editor.pxPerSec,
+          ширинаТонкого: Math.round(tToX(слова[1].end) - tToX(слова[1].start)),
+          поТонкому: поТонкому && поТонкому.kind,
+          уКраяТонкого: уКраяТонкого && уКраяТонкого.kind,
+          уЛевого: уЛевого && уЛевого.kind + ':' + уЛевого.k,
+          уПравого: уПравого && уПравого.kind + ':' + уПравого.k,
+          поТонкойСтроке: поТонкойСтроке && поТонкойСтроке.kind,
+        };
+        итог.вНорме =
+          // Тонкое слово целиком — ручка переноса
+          итог.поТонкому === 'word-move' && итог.уКраяТонкого === 'word-move'
+          // Из двух близких краёв берётся тот, к которому ближе курсор
+          && итог.уЛевого === 'word-end:0' && итог.уПравого === 'word-start:1'
+          // И у строк то же правило
+          && итог.поТонкойСтроке === 'line-move';
+        return итог;
+      })`, true);
+
       /* Двойной щелчок по ползунку возвращает умолчание — у ВСЕХ.
 
          Так ведут себя фейдеры в монтажных программах, и у нас это
