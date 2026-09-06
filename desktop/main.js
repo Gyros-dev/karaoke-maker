@@ -7437,9 +7437,22 @@ function createWindow() {
         const холст = document.createElement('canvas');
         холст.width = 320; холст.height = 180;
         const g = холст.getContext('2d');
-        const поток = холст.captureStream(30);
-        const mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
-          .find((m) => MediaRecorder.isTypeSupported(m)) || '';
+        /* Дорожек ДВЕ, как в настоящем экспорте: картинка с холста
+           и звук из Web Audio. Со звуком это не придирка — контейнер
+           MP4 не принимает opus, и ошибка вылезла бы только здесь. */
+        const ctxЗв = new AudioContext();
+        const осц = ctxЗв.createOscillator();
+        const кудаЗв = ctxЗв.createMediaStreamDestination();
+        осц.frequency.value = 440;
+        осц.connect(кудаЗв);
+        осц.start();
+        const поток = new MediaStream([
+          холст.captureStream(30).getVideoTracks()[0],
+          ...кудаЗв.stream.getAudioTracks(),
+        ]);
+        // Тот же список, что и у настоящего экспорта: проверяем формат,
+        // в котором ролик и пишется (см. видеоФормат в app.js)
+        const mime = видеоФормат();
         const rec = new MediaRecorder(поток, mime ? { mimeType: mime } : undefined);
         const куски = [];
         rec.ondataavailable = (e) => { if (e.data.size) куски.push(e.data); };
@@ -7453,6 +7466,7 @@ function createWindow() {
         clearInterval(тик);
         rec.stop();
         await готово;
+        try { осц.stop(); await ctxЗв.close(); } catch (e) { /* уже закрыт */ }
         const blob = new Blob(куски, { type: mime || 'video/webm' });
         const el = document.createElement('video');
         el.src = URL.createObjectURL(blob);
@@ -7460,6 +7474,9 @@ function createWindow() {
           el.onloadedmetadata = () => r(el.duration);
           setTimeout(() => r(null), 5000);
         });
+        // Ширина кадра — доказательство, что дорожка не только записана,
+        // но и раскодировалась: у битого файла она осталась бы нулём
+        const ширина = el.videoWidth;
         const перемотка = el.seekable.length ? el.seekable.end(0) : null;
         URL.revokeObjectURL(el.src);
         /* Имя готового файла. Человек попросил: «Ленинград — Звёзды
@@ -7475,12 +7492,15 @@ function createWindow() {
         I18N.установить(былЯзык);
 
         return {
-          mime, размер: blob.size, кусков: куски.length,
+          mime, размер: blob.size, кусков: куски.length, ширина,
           длина: длина == null ? null : +длина.toFixed(2),
           перемотка: перемотка == null ? null : +перемотка.toFixed(2),
           имена,
           вНорме: !!blob.size && Number.isFinite(длина) && длина > 0.5
             && Number.isFinite(перемотка) && перемотка > 0.5
+            // В приложении H.264 есть всегда — значит, пишем MP4,
+            // а не WebM: его открывают всюду (см. видеоФормат)
+            && mime.startsWith('video/mp4') && ширина === 320
             && имена.ru === 'Ленинград — Звёзды и луна (karaoke punch).webm'
             && имена.en === имена.ru,
         };

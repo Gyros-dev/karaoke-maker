@@ -5,6 +5,7 @@
   "private": true,
   "license": "MIT",
   "scripts": {
+    "test": "node --test",
     "serve": "python3 -m http.server 8765",
     "versions": "node bump-version.js",
     "icons": "node make-icons.js",
