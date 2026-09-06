@@ -44,6 +44,12 @@ contextBridge.exposeInMainWorld('desktop', {
      прочитать из неё файл. Больше о диске страница ничего не умеет —
      и путь внутри папки она не задаёт: только имена файлов, а главный
      процесс их проверяет (см. имяВПапкеЧистое в main.js). */
+  /* Журнал: страница сообщает о своих бедах, а человек может открыть
+     папку с файлом («Показать журнал» в руководстве). Писать в файл
+     из страницы нечем и не нужно — файлы живут в главном процессе. */
+  logError: (текст) => ipcRenderer.invoke('log-error', String(текст || '')),
+  logShow: () => ipcRenderer.invoke('log-show'),
+  logPath: () => ipcRenderer.invoke('log-path'),
   projectPick: (name) => ipcRenderer.invoke('project-pick', name),
   projectWrite: (dir, files) => ipcRenderer.invoke('project-write', { dir, files }),
   projectOpenPick: () => ipcRenderer.invoke('project-open-pick'),

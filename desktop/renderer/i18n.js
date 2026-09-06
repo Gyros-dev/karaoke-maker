@@ -592,8 +592,11 @@ I18N.EN = {
   'как.экспорт.оформление': '<b>Look.</b> Tabs down the right of the “Karaoke” step: font and size, colours, stage (where the lines sit, the scrim under the text, blur on the inactive lines, the three-dot count-in before a line) and sound (vocal level and equaliser). The panel sits where the editor’s inspector does — parameters always on the same side. Everything shows up straight away in the preview on the left, and the F key blows it up full screen.',
   'как.экспорт.lrc': '<b>.lrc</b> is the standard synced-lyrics format: a line and its time. Plenty of players read it. Next to it, “.lrc with words” — the extended variant with a timestamp on every word.',
   'как.экспорт.wav': '<b>Instrumental .wav</b> — the audio without vocals as a single file, including the stretches where you kept the original.',
-  'как.экспорт.видео': '<b>Video</b> — a finished clip with background, text and instrumental in HD, Full HD or 2K, as a <b>.webm</b> file. It records in real time, so it takes exactly as long as the song; you can minimise the window and recording carries on.',
+  'как.экспорт.видео': '<b>Video</b> — a finished clip with background, text and instrumental in HD, Full HD or 2K, as an <b>.mp4</b> file that opens everywhere — on a phone, in messengers, on social media. It records in real time, so it takes exactly as long as the song; you can minimise the window and recording carries on.',
   'как.экспорт.чип': '<b>Where the work lives.</b> On the left of the step row there is a chip with the project name: click it and everything you can do with the project is there — save, save as, open another one, show the folder in the system. A dot next to the name means there are changes that aren’t in the folder yet. And on the first step, while no song is open, recent projects are listed under the drop zone — one click back to yesterday’s work.',
+  'как.журнал': '<b>If something goes wrong.</b> The studio keeps a log: the launch with the version number, the notable steps and every error. It sits in a file next to the app’s settings, it is never sent anywhere, and there is nothing personal in it — only file names and our own messages. Show it when you report a problem: it says what happened.',
+  'как.журнал.кнопка': 'Show the log',
+  'как.журнал.подсказка': 'Open the folder with the log and highlight the file',
   'как.экспорт.сохранение': 'Lyrics, timings, word timing and the look are saved automatically and survive closing the <span class="only-web">tab</span><span class="only-desktop">app</span>. The only thing you have to pick again is the audio file itself.',
 
   /* ---------- Студия: шаги ---------- */
@@ -1728,6 +1731,10 @@ I18N.СТРОКИ = {
     en: 'Tricky passage, listening again ({n} of {всего})…',
   },
   'asr.готовимЗвук': { ru: 'Готовим звук…', en: 'Preparing the audio…' },
+  'журнал.неОткрылся': {
+    ru: 'Не получилось открыть папку с журналом.',
+    en: 'Could not open the folder with the log.',
+  },
   'asr.сначалаПесня': { ru: 'Сначала загрузи песню.', en: 'Load a song first.' },
   'asr.сначалаТекст': { ru: 'Сначала вставь текст песни в поле ниже.', en: 'Paste the lyrics into the field below first.' },
   /* Три сообщения разметки нейросетью. Их зовёт desktop.js, а в словаре
