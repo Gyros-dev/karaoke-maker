@@ -7898,6 +7898,194 @@ function createWindow() {
         };
       }
 
+      /* Разделы инспектора не сворачиваются сами.
+
+         Человек написал: «пропадают настройки строчки». Раздел выбирался
+         по последнему вызову, а звали его три панели на каждой
+         перерисовке: пока было выбрано слово, «Слово» и «Строка»
+         переключали друг друга по десять раз в секунду, а щелчок по
+         блоку строки снимал выбор слова — и в панели не оставалось
+         ничего, кроме свёрнутого заголовка. */
+      report.инспекторРазделы = await win.webContents.executeJavaScript(`__раздел('инспекторРазделы', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        state.lines = [
+          { text: 'на небе звёзды и луна', time: 10, end: 12, ручнойКонец: true, ручноеНачало: true,
+            words: [
+              { text: 'на ', time: 10.0, end: 10.4 },
+              { text: 'небе ', time: 10.4, end: 10.8 },
+              { text: 'звёзды ', time: 10.8, end: 11.3 },
+              { text: 'и ', time: 11.3, end: 11.5 },
+              { text: 'луна', time: 11.5, end: 12.0 },
+            ] },
+          { text: 'вторая строка', time: 15, end: 16.5, ручнойКонец: true, ручноеНачало: true },
+        ];
+        document.getElementById('lyrics-input').value = 'на небе звёзды и луна\\nвторая строка';
+        goToStep(3);
+        openEditor();
+        editor.sel = 0;
+        editor.wordSel = -1;
+        refreshTimes();
+        const строка = () => document.getElementById('insp-line').open;
+        const слово = () => document.getElementById('insp-word').open;
+        const итог = { строкаСразу: строка() };
+
+        // Выбрали слово — открывается «Слово», «Строка» сворачивается
+        editor.wordSel = 2;
+        updateWordInfo();
+        итог.словоОткрыто = слово();
+        итог.строкаПриСлове = строка();
+
+        // Человек раскрыл «Строка» руками: перерисовки её не закрывают
+        document.getElementById('insp-line').open = true;
+        refreshTimes();
+        refreshTimes();
+        refreshTimes();
+        итог.держится = строка();
+        итог.словоНеЗакрылось = слово();
+
+        // Щелчок по блоку строки снимает выбор слова — «Строка» на месте
+        editor.wordSel = -1;
+        updateWordInfo();
+        итог.послеСнятия = строка();
+        итог.панельСловаПуста = document.getElementById('word-panel').classList.contains('empty');
+
+        итог.вНорме = итог.строкаСразу && итог.словоОткрыто && !итог.строкаПриСлове
+          && итог.держится && итог.словоНеЗакрылось
+          && итог.послеСнятия && итог.панельСловаПуста;
+        return итог;
+      })`, true);
+
+      /* Слово тянется за то, что ВИДНО.
+
+         Две беды разом. Первая: у последнего слова показанный конец
+         больше записанного на весь хвост распева, а перенос брал ширину
+         из метки — блок схлопывался в полоску в первый же миг. Вторая:
+         строку подтягивает к голосу, метки слов живут со сдвигом,
+         и край вставал не под мышь, а на сдвиг мимо. */
+      report.словоПоПоказанному = await win.webContents.executeJavaScript(`__раздел('словоПоПоказанному', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        // Огибающая голоса: строку подтянет с 10,0 к 10,3 — сдвиг 0,3 с
+        voice.runs = [{ start: 10.30, end: 13.00 }, { start: 15.60, end: 17.0 }];
+        const свежие = () => {
+          state.lines = [
+            { text: 'на небе звёзды и луна', time: 10.0, words: [
+              { text: 'на ', time: 10.0, end: 10.4 },
+              { text: 'небе ', time: 10.4, end: 10.8 },
+              { text: 'звёзды ', time: 10.8, end: 11.3 },
+              { text: 'и ', time: 11.3, end: 11.45 },
+              { text: 'луна', time: 11.6, end: 11.9 },
+            ] },
+            { text: 'вторая строка', time: 15.5 },
+          ];
+          editor.sel = 0;
+          editor.wordSel = -1;
+          editor.spansKey = '';
+          refreshTimes();
+        };
+        document.getElementById('lyrics-input').value = 'на небе звёзды и луна\\nвторая строка';
+        свежие();
+        goToStep(3);
+        openEditor();
+        editor.snap = false;
+        const кругл = (v) => Math.round(v * 1000) / 1000;
+        const итог = {};
+
+        // Строку подтянуло к голосу — метки слов показаны со сдвигом
+        итог.сдвиг = кругл(spanOfRow(0).start - state.lines[0].time);
+
+        // 1) Перенос последнего слова целиком: ширина остаётся показанной
+        const пок = lineWords(state.lines[0], spanOfRow(0));
+        const п = пок.length - 1;
+        итог.ширинаБыла = кругл(пок[п].end - пок[п].start);
+        итог.меткаУже = кругл(state.lines[0].words[п].end - state.lines[0].words[п].time);
+        const хват = (пок[п].start + пок[п].end) / 2;
+        beginDrag({ kind: 'word-move', row: 0, k: п }, хват);
+        applyDrag(хват - 0.10);
+        editor.drag = null;
+        const после = lineWords(state.lines[0], spanOfRow(0))[п];
+        итог.ширинаСтала = кругл(после.end - после.start);
+        итог.началоЖдём = кругл(пок[п].start - 0.10);
+        итог.началоСтало = кругл(после.start);
+
+        // 2) Край слова встаёт ровно под мышь, а не на сдвиг мимо
+        свежие();
+        const пок2 = lineWords(state.lines[0], spanOfRow(0));
+        const цель = кругл(пок2[п].start + 0.10);
+        beginDrag({ kind: 'word-start', row: 0, k: п }, пок2[п].start);
+        applyDrag(цель);
+        editor.drag = null;
+        итог.крайЦель = цель;
+        итог.крайСтал = кругл(lineWords(state.lines[0], spanOfRow(0))[п].start);
+
+        итог.вНорме = итог.сдвиг > 0.2
+          // Блок не схлопнулся до метки и уехал ровно туда, куда вели
+          && Math.abs(итог.ширинаСтала - итог.ширинаБыла) < 0.01
+          && итог.ширинаБыла > итог.меткаУже + 0.5
+          // Слово не упёрлось в соседа: ему было куда ехать
+          && Math.abs(итог.началоСтало - итог.началоЖдём) < 0.01
+          // Край встал под мышь
+          && Math.abs(итог.крайСтал - итог.крайЦель) < 0.005;
+        return итог;
+      })`, true);
+
+      /* Строку укоротили — слова не сжимаются все разом.
+
+         Человек написал: «если мы ошибочно длинную строку уменьшаем,
+         то и уменьшаются все слова, далее приходится расставлять их».
+         Теперь помещающиеся слова остаются на местах, а вышедшие
+         за конец раскладываются по весу в остатке; вернули конец —
+         вернулась и вся разметка, её никто не переписывал. */
+      report.укоротилиСтроку = await win.webContents.executeJavaScript(`__раздел('укоротилиСтроку', async () => {
+        const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+        state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+        state.instrumentalBuffer = state.originalBuffer;
+        audio.duration = 60;
+        voice.runs = null;
+        state.lines = [
+          { text: 'на небе звёзды и луна', time: 10.0, ручноеНачало: true, words: [
+            { text: 'на ', time: 10.0, end: 10.4 },
+            { text: 'небе ', time: 10.4, end: 10.8 },
+            { text: 'звёзды ', time: 10.8, end: 11.3 },
+            { text: 'и ', time: 11.3, end: 11.5 },
+            { text: 'луна', time: 11.5, end: 11.9 },
+          ] },
+          { text: 'вторая строка', time: 15.5, ручноеНачало: true },
+        ];
+        document.getElementById('lyrics-input').value = 'на небе звёзды и луна\\nвторая строка';
+        goToStep(3);
+        openEditor();
+        editor.sel = 0;
+        const карта = () => lineWords(state.lines[0], spanOfRow(0))
+          .map((w) => [Math.round(w.start * 1000) / 1000, Math.round(w.end * 1000) / 1000]);
+        const итог = { до: карта() };
+
+        setLineEnd(0, 11.2);            // конец руками левее последних слов
+        editor.spansKey = '';
+        refreshTimes();
+        итог.после = карта();
+
+        setLineEnd(0, 11.9);            // вернули как было
+        editor.spansKey = '';
+        refreshTimes();
+        итог.вернули = карта();
+
+        const первыеНаМесте = итог.после[0][0] === итог.до[0][0] && итог.после[0][1] === итог.до[0][1]
+          && итог.после[1][0] === итог.до[1][0] && итог.после[1][1] === итог.до[1][1];
+        const хвостВнутри = итог.после[4][1] <= 11.2001;
+        /* Прежний код ужимал ВСЕ слова общим множителем: первое слово
+           кончалось бы на 10,253 вместо 10,4 — по нему беду и видно. */
+        const первоеНеСжато = итог.после[0][1] > 10.35;
+        const вернулось = JSON.stringify(итог.вернули) === JSON.stringify(итог.до);
+        итог.вНорме = первыеНаМесте && хвостВнутри && первоеНеСжато && вернулось;
+        return итог;
+      })`, true);
+
       /* Пробел — всегда пуск и пауза, даже с кнопки под фокусом.
 
          Человек написал: «ставлю паузу, нажимаю магнит, хочу так же

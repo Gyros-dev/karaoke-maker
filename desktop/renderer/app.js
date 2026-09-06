@@ -4509,6 +4509,71 @@ function splitWords(text) {
   return parts ? parts : [];
 }
 
+/* Сдвиг слов относительно их меток.
+
+   Метки слов заданы абсолютным временем, а строку могло подтянуть
+   к настоящему вступлению голоса (см. lineStart) — тогда слова едут
+   за ней ровно на ту же величину, иначе подсветка бежала бы впереди
+   певца. Без голосовой дорожки и у строки, начало которой поставили
+   руками, сдвиг нулевой.
+
+   Это ЕДИНСТВЕННАЯ разница между показанным временем слова (дорожка,
+   мышь, клавиши, поля инспектора, указатель) и его меткой в разметке.
+   Всё, что пишет метки, обязано перевести показанное время сюда —
+   иначе край встанет не туда, куда его привели. Так и было: тянешь
+   начало слова к 11,90, а оно встаёт на 12,12 — ровно на сдвиг
+   строки мимо. */
+function сдвигСлов(line, span) {
+  return span.start - line.time;
+}
+
+function меткаПоПоказанному(line, span, t) {
+  return t - сдвигСлов(line, span);
+}
+
+/* Разложить куски по весу в промежутке: длинное слово поётся дольше
+   короткого. Одна на всех: так делится строка без разметки и так же
+   раскладываются слова, не поместившиеся в укороченную строку. */
+function разложитьПоВесу(куски, от, до) {
+  const weights = куски.map((c) => Math.max(1, String(c).trim().length));
+  const total = weights.reduce((a, b) => a + b, 0);
+  const width = Math.max(0.05, до - от);
+  const out = [];
+  let acc = от;
+  for (let i = 0; i < куски.length; i++) {
+    const dur = width * (weights[i] / total);
+    out.push({ start: acc, end: acc + dur });
+    acc += dur;
+  }
+  return out;
+}
+
+/* Слова не поместились в строку — раскладываем те, что вышли за конец.
+
+   Беда, которую это лечит: человек укорачивал ошибочно длинную строку,
+   и вместе с ней съёживались ВСЕ слова разом. Прежний код ужимал
+   разметку общим множителем, сохраняя пропорции заведомо неверной
+   раскладки: слова, стоявшие в начале правильно, уезжали влево,
+   и строку приходилось раскладывать заново кнопкой «распределить».
+
+   Теперь всё, что помещается, остаётся ровно там, где стоит, а вышедшие
+   за конец раскладываются по весу в оставшемся куске. Саму разметку это
+   не переписывает: вернули конец назад — вернулись и метки. Переписывает
+   её только правка слова, и тоже из показанного (см. ensureWords). */
+function вместитьСлова(пок, start, core) {
+  const предел = Math.max(start + MIN_SPAN, core);
+  const i = пок.findIndex((w) => w.end > предел + 0.0005);
+  if (i < 0) return пок;
+  const левее = i > 0 ? пок[i - 1].end : пок[0].start;
+  const от = Math.max(start, Math.min(левее, предел - 0.05));
+  const места = разложитьПоВесу(пок.slice(i).map((w) => w.text), от, предел);
+  for (let j = i; j < пок.length; j++) {
+    пок[j].start = места[j - i].start;
+    пок[j].end = места[j - i].end;
+  }
+  return пок;
+}
+
 function lineWords(line, span) {
   const start = span.start;
   const end = span.end;
@@ -4516,49 +4581,37 @@ function lineWords(line, span) {
 
   if (line.words && line.words.length) {
     const arr = line.words;
-    const last = arr[arr.length - 1];
-    const natEnd = last.end != null ? last.end : last.time + 0.3;
-    /* Метки слов заданы абсолютным временем. Строку могло подтянуть
-       к настоящему вступлению голоса — тогда метки едут за ней ровно
-       на ту же величину, иначе подсветка бежала бы впереди певца.
-       И только если сдвинутая строка налезает на следующую, она ужимается.
-       Без голосовой дорожки сдвиг нулевой, ужимать нечего, и метки
-       остаются ровно теми, что размечены. */
-    const delta = start - line.time;
-    const shifted = natEnd + delta;
-    const k = shifted > start ? Math.min(1, (core - start) / (shifted - start)) : 1;
-    const at = (t) => start + (t + delta - start) * k;
-    return arr.map((w, i) => ({
+    const сдвиг = сдвигСлов(line, span);
+    const пок = arr.map((w, i) => ({
       text: w.text,
       /* Начало первого слова НЕ приравнивается к началу строки: если
-         человек отодвинул его, at(w.time) окажется правее start — и это
+         человек отодвинул его, метка окажется правее start — и это
          пауза перед первым словом, законная ровно так же, как пауза
          между словами. Певец вступает не сразу. */
-      start: at(w.time),
-      end: i === arr.length - 1
-        /* Последнее слово тянется, пока звучит голос: это и есть распев.
-           Но конец, выставленный ЧЕЛОВЕКОМ (w.ручнойКонец — тот же
-           признак, что line.ручнойКонец у строки), важнее автоматики:
-           тогда хвост остаётся за строкой, а слово кончается там,
-           где сказано. */
-        ? (w.ручнойКонец && w.end != null ? at(natEnd) : Math.max(at(natEnd), end))
-        : at(w.end != null ? w.end : arr[i + 1].time),
+      start: w.time + сдвиг,
+      end: (w.end != null ? w.end
+        : (arr[i + 1] ? arr[i + 1].time : w.time + 0.3)) + сдвиг,
+      ручнойКонец: !!w.ручнойКонец,
     }));
+    вместитьСлова(пок, start, core);
+    // «Свой» конец — до распева. По нему живёт черта внутри блока строки
+    // и по нему же пишется разметка, когда слово правят (см. ensureWords)
+    пок.forEach((w) => { w.свой = w.end; });
+    /* Последнее слово тянется, пока звучит голос: это и есть распев.
+       Но конец, выставленный ЧЕЛОВЕКОМ (w.ручнойКонец — тот же признак,
+       что line.ручнойКонец у строки), важнее автоматики: тогда хвост
+       остаётся за строкой, а слово кончается там, где сказано. */
+    const п = пок.length - 1;
+    if (!пок[п].ручнойКонец) пок[п].end = Math.max(пок[п].end, end);
+    return пок;
   }
 
   const chunks = splitWords(line.text);
   if (!chunks.length) return [];
-  // Вес слова — число букв без пробелов, минимум единица
-  const weights = chunks.map((c) => Math.max(1, c.trim().length));
-  const total = weights.reduce((a, b) => a + b, 0);
-  const width = Math.max(0.05, core - start);
-  const out = [];
-  let acc = start;
-  for (let i = 0; i < chunks.length; i++) {
-    const dur = width * (weights[i] / total);
-    out.push({ text: chunks[i], start: acc, end: acc + dur });
-    acc += dur;
-  }
+  const места = разложитьПоВесу(chunks, start, core);
+  const out = chunks.map((text, i) => ({
+    text, start: места[i].start, end: места[i].end, свой: места[i].end,
+  }));
   // Хвост распева достаётся последнему слову, а не всей строке разом
   out[out.length - 1].end = Math.max(out[out.length - 1].end, end);
   return out;
@@ -7455,11 +7508,17 @@ function startWordTap(i) {
   wordTap.index = 0;
   wordTap.marks = [];
   wordTap.chunks = chunks;
-  wordTap.start = line.time;
+  /* Стучат по тому, что слышно и видно, — значит, в показанном времени
+     (см. сдвигСлов). Начало берём тоже показанное: прежде сюда шла
+     метка line.time, и у подтянутой к голосу строки первое слово
+     оказывалось раньше самой строки. */
+  wordTap.start = lineStart(synced, synced.indexOf(line));
   wordTap.end = lineEnd(synced, synced.indexOf(line));
 
-  // playSegment сам включает вокал — без него не понять, куда попадать
-  audio.playSegment(Math.max(0, line.time - WORD_TAP_LEAD),
+  // playSegment сам включает вокал — без него не понять, куда попадать.
+  // Отсчёт от ПОКАЗАННОГО начала: подтянутая к голосу строка звучит там,
+  // где её видно, и подыгрыш обязан начинаться перед ней же
+  audio.playSegment(Math.max(0, wordTap.start - WORD_TAP_LEAD),
     Math.min(audio.duration, wordTap.end + 0.4));
 
   $('word-tap').classList.remove('hidden');
@@ -7537,7 +7596,10 @@ function finishWordTap(save) {
 
   if (save && wordTap.marks.length && line) {
     pushHistory();   // разметку слов тоже можно отменить
-    line.words = buildWords(wordTap.chunks, wordTap.marks, wordTap.start, wordTap.end);
+    const spТап = spanOfRow(wordTap.line);
+    const сдвигТап = spТап ? сдвигСлов(line, spТап) : 0;
+    line.words = buildWords(wordTap.chunks, wordTap.marks, wordTap.start, wordTap.end)
+      .map((w) => ({ ...w, time: w.time - сдвигТап, end: w.end - сдвигТап }));
     editor.spansKey = '';
     saveProject();
   }
@@ -9558,8 +9620,8 @@ function updateSelInfo() {
   if (!el) return;
   const sp = spanOfRow(editor.sel);
   const line = sp ? sp.line : null;
-  // Выбрали строку — раздел «Строка» открывается сам (см. ИНСПЕКТОР.подВыбор)
-  if (sp) ИНСПЕКТОР.подВыбор('строка', sp.row);
+  // Выбрали строку — раздел «Строка» открывается сам (см. ИНСПЕКТОР.подтянуть)
+  ИНСПЕКТОР.подтянуть();
   /* В ряду инспектора слева стоит подпись «строка», поэтому значением
      остаётся только номер: «строка · Строка №26» читалось бы дважды.
      Полное название и пометка «время на глазок» — в подсказке. */
@@ -9666,7 +9728,7 @@ function updateWordInfo() {
   const info = selectedWord();
   // Слово могло исчезнуть (строку сбросили, укоротили текст) — снимаем выбор
   if (editor.wordSel >= 0 && !info) editor.wordSel = -1;
-  if (info) ИНСПЕКТОР.подВыбор('слово', editor.sel + ':' + editor.wordSel);
+  ИНСПЕКТОР.подтянуть();
   /* Значением ряда стоит само слово, а не его номер: искать глазами
      «пьянь» проще, чем «Слово №6 из 7». Номер остался в подсказке.
      Слово — текст человека, поэтому только textContent. */
@@ -9715,18 +9777,24 @@ function updateWordInfo() {
    мышью (см. applyDrag, ветка word-edge) и правки клавишами/полем.
    Магнит внутрь не входит: его накладывает вызывающий, у мыши он есть,
    у набора числа и у стрелок — нет, как и у самой строки. */
+/* Время сюда приходит ПОКАЗАННОЕ — от мыши, клавиш, поля или указателя.
+   Метки живут в своём (см. сдвигСлов), поэтому переводим на входе,
+   а наружу отдаём снова показанное: его показывают подписью у курсора
+   и в полях инспектора. */
 function wordEdgeCore(row, idx, t) {
   const line = state.lines[row];
   const sp = spanOfRow(row);
   if (!line || !sp) return null;
   const words = ensureWords(line, sp);
   if (idx < 1 || !words[idx]) return null;
+  const сдвиг = сдвигСлов(line, sp);
+  const цель = t - сдвиг;
   const lo = (words[idx - 1] ? words[idx - 1].time : line.time) + MIN_SPAN;
-  const hi = (words[idx].end != null ? words[idx].end : sp.end) - MIN_SPAN;
-  const nt = Math.min(Math.max(t, lo), Math.max(lo, hi));
+  const hi = (words[idx].end != null ? words[idx].end : sp.end - сдвиг) - MIN_SPAN;
+  const nt = Math.min(Math.max(цель, lo), Math.max(lo, hi));
   words[idx].time = nt;
   words[idx - 1].end = nt;
-  return nt;
+  return nt + сдвиг;
 }
 
 /* Один край, а не стык: конец слова idx или начало слова idx — каждый
@@ -9742,27 +9810,31 @@ function wordEdgeOneCore(row, idx, край, t) {
   const words = ensureWords(line, sp);
   const w = words[idx];
   if (!w) return null;
+  // Показанное время — в метку и обратно (см. wordEdgeCore выше)
+  const сдвиг = сдвигСлов(line, sp);
+  const цель = t - сдвиг;
+  const конецСтроки = sp.end - сдвиг;
   if (край === 'end') {
     const lo = w.time + MIN_SPAN;
     // Дальше начала следующего слова конец не пускаем: слова не налезают
-    const hi = words[idx + 1] ? words[idx + 1].time : sp.end;
-    const nt = Math.min(Math.max(t, lo), Math.max(lo, hi));
+    const hi = words[idx + 1] ? words[idx + 1].time : конецСтроки;
+    const nt = Math.min(Math.max(цель, lo), Math.max(lo, hi));
     w.end = nt;
     /* Конец ПОСЛЕДНЕГО слова автоматика тянет до конца строки — это
        распев (см. lineWords). Раз его подвинул человек, метку надо
        уважать, поэтому помечаем её ручной. Подвёл обратно вплотную
        к концу строки — снова стык, признак снимается, и хвост опять
        достаётся слову сам собой. */
-    if (idx === words.length - 1) w.ручнойКонец = !стыкли(nt, sp.end);
-    return nt;
+    if (idx === words.length - 1) w.ручнойКонец = !стыкли(nt + сдвиг, sp.end);
+    return nt + сдвиг;
   }
   const lo = words[idx - 1]
     ? (words[idx - 1].end != null ? words[idx - 1].end : words[idx - 1].time + MIN_SPAN)
-    : sp.start;
-  const hi = (w.end != null ? w.end : sp.end) - MIN_SPAN;
-  const nt = Math.min(Math.max(t, lo), Math.max(lo, hi));
+    : sp.start - сдвиг;
+  const hi = (w.end != null ? w.end : конецСтроки) - MIN_SPAN;
+  const nt = Math.min(Math.max(цель, lo), Math.max(lo, hi));
   w.time = nt;
-  return nt;
+  return nt + сдвиг;
 }
 
 /* Слово целиком: обе границы едут вместе, ширина сохраняется — как
@@ -9781,23 +9853,30 @@ function wordEdgeOneCore(row, idx, край, t) {
    клавиша, которая молчит, хуже отсутствующей. Поэтому у клавиш
    сваренный сосед едет своим краем следом, ужимаясь: это «slide»
    из монтажной программы, где клип двигают внутри сплошного ряда. */
+/* Начало и ширина приходят ПОКАЗАННЫЕ — те, что видны на дорожке.
+   Ширина у последнего слова показана вместе с хвостом распева, и это
+   важно: тянут блок за то, что видят (см. beginDrag). */
 function двинутьСловоЦеликом(row, k, цельНачала, ширина, стыки) {
   const sp = spanOfRow(row);
   if (!sp) return null;
   const words = ensureWords(sp.line, sp);
   const w = words[k];
   if (!w) return null;
+  const сдвиг = сдвигСлов(sp.line, sp);
+  const цель = цельНачала - сдвиг;
+  const началоСтроки = sp.start - сдвиг;
+  const конецСтроки = sp.end - сдвиг;
   const пред = words[k - 1];
   const след = words[k + 1];
   const конецПред = пред ? (пред.end != null ? пред.end : пред.time + MIN_SPAN) : null;
-  const конец = w.end != null ? w.end : (след ? след.time : sp.end);
+  const конец = w.end != null ? w.end : (след ? след.time : конецСтроки);
   const слеваСварен = !!(стыки && пред && стыкли(конецПред, w.time));
   const справаСварен = !!(стыки && след && стыкли(конец, след.time));
-  const lo = слеваСварен ? пред.time + MIN_SPAN : (пред ? конецПред : sp.start);
+  const lo = слеваСварен ? пред.time + MIN_SPAN : (пред ? конецПред : началоСтроки);
   const hi = (справаСварен
-    ? (след.end != null ? след.end : sp.end) - MIN_SPAN
-    : (след ? след.time : sp.end)) - ширина;
-  const nt = Math.min(Math.max(цельНачала, lo), Math.max(lo, hi));
+    ? (след.end != null ? след.end : конецСтроки) - MIN_SPAN
+    : (след ? след.time : конецСтроки)) - ширина;
+  const nt = Math.min(Math.max(цель, lo), Math.max(lo, hi));
   w.time = nt;
   w.end = nt + ширина;
   if (слеваСварен) пред.end = nt;
@@ -9806,8 +9885,8 @@ function двинутьСловоЦеликом(row, k, цельНачала, ш
      руками (распев, см. lineWords). Уехало вместе с блоком — значит
      выставлен: без этой пометки на дорожке двигалось бы одно начало,
      а хвост упрямо возвращался к концу строки. */
-  if (k === words.length - 1) w.ручнойКонец = !стыкли(w.end, sp.end);
-  return nt;
+  if (k === words.length - 1) w.ручнойКонец = !стыкли(w.end + сдвиг, sp.end);
+  return nt + сдвиг;
 }
 
 /* Подстройка границы слова с клавиатуры или полем — как nudgeLine
@@ -9827,27 +9906,24 @@ function nudgeWordEdge(row, idx, delta, край) {
   const sp = spanOfRow(row);
   if (!sp) return null;
   const words = ensureWords(sp.line, sp);
+  /* Считаем от ПОКАЗАННОГО края, а не от метки. Показанное отличается
+     от метки на сдвиг строки к голосу, а у последнего слова ещё и на
+     весь хвост распева (см. lineWords) — от метки первое же нажатие
+     клавиши прыгало бы на эту разницу. */
+  const пок = lineWords(sp.line, sp);
   const пред = words[idx - 1];
   const тек = words[idx];
   if (!пред && !тек) return null;
   const сварены = !!пред && !!тек && стыкли(пред.end, тек.time);
   let nt;
   if (сварены || (!край && пред && тек)) {
-    nt = wordEdgeCore(row, idx, тек.time + delta);
+    nt = wordEdgeCore(row, idx, пок[idx].start + delta);
   } else if (край === 'end') {
     if (!пред) return null;
-    /* У последнего слова показанный конец — не та же величина, что
-       записанная метка: пока конец не выставлен руками, автоматика
-       тянет его до конца строки (распев). Двигаемся от того, что
-       ВИДНО, иначе первое же нажатие клавиши прыгнуло бы на всю
-       длину хвоста. */
-    const показан = !тек ? lineWords(sp.line, sp)[idx - 1].end : null;
-    const было = показан != null ? показан
-      : (пред.end != null ? пред.end : (тек ? тек.time : пред.time + MIN_SPAN));
-    nt = wordEdgeOneCore(row, idx - 1, 'end', было + delta);
+    nt = wordEdgeOneCore(row, idx - 1, 'end', пок[idx - 1].end + delta);
   } else if (край === 'start') {
     if (!тек) return null;
-    nt = wordEdgeOneCore(row, idx, 'start', тек.time + delta);
+    nt = wordEdgeOneCore(row, idx, 'start', пок[idx].start + delta);
   } else {
     return null;
   }
@@ -9939,7 +10015,12 @@ function распределитьСлова(row) {
   // звучит голос, а не обрывается ровно на core
   const last = times[times.length - 1];
   last.end = Math.max(last.end, sp.end);
-  line.words = chunks.map((text, k) => ({ text, time: times[k].time, end: times[k].end }));
+  // Раскладывали по дорожке — значит, в показанном времени; в метки оно
+  // идёт за вычетом сдвига строки (см. сдвигСлов)
+  const сдвиг = сдвигСлов(line, sp);
+  line.words = chunks.map((text, k) => ({
+    text, time: times[k].time - сдвиг, end: times[k].end - сдвиг,
+  }));
   dropEmptyHistory();
   editor.wordSel = -1;
   editor.spansKey = '';
@@ -10082,7 +10163,7 @@ function обновитьОтрезок() {
   if (!поле) return;
   if (editor.origSel >= state.origSpans.length) editor.origSel = -1;
   const s = выбранныйОтрезок();
-  if (s) ИНСПЕКТОР.подВыбор('отрезок', editor.origSel);
+  ИНСПЕКТОР.подтянуть();
   /* Сотые, а не тысячные: «0:37,810 → 0:44,150» не влезало в строку
      инспектора и обрывалось многоточием ровно на втором времени —
      то есть на том, ради чего подпись и читают. */
@@ -10348,18 +10429,43 @@ function beginDrag(hit, t) {
        метке в первый же миг перетаскивания. */
     startWas: sp.start,
     endWas: lineEnd(syncedLines(), syncedLines().indexOf(sp.line)),
-    words: hasWords(sp.line) ? sp.line.words.map((w) => ({ ...w })) : null,
+    /* Снимок слов — ПОКАЗАННЫЙ, а не из разметки. У последнего слова
+       показанный конец больше записанного на весь хвост распева
+       (см. lineWords), и перенос блока брал ширину из метки: блок
+       схлопывался до неё в первый же миг перетаскивания — человек
+       тянул слово длиной в секунду, а оно превращалось в полоску.
+       Клавишам эту ширину чинили раньше (см. сдвинутьВыбранное). */
+    words: lineWords(sp.line, sp).map((w) => ({ text: w.text, time: w.start, end: w.end })),
     moved: false,
   };
 }
 
-/* Ручную разметку слов делаем из того, что видно: пока слова делились
+/* Ручную разметку слов делаем из того, что ВИДНО: пока слова делились
    автоматически, тянуть их границу было бы некуда — сначала записываем
-   текущее деление как настоящее, а потом двигаем в нём одну границу. */
+   текущее деление как настоящее, а потом двигаем в нём одну границу.
+
+   То же и с уже размеченной строкой, у которой показанное разошлось
+   с метками: слова, не поместившиеся в укороченную строку, разложены
+   по весу (см. вместитьСлова), и править надо ровно то, что видно.
+   Метки пишутся в своём времени — показанное минус сдвиг строки,
+   а конец берётся СВОЙ, без хвоста распева: хвост принадлежит строке,
+   и записанный в слово он полз бы дальше с каждой правкой. */
 function ensureWords(line, sp) {
-  if (hasWords(line)) return line.words;
-  const words = lineWords(line, sp);
-  line.words = words.map((w) => ({ text: w.text, time: w.start, end: w.end }));
+  const пок = lineWords(line, sp);
+  const сдвиг = сдвигСлов(line, sp);
+  const тоЖе = hasWords(line) && line.words.length === пок.length
+    && пок.every((w, i) => {
+      const м = line.words[i];
+      const свой = м.end != null ? м.end : w.свой - сдвиг;
+      return Math.abs(м.time + сдвиг - w.start) < 0.0005
+        && Math.abs(свой + сдвиг - w.свой) < 0.0005;
+    });
+  if (тоЖе) return line.words;
+  line.words = пок.map((w) => {
+    const м = { text: w.text, time: w.start - сдвиг, end: w.свой - сдвиг };
+    if (w.ручнойКонец) м.ручнойКонец = true;
+    return м;
+  });
   return line.words;
 }
 
@@ -10438,22 +10544,28 @@ function applyDrag(t) {
       const цель = примагнитить(t, {
         кромеСтроки: d.row, свои: d.row, безНачала: k, безКонца: k - 1,
       });
+      // Стык снимали с дорожки — он в показанном времени; в метку
+      // второго края он идёт за вычетом сдвига строки (см. сдвигСлов)
+      const стыкМетка = меткаПоПоказанному(line, sp, d.стыкWas);
       if (цель <= d.стыкWas) {
-        if (words[k].time !== d.стыкWas) words[k].time = d.стыкWas;
+        if (words[k].time !== стыкМетка) words[k].time = стыкМетка;
         const nt = wordEdgeOneCore(d.row, k - 1, 'end', цель);
         if (nt != null) editor.dragTip = nt;
       } else {
-        if (words[k - 1] && words[k - 1].end !== d.стыкWas) words[k - 1].end = d.стыкWas;
+        if (words[k - 1] && words[k - 1].end !== стыкМетка) words[k - 1].end = стыкМетка;
         const nt = wordEdgeOneCore(d.row, k, 'start', цель);
         if (nt != null) editor.dragTip = nt;
       }
     } else if (d.kind === 'word-edge') {
       // Общая часть с клавишами и полем инспектора — см. wordEdgeCore.
-      // Магнит здесь накладывает только мышь, поэтому он снаружи
+      // Магнит здесь накладывает только мышь, поэтому он снаружи.
+      // Метку wordEdgeCore пишет сам, а возвращает ПОКАЗАННОЕ время —
+      // его и показываем подписью у курсора
       const nt = wordEdgeCore(d.row, k, примагнитить(t, { кромеСтроки: d.row }));
-      if (nt != null) words[k].time = nt;
-      editor.dragTip = words[k].time;
+      if (nt != null) editor.dragTip = nt;
     } else {
+      /* Снимок ПОКАЗАННЫХ границ, снятый при нажатии (см. beginDrag):
+         и начало, и ширина — те, что человек видит на дорожке. */
       const src = d.words && d.words[k] ? d.words[k] : words[k];
       const delta = t - d.grabT;
       const width = (src.end != null ? src.end : src.time + 0.3) - src.time;
@@ -10754,24 +10866,49 @@ const ИНСПЕКТОР = (() => {
   }
 
   /* Открыть раздел под то, что человек только что выбрал, и свернуть
-     остальные. Зовётся на СМЕНУ выбора, а не на каждую перерисовку:
-     иначе свёрнутый руками раздел открывался бы сам собой и спорил
-     с человеком.
+     остальные.
 
      Почему так. Разделов три, и открытые разом они занимают вдвое
      больше высоты, чем есть у панели, — её приходилось прокручивать,
      а прокрутка в панели свойств хуже, чем лишний щелчок. Открытым
      остаётся ровно один — тот, про который человек только что спросил,
      щёлкнув по строке, слову или отрезку. Открыть заодно и соседний
-     можно треугольником, и до следующей смены выбора он останется
-     открытым. */
-  let прежний = '';
-  function подВыбор(вид, ключ) {
-    const id = ПО_ВЫБОРУ[вид];
+     можно треугольником, и он останется открытым до следующей смены
+     выбора.
+
+     Что тут было не так. Раздел выбирался по ПОСЛЕДНЕМУ вызову, а
+     звали отсюда три разные панели, и каждая — на всякой перерисовке.
+     Пока было выбрано слово, «Строка» и «Слово» переключали друг друга
+     по десять раз в секунду, и раскрытая руками «Строка» схлопывалась
+     на первой же перерисовке. А щелчок по блоку строки снимал выбор
+     слова, «Слово» пряталось совсем (у него пустая панель скрыта
+     стилем) — и в инспекторе не оставалось ничего, кроме свёрнутого
+     заголовка. Человек это и увидел: «пропадают настройки строчки».
+
+     Теперь раздел выводится из САМОГО выбора, а не из того, кто позвал
+     последним, и меняется только когда выбор ДЕЙСТВИТЕЛЬНО сменился.
+     Перерисовка, в которой ничего не выбрали заново, не трогает
+     свёрнутое и раскрытое вовсе. */
+  let былВыбор = { строка: -1, слово: '', отрезок: -1 };
+  function подтянуть() {
+    const слово = selectedWord();
+    const отрезок = выбранныйОтрезок();
+    const стало = {
+      строка: spanOfRow(editor.sel) ? editor.sel : -1,
+      слово: слово ? editor.sel + ':' + editor.wordSel : '',
+      отрезок: отрезок ? editor.origSel : -1,
+    };
+    const сменилось = (к) => стало[к] !== былВыбор[к];
+    /* Слово главнее отрезка, отрезок — строки: так они и выбираются,
+       от общего к частному. Сняли выбор слова (щёлкнули по строке
+       мимо полосы слов) — открывается «Строка»: это не «ничего
+       не выбрано», а возврат к строке. */
+    const id = сменилось('слово') && стало.слово ? ПО_ВЫБОРУ['слово']
+      : сменилось('отрезок') && стало.отрезок >= 0 ? ПО_ВЫБОРУ['отрезок']
+        : (сменилось('строка') || сменилось('слово')) && стало.строка >= 0 ? ПО_ВЫБОРУ['строка']
+          : null;
+    былВыбор = стало;
     if (!id) return;
-    const метка = вид + ':' + ключ;
-    if (метка === прежний) return;
-    прежний = метка;
     РАЗДЕЛЫ.forEach((р) => {
       const el = $(р);
       if (!el) return;
@@ -10791,7 +10928,7 @@ const ИНСПЕКТОР = (() => {
   });
 
   применить();
-  return { применить, прочитать, подВыбор };
+  return { применить, прочитать, подтянуть };
 })();
 
 /* Легенда цветов дорожки за значком «?». Шесть подписей читают один
