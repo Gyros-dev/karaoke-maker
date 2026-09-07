@@ -3564,3 +3564,6 @@ body.is-desktop .site-header .footer-link {
 .queue-row.bad .queue-state { color: var(--bad, #ef4444); overflow: hidden; text-overflow: ellipsis; }
 .queue-note { margin: 0.6rem 0 0; font-size: 0.82rem; color: var(--muted); }
 
+.queue-sum { margin: 0.1rem 0 0.2rem; font-size: 0.86rem; color: var(--text); line-height: 1.45; }
+.queue-where { color: var(--muted); }
+.queue-buttons { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.9rem; }

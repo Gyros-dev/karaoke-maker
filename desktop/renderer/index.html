@@ -88,9 +88,17 @@
 <div class="export-overlay hidden" id="queue-overlay">
   <div class="export-box queue-box">
     <h3 data-i18n="очередь.заголовок">Очередь</h3>
+    <!-- Сводка стоит ДО начала работы: сколько песен, у скольких есть
+         текст и куда всё ляжет. Человек попробовал вживую и сказал:
+         «не понятно сколько ждать, какой будет результат». -->
+    <p class="queue-sum" id="queue-summary"></p>
     <div class="queue-list" id="queue-list"></div>
     <p class="queue-note" id="queue-note"></p>
-    <button class="btn btn-ghost" id="queue-cancel" data-i18n="очередь.отменить">Отменить</button>
+    <div class="queue-buttons">
+      <button class="btn btn-primary" id="queue-go" data-i18n="очередь.начать">Начать</button>
+      <button class="btn btn-ghost hidden" id="queue-show" data-i18n="очередь.показатьПапку">Показать папку</button>
+      <button class="btn btn-ghost" id="queue-cancel" data-i18n="очередь.отменить">Отменить</button>
+    </div>
   </div>
 </div>
 

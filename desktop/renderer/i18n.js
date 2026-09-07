@@ -671,6 +671,8 @@ I18N.EN = {
   'очередь.кнопка.подсказка': 'Pick several songs — the studio separates and times them one after another and puts the finished projects into the folder you choose',
   'очередь.подсказка': 'Pick the songs and their lyrics together: <b>song.mp3</b> with <b>song.txt</b> (or <b>song.lrc</b>) beside it — then the timing falls into place as well.',
   'очередь.заголовок': 'Queue',
+  'очередь.начать': 'Start',
+  'очередь.показатьПапку': 'Show the folder',
   'шаг2.lrc': 'Open an .lrc',
   'шаг2.lrc.подсказка': 'Open a ready .lrc: the lyrics and the line timings fall into place on their own',
   'шаг2.назад': '← Back',
@@ -1741,9 +1743,58 @@ I18N.СТРОКИ = {
     ru: 'Не получилось открыть папку с журналом.',
     en: 'Could not open the folder with the log.',
   },
+  'очередь.сводка': {
+    ru: {
+      one: 'Песня одна, текст есть у {сТекстом}.',
+      few: 'Песен {n}, текст есть у {сТекстом}.',
+      many: 'Песен {n}, текст есть у {сТекстом}.',
+    },
+    en: {
+      one: 'One song, {сТекстом} with lyrics.',
+      other: '{n} songs, {сТекстом} with lyrics.',
+    },
+  },
+  'очередь.куда': {
+    ru: 'Готовые проекты лягут сюда: {папка}',
+    en: 'The finished projects will go here: {папка}',
+  },
+  'очередь.скольькоЖдать': {
+    ru: 'На каждую песню уходит несколько минут: столько считает разделение вокала. Можно уйти — и прервать в любой миг.',
+    en: 'Each song takes a few minutes — that is the vocal separation working. You can walk away, and stop it at any moment.',
+  },
+  'очередь.будет.txt': {
+    ru: 'минусовка и разметка по тексту',
+    en: 'instrumental and timing from the lyrics',
+  },
+  'очередь.будет.lrc': {
+    ru: 'минусовка и времена из .lrc',
+    en: 'instrumental and timings from the .lrc',
+  },
+  'очередь.будет.нет': {
+    ru: 'только минусовка — текста рядом нет',
+    en: 'instrumental only — no lyrics beside it',
+  },
+  'очередь.готово': {
+    ru: 'готово → {папка}',
+    en: 'done → {папка}',
+  },
+  'очередь.прервать': { ru: 'Прервать', en: 'Stop' },
+  'очередь.прерываем': {
+    ru: 'Прерываем…',
+    en: 'Stopping…',
+  },
+  'очередь.состояние.прервано': { ru: 'прервано', en: 'stopped' },
   'очередь.нетПесен': {
     ru: 'Среди выбранных файлов нет ни одной песни. Выбери аудиофайлы, а рядом с ними — тексты .txt или .lrc, если они есть.',
     en: 'There is not a single song among the files you picked. Pick audio files, and .txt or .lrc lyrics beside them if you have any.',
+  },
+  'очередь.неРазделилось': {
+    ru: 'Минусовка не получилась',
+    en: 'The instrumental did not come out',
+  },
+  'очередь.неРазметилось': {
+    ru: 'Времена не легли на текст',
+    en: 'The lyrics did not get their timings',
   },
   'очередь.неОткрылась': {
     ru: 'Песня не открылась',
@@ -1761,10 +1812,6 @@ I18N.СТРОКИ = {
   'очередь.итог': {
     ru: 'Готово: {готово} из {всего}.',
     en: 'Done: {готово} of {всего}.',
-  },
-  'очередь.остановимся': {
-    ru: 'Остановимся, как только закончим нынешнюю песню.',
-    en: 'We will stop as soon as the current song is finished.',
   },
   'очередь.остановлена': {
     ru: 'Очередь остановлена.',
