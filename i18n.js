@@ -797,22 +797,26 @@ I18N.EN = {
   /* ---------- Шаг 4: экспорт ---------- */
   'экспорт.назад': '← Editor',
   'экспорт.звук': 'Check the sound',
-  'экспорт.lrc': 'Lyrics .lrc',
-  'экспорт.lrcСлова': '.lrc with words',
-  'экспорт.lrcСлова.подсказка': 'Extended LRC: a timestamp for every word inside a line',
-  'экспорт.wav': 'Instrumental .wav',
-  'экспорт.wav.подсказка': 'Instrumental with the original on the stretches marked in the editor',
+  'экспорт.сохранить': 'Save…',
+  'экспорт.сохранить.подсказка': 'Video, instrumental or timed lyrics — pick what to take out of the studio',
+  'экспорт.меню.aria': 'What to save',
+  'экспорт.видео.заголовок': 'Save the video',
+  'экспорт.формат': 'Format',
+  'экспорт.формат.mp4': 'MP4 · opens everywhere',
+  'экспорт.формат.webm': 'WebM · smaller file',
+  'экспорт.видео.очём': '<b>What goes into the file:</b> the background, the lyrics with their highlighting, the instrumental (and the original on the stretches you marked), the studio’s mark in the corner and the closing frame with the praise. It records in real time — it takes exactly as long as the song; you can minimise the window.',
+  'экспорт.видеоНачать': 'Save',
+  'экспорт.видеоНачать.подсказка': 'Record the clip of the stage with sound — it takes exactly as long as the song',
+  'экспорт.отмена.подсказка': 'Close without recording anything',
+  'экспорт.отмена': 'Cancel',
   'экспорт.качество': 'Quality',
   /* Строка про права: одна на всю студию, под кнопками вывода */
   'экспорт.права': 'The rights to the song stay with whoever holds them. Make karaoke out of what you have the rights to, and publishing the finished video is on you.',
-  'экспорт.видео': 'Save video',
   'экспорт.идёт': 'Recording the video…',
   'экспорт.подсказка': 'Recording runs in real time. You can minimise the window: the export carries on in the background. Don’t close the page before it finishes.',
   'экспорт.отменить': 'Cancel',
   'экспорт.назад.подсказка': 'Back to the editor to fix the timing',
   'экспорт.звук.подсказка': 'A short beep: check the sound is going where it should and can be heard',
-  'экспорт.lrc.подсказка': 'Save the lyrics with line times (.lrc) — nearly every karaoke player reads it',
-  'экспорт.видео.подсказка': 'Record a video of the stage with the sound — a finished .webm file',
   'экспорт.отменить.подсказка': 'Stop recording the video. What has been recorded is not kept',
 
   /* ---------- Шаг 3: редактор ---------- */
@@ -1385,6 +1389,29 @@ I18N.СТРОКИ = {
   },
 
   /* ---------- Экспорт ---------- */
+  /* Подписи пунктов меню «Сохранить…». Их зовёт код (собратьМенюЭкспорта),
+     поэтому живут здесь, а не в разметочном словаре: там русской стороны
+     нет, и по-русски человек увидел бы сам ключ. */
+  'экспорт.видео': { ru: 'Видео…', en: 'Video…' },
+  'экспорт.видео.подсказка': {
+    ru: 'Готовый ролик со сценой и звуком: выбрать качество и формат',
+    en: 'A finished clip of the stage with sound: pick the quality and the format',
+  },
+  'экспорт.wav': { ru: 'Минусовка .wav', en: 'Instrumental .wav' },
+  'экспорт.wav.подсказка': {
+    ru: 'Минусовка с оригиналом на отрезках, размеченных в редакторе',
+    en: 'Instrumental with the original on the stretches marked in the editor',
+  },
+  'экспорт.lrc': { ru: 'Текст .lrc', en: 'Lyrics .lrc' },
+  'экспорт.lrc.подсказка': {
+    ru: 'Текст со временем строк — его понимают почти все караоке-плееры',
+    en: 'Lyrics with line times — nearly every karaoke player reads it',
+  },
+  'экспорт.lrcСлова': { ru: '.lrc со словами', en: '.lrc with words' },
+  'экспорт.lrcСлова.подсказка': {
+    ru: 'Расширенный LRC: время каждого слова внутри строки',
+    en: 'Extended LRC: a timestamp for every word inside a line',
+  },
   'экспорт.нетСтрок': { ru: 'Сначала размети текст.', en: 'Time the lyrics first.' },
   'экспорт.имяСлова': { ru: '{имя} (по словам).lrc', en: '{имя} (word by word).lrc' },
   'экспорт.имяМинус': { ru: '{имя} (минус).wav', en: '{имя} (instrumental).wav' },

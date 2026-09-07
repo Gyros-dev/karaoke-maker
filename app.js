@@ -6043,8 +6043,90 @@ $('btn-sound-check').addEventListener('click', async () => {
   alert(lines.join('\n'));
 });
 
+/* ============================================================
+   Что унести из студии — под одной кнопкой
+
+   Человек написал: «при экспорте хочу, чтобы был выбор формата
+   и качества под одной кнопкой, сейчас мы отдельно выбираем качество.
+   Надо сделать как в Final Cut — кнопка экспорт, там выбираешь
+   и качество, и формат, и вообще всё, что хочешь сохранить».
+
+   Так и сделано: в ряду одна кнопка «Сохранить…», под ней меню
+   со всем, что студия умеет отдать. Видео — не сразу, а окном:
+   у него есть выбор (качество, формат) и есть что сказать про запись
+   в реальном времени. Остальное уходит одним нажатием: там выбирать
+   нечего.
+
+   Состав меню зависит от сделанного: «.lrc со словами» появляется,
+   только когда слова размечены, — раньше ради этого пряталась
+   отдельная кнопка в ряду (updateWordExportBtn).
+   ============================================================ */
+function собратьМенюЭкспорта() {
+  const меню = $('export-menu');
+  if (!меню) return;
+  const пункты = [
+    { значок: 'video', ключ: 'экспорт.видео', дело: () => показатьОкноВидео(true) },
+    { значок: 'download', ключ: 'экспорт.wav', дело: () => сохранитьМинусовку() },
+    { значок: 'download', ключ: 'экспорт.lrc', дело: () => сохранитьLrc() },
+  ];
+  if (anyWords()) {
+    пункты.push({ значок: 'download', ключ: 'экспорт.lrcСлова', дело: () => сохранитьLrcСловами() });
+  }
+  меню.textContent = '';
+  for (const п of пункты) {
+    const кн = document.createElement('button');
+    кн.type = 'button';
+    кн.className = 'pick-item proj-item';
+    кн.setAttribute('role', 'menuitem');
+    кн.appendChild(значокSVG(п.значок));
+    const подпись = document.createElement('span');
+    подпись.textContent = t(п.ключ);
+    кн.appendChild(подпись);
+    кн.title = t(п.ключ + '.подсказка');
+    кн.addEventListener('click', () => {
+      показатьСписок($('export-switch'), false);
+      п.дело();
+    });
+    кн.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); перейтиПоСписку(меню, кн, 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); перейтиПоСписку(меню, кн, -1); }
+      else if (e.key === 'Escape') {
+        e.preventDefault();
+        показатьСписок($('export-switch'), false);
+        $('btn-export').focus();
+      } else if (e.key === 'Tab') показатьСписок($('export-switch'), false);
+    });
+    меню.appendChild(кн);
+  }
+}
+
+function показатьОкноВидео(да) {
+  const окно = $('video-setup');
+  if (окно) окно.classList.toggle('hidden', !да);
+  if (да) {
+    const кн = $('btn-export-video');
+    if (кн) кн.focus();
+  }
+}
+
+if ($('btn-export')) {
+  const гнездо = $('export-switch');
+  $('btn-export').addEventListener('click', () => {
+    собратьМенюЭкспорта();
+    показатьСписок(гнездо, !списокВиден(гнездо));
+  });
+  $('btn-export').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      собратьМенюЭкспорта();
+      показатьСписок(гнездо, true);
+    }
+  });
+}
+if ($('video-cancel')) $('video-cancel').addEventListener('click', () => показатьОкноВидео(false));
+
 /* ---------- Экспорт LRC ---------- */
-$('btn-export-lrc').addEventListener('click', () => {
+function сохранитьLrc() {
   const lines = syncedLines();
   if (!lines.length) { alert(t('экспорт.нетСтрок')); return; }
   const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
@@ -6054,14 +6136,14 @@ $('btn-export-lrc').addEventListener('click', () => {
     ...lines.map((l) => `[${fmtLrcTime(l.time)}]${l.text}`),
   ].join('\n');
   download(new Blob([lrc], { type: 'text/plain;charset=utf-8' }), `${name}.lrc`);
-});
+}
 
 /* Расширенный LRC («enhanced LRC»): после метки строки идут метки слов
    в угловых скобках. Обычные плееры угловые скобки игнорируют и всё
    равно читают текст, а понимающие — подсвечивают по словам.
    Слова берём те же, что показывает сцена: ручные метки, если они есть,
    иначе автоматическое деление по длине слов. */
-$('btn-export-lrc-words').addEventListener('click', () => {
+function сохранитьLrcСловами() {
   const lines = syncedLines();
   if (!lines.length) { alert(t('экспорт.нетСтрок')); return; }
   const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
@@ -6090,7 +6172,7 @@ $('btn-export-lrc-words').addEventListener('click', () => {
     ...body,
   ].join('\n');
   download(new Blob([lrc], { type: 'text/plain;charset=utf-8' }), t('экспорт.имяСлова', { 'имя': name }));
-});
+}
 
 /* ---------- Экспорт WAV (минусовка) ---------- */
 function bufferToWav(buffer) {
@@ -6159,7 +6241,7 @@ async function собратьМинусовку() {
   return ctx.startRendering();
 }
 
-$('btn-export-wav').addEventListener('click', async () => {
+async function сохранитьМинусовку() {
   /* Песни нет вовсе — так и говорим. Раньше здесь на любую пустоту
      отвечали «Для монофайла минусовку сделать нельзя»: файла не было
      ни моно, ни стерео, а причина называлась выдуманная. */
@@ -6174,7 +6256,7 @@ $('btn-export-wav').addEventListener('click', async () => {
   const name = (state.fileName || 'song').replace(/\.[^.]+$/, '');
   const buf = await собратьМинусовку();
   download(bufferToWav(buf), t('экспорт.имяМинус', { 'имя': name }));
-});
+}
 
 /* ============================================================
    Шаг 3 — редактор: список строк + просмотр + дорожка
@@ -7432,8 +7514,12 @@ function anyWords() {
   return state.lines.some(hasWords);
 }
 
+/* «.lrc со словами» показывать, только когда слова размечены. Раньше
+   ради этого пряталась кнопка в ряду; теперь это пункт меню, и меню
+   просто пересобирается — состав считается заново при каждом открытии,
+   а этот вызов остаётся для тех мест, что звали его и раньше. */
 function updateWordExportBtn() {
-  $('btn-export-lrc-words').classList.toggle('hidden', !anyWords());
+  собратьМенюЭкспорта();
 }
 
 function startWordTap(i) {
@@ -12100,14 +12186,16 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
 
    Одна на всех: этим же списком пользуется раздел самопроверки
    видеоСДлиной — он проверяет тот формат, в котором и пишем. */
-function видеоФормат() {
-  return [
-    'video/mp4;codecs=avc1',
-    'video/mp4',
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
-  ].find((m) => MediaRecorder.isTypeSupported(m)) || '';
+function видеоФормат(предпочтение) {
+  const mp4 = ['video/mp4;codecs=avc1', 'video/mp4'];
+  const webm = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  /* Что выбрано в окне «Сохранить видео». MP4 стоит первым и там,
+     и здесь; WebM остаётся для тех, кому важнее вес файла, — и как
+     запасной путь для браузеров без H.264. */
+  const хочет = предпочтение
+    || (typeof document !== 'undefined' && $('video-format') ? $('video-format').value : 'mp4');
+  const порядок = хочет === 'webm' ? webm.concat(mp4) : mp4.concat(webm);
+  return порядок.find((m) => MediaRecorder.isTypeSupported(m)) || '';
 }
 
 async function exportVideo() {
@@ -12329,7 +12417,10 @@ function makeTicker(intervalMs) {
   return api;
 }
 
-$('btn-export-video').addEventListener('click', exportVideo);
+$('btn-export-video').addEventListener('click', () => {
+  показатьОкноВидео(false);
+  exportVideo();
+});
 $('btn-export-cancel').addEventListener('click', () => { videoExport.cancelled = true; });
 
 /* Политика автовоспроизведения: некоторые браузеры «замораживают»
@@ -12956,6 +13047,11 @@ document.addEventListener('i18n', () => {
   расставитьМодификаторы();
   собратьПереключателиЯзыка();
   собратьПереключателиТемы();
+  /* Меню «Сохранить…» собрано кодом: подписи и подсказки его пунктов
+     проставлены переводом на момент сборки, и без пересборки они
+     остались бы на прежнем языке (самопроверка ловит это разделами
+     «язык» и «подсказки»). */
+  собратьМенюЭкспорта();
   // Не завязано на editor.peaks: timelineLanes() — чистая функция
   // высот, колонку заголовков можно и нужно перевести в любой момент,
   // даже если сама дорожка ещё не открыта или уже закрыта

@@ -3575,3 +3575,24 @@ body.is-desktop .site-header .footer-link {
 }
 .queue-step-text { margin: 0 0 0.6rem; font-size: 0.84rem; line-height: 1.5; color: var(--text); }
 .queue-warn { margin: 0.5rem 0 0; font-size: 0.82rem; color: var(--bad, #ef4444); line-height: 1.45; }
+
+/* ---------- Окно «Сохранить видео» ---------- */
+.video-box { max-width: 420px; text-align: left; }
+.video-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
+  margin: 0.5rem 0; font-size: 0.88rem;
+}
+.video-row select { min-width: 200px; }
+.video-hint { margin: 0.8rem 0 0; font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+/* Кнопка «Сохранить…» — та же машинка, что у чипа проекта: кнопка
+   с уголком и меню (см. .pick-switch в шапке). Но открывается оно
+   ВВЕРХ: ряд вывода стоит у самого низа студии, и вниз меню уезжало
+   за её край — на снимке было видно один пункт из четырёх. */
+.export-switch { position: relative; display: inline-flex; }
+.export-menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+  right: auto;
+  left: 0;
+  min-width: 230px;
+}

@@ -85,6 +85,47 @@
 <!-- Ход очереди: список песен и что с каждой сейчас. Окно того же
      устройства, что и прочие окна ожидания (.export-overlay), — значит,
      и клавиши редактора под ним молчат (см. окноПоверхСтудии). -->
+<!-- Что и как сохранить видео. Отдельным окном, а не строкой в ряду:
+     выбор тут не один (качество, формат), и рядом надо сказать, что
+     запись идёт в реальном времени и что попадёт в кадр. -->
+<div class="export-overlay hidden" id="video-setup">
+  <div class="export-box video-box">
+    <h3 data-i18n="экспорт.видео.заголовок">Сохранить видео</h3>
+    <label class="video-row" for="video-quality">
+      <span data-i18n="экспорт.качество">Качество</span>
+      <select id="video-quality">
+        <option value="720">HD · 1280×720</option>
+        <option value="1080" selected>Full HD · 1920×1080</option>
+        <option value="1440">2K · 2560×1440</option>
+      </select>
+    </label>
+    <label class="video-row" for="video-format">
+      <span data-i18n="экспорт.формат">Формат</span>
+      <select id="video-format">
+        <option value="mp4" data-i18n="экспорт.формат.mp4">MP4 · открывается везде</option>
+        <option value="webm" data-i18n="экспорт.формат.webm">WebM · меньше весит</option>
+      </select>
+    </label>
+    <p class="video-hint" data-i18n-html="экспорт.видео.очём"><b>Что попадёт в файл:</b> фон,
+      текст с подсветкой, минусовка (и оригинал на размеченных отрезках), знак студии в углу
+      и финальный кадр с похвалой. Запись идёт в реальном времени — займёт столько же,
+      сколько длится песня; окно можно свернуть.</p>
+    <!-- Права на песню — здесь, у самого действия: это последнее место,
+         где человек решает, забирать ли файл. В приложении строки под
+         рядом кнопок нет (она отнимала высоту у сцены), а сказать это
+         надо ровно тут. -->
+    <p class="export-rights only-desktop" id="export-rights-video" data-i18n="экспорт.права">Права на песню остаются у того, кому принадлежат. Делай караоке из того, на что у тебя есть права, а за публикацию готового видео отвечаешь ты.</p>
+    <div class="queue-buttons">
+      <button class="btn btn-primary" id="btn-export-video"
+        data-i18n-title="экспорт.видеоНачать.подсказка"
+        title="Записать ролик со сценой и звуком — займёт столько же, сколько длится песня"><span data-i18n="экспорт.видеоНачать">Сохранить</span></button>
+      <button class="btn btn-ghost" id="video-cancel"
+        data-i18n-title="экспорт.отмена.подсказка"
+        title="Закрыть, ничего не записывая"><span data-i18n="экспорт.отмена">Отмена</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="export-overlay hidden" id="queue-overlay">
   <div class="export-box queue-box">
     <h3 data-i18n="очередь.заголовок">Очередь</h3>
@@ -2018,21 +2059,24 @@
     <div class="export-row">
       <button class="btn btn-ghost" id="btn-back-3" data-i18n-title="экспорт.назад.подсказка" title="Вернуться в редактор и поправить разметку" data-i18n="экспорт.назад">← Редактор</button>
       <button class="btn btn-ghost" id="btn-sound-check" data-i18n-title="экспорт.звук.подсказка" title="Короткий гудок: проверить, что звук идёт туда, куда нужно, и слышен"><svg class="icon" aria-hidden="true"><use href="#i-speaker"></use></svg><span data-i18n="экспорт.звук">Проверить звук</span></button>
-      <button class="btn btn-ghost" id="btn-export-lrc" data-i18n-title="экспорт.lrc.подсказка" title="Сохранить текст со временем строк (.lrc) — его понимают почти все караоке-плееры"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.lrc">Текст .lrc</span></button>
-      <button class="btn btn-ghost hidden" id="btn-export-lrc-words"
-        data-i18n-title="экспорт.lrcСлова.подсказка"
-        title="Расширенный LRC: время каждого слова внутри строки"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.lrcСлова">.lrc со словами</span></button>
-      <button class="btn btn-ghost" id="btn-export-wav"
-        data-i18n-title="экспорт.wav.подсказка"
-        title="Минусовка с оригиналом на отрезках, размеченных в редакторе"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.wav">Минусовка .wav</span></button>
-      <label class="btn btn-ghost export-quality" for="video-quality"><span data-i18n="экспорт.качество">Качество</span>
-        <select id="video-quality">
-          <option value="720">HD · 1280×720</option>
-          <option value="1080" selected>Full HD · 1920×1080</option>
-          <option value="1440">2K · 2560×1440</option>
-        </select>
-      </label>
-      <button class="btn btn-primary" id="btn-export-video" data-i18n-title="экспорт.видео.подсказка" title="Записать видео со сценой и звуком — готовый файл .webm"><svg class="icon" aria-hidden="true"><use href="#i-video"></use></svg><span data-i18n="экспорт.видео">Сохранить видео</span></button>
+
+      <!-- Всё, что можно унести из студии, — под одной кнопкой, как
+           «Поделиться» в Final Cut. Раньше рядом стояли четыре кнопки
+           вывода и отдельный выбор качества: человек написал — «хочу,
+           чтобы был выбор формата и качества под одной кнопкой, сейчас
+           мы отдельно выбираем качество». Пункты собирает код
+           (собратьМенюЭкспорта в app.js): их состав зависит от того,
+           что уже сделано, — .lrc со словами появляется, только когда
+           слова размечены. -->
+      <span class="export-switch pick-switch" id="export-switch"
+        data-i18n-aria="экспорт.меню.aria" aria-label="Что сохранить">
+        <button type="button" class="btn btn-primary pick-btn" id="btn-export"
+          aria-haspopup="menu" aria-expanded="false"
+          data-i18n-title="экспорт.сохранить.подсказка"
+          title="Видео, минусовка или текст со временем — выбери, что унести из студии"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.сохранить">Сохранить…</span><svg class="icon pick-caret" aria-hidden="true"><use href="#i-caret"></use></svg></button>
+        <div class="pick-menu export-menu hidden" id="export-menu" role="menu"></div>
+      </span>
+
       <!-- Права на песню значком: в приложении строки под кнопками нет,
            а сказать это надо ровно здесь — где забирают готовый файл.
            Щелчок открывает руководство, там текст целиком. -->
