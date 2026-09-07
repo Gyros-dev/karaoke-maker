@@ -92,14 +92,50 @@
 <div class="export-overlay hidden" id="queue-overlay">
   <div class="export-box queue-box">
     <h3 data-i18n="очередь.заголовок">Очередь</h3>
-    <!-- Сводка стоит ДО начала работы: сколько песен, у скольких есть
-         текст и куда всё ляжет. Человек попробовал вживую и сказал:
-         «не понятно сколько ждать, какой будет результат». -->
+    <!-- Человек должен понимать, что и зачем он делает, ДО того как
+         начнёт: что получится, сколько ждать и чего делать не надо.
+         Первая сборка спрашивала файлы молча — и он справедливо
+         не понял ни что выбирать, ни как студия свяжет текст с песней. -->
+    <p class="queue-about" id="queue-about" data-i18n-html="очередь.оЧём"><b>Что будет.</b> Студия возьмёт песни
+      по очереди: у каждой уберёт вокал нейросетью, а если рядом лежит текст — ещё и разложит
+      его по времени. Готовые проекты сложит в выбранную папку — их останется только открыть.
+      На песню уходит несколько минут; можно уйти и прервать в любой момент.</p>
+
+    <div class="queue-step" id="queue-step-1">
+      <div class="queue-step-head" data-i18n="очередь.шаг1.заголовок">Шаг 1 из 3 · Песни</div>
+      <p class="queue-step-text" data-i18n-html="очередь.шаг1.текст">Выбери <b>один или несколько</b>
+        аудиофайлов — mp3, wav, ogg, m4a. В окне выбора их отмечают вместе:
+        <b>Cmd</b> (на Windows <b>Ctrl</b>) или <b>Shift</b>, а «Выделить всё» — <b>Cmd+A</b>.</p>
+      <input type="file" id="queue-songs" accept="audio/*" multiple hidden>
+      <button class="btn btn-primary" id="btn-queue-songs" data-i18n="очередь.выбратьПесни">Выбрать песни…</button>
+    </div>
+
+    <div class="queue-step hidden" id="queue-step-2">
+      <div class="queue-step-head" data-i18n="очередь.шаг2.заголовок">Шаг 2 из 3 · Тексты (необязательно)</div>
+      <p class="queue-step-text" data-i18n-html="очередь.шаг2.текст"><b>Текст находится по имени файла.</b>
+        Рядом с <b>Ленинград — Луна.mp3</b> должен лежать <b>Ленинград — Луна.txt</b>: имя до точки
+        совпадает, большие и маленькие буквы не важны. Расширение <b>.txt</b> — просто слова песни
+        (времена расставит нейросеть), <b>.lrc</b> — слова, у которых времена уже есть.
+        <br>Текста нет — не беда: песня получит минусовку, а слова вставишь потом.</p>
+      <input type="file" id="queue-texts" accept=".txt,.lrc,text/plain" multiple hidden>
+      <button class="btn btn-primary" id="btn-queue-texts" data-i18n="очередь.выбратьТексты">Выбрать тексты…</button>
+      <button class="btn btn-ghost" id="btn-queue-notexts" data-i18n="очередь.безТекстов">Без текстов</button>
+    </div>
+
+    <div class="queue-step hidden" id="queue-step-3">
+      <div class="queue-step-head" data-i18n="очередь.шаг3.заголовок">Шаг 3 из 3 · Куда сложить готовое</div>
+      <p class="queue-step-text" data-i18n-html="очередь.шаг3.текст">Каждая песня станет отдельной
+        папкой-проектом с именем песни. <b>Осторожно:</b> если такой проект в этой папке уже есть,
+        он будет заменён.</p>
+      <button class="btn btn-primary" id="btn-queue-folder" data-i18n="очередь.выбратьПапку">Выбрать папку…</button>
+    </div>
+
     <p class="queue-sum" id="queue-summary"></p>
     <div class="queue-list" id="queue-list"></div>
+    <p class="queue-warn" id="queue-warn"></p>
     <p class="queue-note" id="queue-note"></p>
     <div class="queue-buttons">
-      <button class="btn btn-primary" id="queue-go" data-i18n="очередь.начать">Начать</button>
+      <button class="btn btn-primary hidden" id="queue-go" data-i18n="очередь.начать">Начать</button>
       <button class="btn btn-ghost hidden" id="queue-show" data-i18n="очередь.показатьПапку">Показать папку</button>
       <button class="btn btn-ghost" id="queue-cancel" data-i18n="очередь.отменить">Отменить</button>
     </div>
@@ -1522,13 +1558,11 @@
          и возвращаешься к готовым проектам. Только в приложении:
          на сайте нет ни нейросетей, ни папок. -->
     <div class="queue-start hidden only-desktop" id="queue-start">
-      <input type="file" id="queue-input" accept="audio/*,.txt,.lrc" multiple hidden>
       <button class="btn btn-ghost btn-small" id="btn-queue"
         data-i18n-title="очередь.кнопка.подсказка"
-        title="Выбери несколько песен — студия разделит их и разметит по очереди, а готовые проекты положит в выбранную папку"><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg><span data-i18n="очередь.кнопка">Очередь из нескольких песен…</span></button>
-      <p class="queue-hint" data-i18n-html="очередь.подсказка">Выбирай сразу и песни, и тексты к ним:
-        <b>песня.mp3</b> и рядом <b>песня.txt</b> (или <b>песня.lrc</b>) — тогда разметка тоже
-        встанет сама.</p>
+        title="Несколько песен подряд: студия сделает минусовки и разметит тексты, а готовые проекты положит в выбранную папку"><svg class="icon" aria-hidden="true"><use href="#i-note"></use></svg><span data-i18n="очередь.кнопка">Очередь из нескольких песен…</span></button>
+      <p class="queue-hint" data-i18n="очередь.подсказка">Минусовка и разметка для нескольких
+        песен подряд, пока ты занят другим.</p>
     </div>
 
     <!-- Недавние проекты. Только в приложении и только пока песня

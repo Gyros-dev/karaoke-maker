@@ -3567,6 +3567,14 @@ body.is-desktop .site-header .footer-link {
 .queue-sum { margin: 0.1rem 0 0.2rem; font-size: 0.86rem; color: var(--text); line-height: 1.45; }
 .queue-where { color: var(--muted); }
 .queue-buttons { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.9rem; }
+.queue-about { margin: 0 0 0.8rem; font-size: 0.84rem; color: var(--muted); line-height: 1.5; }
+.queue-step { margin: 0 0 0.6rem; }
+.queue-step-head {
+  font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 0.3rem;
+}
+.queue-step-text { margin: 0 0 0.6rem; font-size: 0.84rem; line-height: 1.5; color: var(--text); }
+.queue-warn { margin: 0.5rem 0 0; font-size: 0.82rem; color: var(--bad, #ef4444); line-height: 1.45; }
 
 /* --- Распознавание текста песни (только в приложении) --- */
 .asr-block {
