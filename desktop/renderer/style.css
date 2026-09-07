@@ -2742,6 +2742,10 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   transition: opacity 0.2s linear, transform 0.12s linear;
 }
 .stage-count i.off { opacity: 0.18; transform: scale(0.55); background: var(--st-inactive); }
+/* Точек в разметке заведено по максимуму (в начале песни ряд длиннее,
+   внутри короче) — лишние убираем совсем, а не гасим: погашенная точка
+   у нас значит «эта секунда прошла», и путать эти два вида нельзя. */
+.stage-count i.gone { display: none; }
 
 /* Плеер и громкость вокала — одной строкой: лишний ряд отнимал бы
    высоту у сцены, а сцена здесь главное */

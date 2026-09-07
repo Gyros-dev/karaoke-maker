@@ -22,7 +22,7 @@ function значокSVG(имя, cls) {
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.29.1';
+const APP_VERSION = '1.30.0';
 
 /* ---------- Модификатор в подписях горячих клавиш ----------
    Сами клавиши код ловит одинаково (metaKey || ctrlKey), а вот подписи
@@ -252,7 +252,7 @@ function defaultStyle() {
        в старые проекты он приезжает сам (styleFromSaved подкладывает
        умолчания под сохранённое) и переноса поколением не требует. */
     scrimSize: 100,     // высота подложки, % от «ровно под строками»
-    countdown: true,    // отсчёт из трёх точек перед вступлением строки
+    countdown: true,    // отсчёт перед вступлением: три точки внутри песни, пять в начале
     /* Цвета партий дуэта. Раньше стояли числами в коде и в CSS, и
        поменять их было нечем: голубой и розовый достались всем песням
        разом. Теперь это оформление, как и всё прочее, — значит, живут
@@ -662,6 +662,10 @@ const audio = {
     return state.originalBuffer ? state.originalBuffer.duration : 0;
   },
 
+  /* Время песни. На подводке оно ОТРИЦАТЕЛЬНОЕ: звук ещё не тронулся,
+     идёт начальный отсчёт (см. «Начало песни» ниже). Ноль — это ноль
+     песни, и вся разметка по-прежнему считается от него. Кто показывает
+     время человеку, тот и прижимает его к нулю сам. */
   position() {
     if (!this.playing) return this.offset;
     return Math.min(this.ctx.currentTime - this.startedAt, this.duration);
@@ -694,7 +698,7 @@ const audio = {
     this.applyMix();
   },
 
-  play(fromOffset) {
+  play(fromOffset, подводка) {
     this.stopSources();
     // Заиграло обычным ходом — кусочки скраба гасим, иначе они лягут поверх
     скраб.стоп();
@@ -728,11 +732,16 @@ const audio = {
     }
 
     const t = ctx.currentTime + 0.03;
+    /* Подводка: звук трогается не сейчас, а на столько секунд позже, —
+       и всё это время position() отдаёт отрицательное время. На нём и идёт
+       начальный отсчёт. Расписание отрезков оригинала (applyMix ниже)
+       считается от startedAt, так что подводку оно учитывает само. */
+    const старт = t + Math.max(0, подводка || 0);
     // Убираем щелчок/искажение на самом старте трека от резкого скачка уровня.
-    fade.gain.setValueAtTime(0, t);
-    fade.gain.linearRampToValueAtTime(1, t + 0.012);
-    this.sources.forEach((s) => s.start(t, this.offset));
-    this.startedAt = t - this.offset;
+    fade.gain.setValueAtTime(0, старт);
+    fade.gain.linearRampToValueAtTime(1, старт + 0.012);
+    this.sources.forEach((s) => s.start(старт, this.offset));
+    this.startedAt = старт - this.offset;
     this.playing = true;
     /* Громкости расставляем ПОСЛЕ startedAt: расписание отрезков
        считается от него, и без него оригинал заиграл бы не там */
@@ -749,7 +758,9 @@ const audio = {
 
   pause() {
     if (!this.playing) return;
-    this.offset = this.position();
+    // Прижимаем к нулю: на подводке время отрицательное, а offset — это
+    // место в песне, и отрицательным оно быть не может
+    this.offset = Math.max(0, this.position());
     this.stopSources();
     this.playing = false;
   },
@@ -4398,6 +4409,38 @@ const COUNT_LEAD = 3;      // за сколько секунд начинает�
 const COUNT_MIN_GAP = 2.2; // короче этой паузы отсчёт только мешает
 const COUNT_DOTS = 3;
 
+/* ---------- Начало песни: отсчёт длиннее, а если надо — и подводка ----------
+
+   Внутри песни отсчёт только предупреждает: певец уже поёт,
+   ему хватает трёх точек. В начале он не поёт вовсе — надо успеть
+   вдохнуть и попасть в первую долю, и трёх секунд для этого мало.
+   Человек попросил прямо: «начальный отсчёт лучше подольше сделать».
+   Пять точек по одной в секунду — тот же ход, только длиннее.
+
+   И вторая беда, с которой всё началось: есть песни, где голос
+   вступает с первой секунды. Паузы перед первой строкой нет вовсе,
+   значит, не было и отсчёта — петь приходилось «с места», не зная,
+   когда именно. Недостающее время студия теперь добавляет сама:
+   перед нулём песни встаёт тишина ровно на столько, сколько не хватает
+   до полного отсчёта. На этой тишине время ОТРИЦАТЕЛЬНОЕ — это и значит
+   «песня ещё не началась»; ноль остаётся нулём песни, и вся разметка,
+   и запись видео считают от него, как считали.
+
+   Подводка идёт и в готовое видео: там она тем более нужна — ролик
+   смотрят без кнопки «приготовиться». */
+const ПОДВОДКА = 5;        // сколько длится отсчёт в самом начале песни
+const ПОДВОДКА_ТОЧЕК = 5;  // по точке в секунду, как и внутри песни
+
+/* Сколько тишины добавить перед песней, чтобы начальный отсчёт уместился
+   целиком. Есть своё вступление на пять секунд и больше — не добавляем
+   ничего. Отсчёт выключен в оформлении — подводки нет вовсе. */
+function подводкаПесни() {
+  if (!state.style.countdown) return 0;
+  const lines = syncedLines();
+  if (!lines.length) return 0;
+  return Math.max(0, ПОДВОДКА - lineStart(lines, 0));
+}
+
 function countdownState(pos, ph) {
   if (!state.style.countdown) return null;
   const lines = syncedLines();
@@ -4412,14 +4455,25 @@ function countdownState(pos, ph) {
     next = ph.next;
     from = ph.end;
   } else return null;
-  if (next == null || next - from < COUNT_MIN_GAP) return null;
+  if (next == null) return null;
+
+  /* Отсчёт перед ПЕРВОЙ строкой считается от края подводки, а не от нуля
+     песни. Иначе у песни, начинающейся сразу, «паузы» вышло бы полсекунды,
+     проверка ниже отсекла бы её как слишком короткую — и отсчёта опять
+     не было бы никакого. */
+  const вНачале = from <= 0;
+  const lead = вНачале ? ПОДВОДКА : COUNT_LEAD;
+  const dots = вНачале ? ПОДВОДКА_ТОЧЕК : COUNT_DOTS;
+  if (вНачале) from = -подводкаПесни();
+  if (next - from < COUNT_MIN_GAP) return null;
 
   const left = next - pos;
-  if (left < 0 || left > COUNT_LEAD) return null;
-  const step = COUNT_LEAD / COUNT_DOTS;
+  if (left < 0 || left > lead) return null;
+  const step = lead / dots;
   return {
     left,
-    lit: Math.min(COUNT_DOTS, Math.ceil(left / step)),   // сколько точек ещё горит
+    dots,                                        // сколько точек показывать вообще
+    lit: Math.min(dots, Math.ceil(left / step)), // сколько точек ещё горит
     // Доля текущей точки: 1 в начале её секунды, 0 в конце — для сжатия
     frac: Math.min(1, Math.max(0, (left % step) / step || (left > 0 ? 1 : 0))),
   };
@@ -4718,7 +4772,10 @@ function ensureCountdownEl(stage) {
   if (!el) {
     el = document.createElement('div');
     el.className = 'stage-count';
-    for (let i = 0; i < COUNT_DOTS; i++) el.appendChild(document.createElement('i'));
+    // Точек заводим по максимуму: в начале песни их ПОДВОДКА_ТОЧЕК,
+    // внутри — COUNT_DOTS, лишние прячет класс .gone (см. updateCountdown)
+    const сколько = Math.max(COUNT_DOTS, ПОДВОДКА_ТОЧЕК);
+    for (let i = 0; i < сколько; i++) el.appendChild(document.createElement('i'));
     stage.appendChild(el);
   } else if (stage.lastElementChild !== el) {
     // Держим последним, поверх строк. Лишний перенос узла сбрасывал бы
@@ -4778,6 +4835,8 @@ function updateCountdown(stage, cd) {
   if (!cd) return;
   const dots = el.children;
   for (let i = 0; i < dots.length; i++) {
+    // Ряд длиной в cd.dots: в начале песни длиннее, внутри короче
+    dots[i].classList.toggle('gone', i >= cd.dots);
     // Гаснут справа налево: последняя точка уходит перед самым вступлением
     const alive = i < cd.lit;
     dots[i].classList.toggle('off', !alive);
@@ -5203,12 +5262,23 @@ function setPlayIcon(id, playing) {
   if (el.classList.contains('playing') !== playing) el.classList.toggle('playing', playing);
 }
 
+/* Пуск караоке. С самого начала — вместе с подводкой: без неё у песни,
+   где голос вступает сразу, отсчёта не было бы вовсе. С любого другого
+   места играем сразу: перемотал в середину — значит, знаешь, куда попал.
+   В редакторе подводки нет нарочно — там размечают, а не поют. */
+function пуститьКараоке(место) {
+  const с = место == null ? audio.offset : место;
+  audio.play(с, с <= 0.05 ? подводкаПесни() : 0);
+}
+
 function updatePlayerUI() {
   setPlayIcon('btn-play', audio.playing);
-  setText('time-current', fmtTime(audio.position()));
+  // На подводке время отрицательное — часам и полосе показываем ноль
+  const место = Math.max(0, audio.position());
+  setText('time-current', fmtTime(место));
   setText('time-total', fmtTime(audio.duration));
   if (!seekDragging && audio.duration) {
-    const v = String(Math.round((audio.position() / audio.duration) * 1000));
+    const v = String(Math.round((место / audio.duration) * 1000));
     const seek = $('seek');
     if (seek.value !== v) seek.value = v;
   }
@@ -5374,7 +5444,7 @@ function времяФинала() {
 $('btn-play').addEventListener('click', () => {
   if (audio.playing) audio.pause();
   else {
-    audio.play();
+    пуститьКараоке();
     audio.onEnded = () => { updatePlayerUI(); };
   }
   updatePlayerUI();
@@ -5385,7 +5455,7 @@ $('seek').addEventListener('input', () => { seekDragging = true; });
 $('seek').addEventListener('change', () => {
   const pos = ($('seek').value / 1000) * audio.duration;
   seekDragging = false;
-  if (audio.playing) audio.play(pos);
+  if (audio.playing) пуститьКараоке(pos);
   else audio.offset = pos;
   updatePlayerUI();
   renderStage();
@@ -11964,8 +12034,8 @@ function drawVideoFrame(g2d, W, H, bgImg, pos, watermark) {
   const drawCountdown = (cy) => {
     const r = Math.max(4, size * 0.2);
     const gap = r * 3.4;
-    const from = W / 2 - ((COUNT_DOTS - 1) * gap) / 2;
-    for (let i = 0; i < COUNT_DOTS; i++) {
+    const from = W / 2 - ((cd.dots - 1) * gap) / 2;
+    for (let i = 0; i < cd.dots; i++) {
       const alive = i < cd.lit;
       const scale = alive
         ? (i === cd.lit - 1 && !reduceMotion.matches ? 0.55 + 0.45 * cd.frac : 1)
@@ -12305,7 +12375,11 @@ async function exportVideo() {
   recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
 
   const duration = audio.duration;
-  const t0 = ctx.currentTime + 0.1;
+  /* Подводка идёт и в ролик: t0 — это НОЛЬ ПЕСНИ, а запись начинается
+     раньше него. Первые секунды ролика — тишина с отсчётом, дальше всё
+     как было. Ролик от этого длиннее ровно на подводку. */
+  const подводка = подводкаПесни();
+  const t0 = ctx.currentTime + 0.1 + подводка;
   /* Отрезки оригинала — тем же расписанием, что и в плеере: в видео
      должно попасть ровно то, что человек слышал в караоке */
   расписатьОтрезки(ctx, vGain, iGain, g, отрезкиОригинала(), t0);
@@ -12383,10 +12457,12 @@ async function exportVideo() {
          во весь экран, второй раз то же самое в углу — шум. */
       drawФиналКадра(g2d, W, H, bgImg, pos - финалС, финалКадра, логоФинала);
     } else {
-      drawVideoFrame(g2d, W, H, bgImg, Math.max(0, pos), watermark);
+      // Время НЕ прижимаем: на подводке оно отрицательное, и ровно
+      // по нему кадр рисует начальный отсчёт
+      drawVideoFrame(g2d, W, H, bgImg, pos, watermark);
     }
     if (typeof videoTrack.requestFrame === 'function') videoTrack.requestFrame();
-    const pct = Math.min(100, (pos / всяДлина) * 100);
+    const pct = Math.min(100, (Math.max(0, pos) / всяДлина) * 100);
     $('export-fill').style.width = `${pct.toFixed(1)}%`;
     $('export-status').textContent = t('экспорт.записываемХод',
       { at: fmtTime(Math.max(0, pos)), 'всего': fmtTime(всяДлина) });
@@ -12490,6 +12566,7 @@ document.addEventListener('keydown', (e) => {
       && state.originalBuffer) {
     e.preventDefault();
     if (audio.playing) audio.pause();
+    else if ($('step-4').classList.contains('active')) пуститьКараоке();
     else audio.play();
     updatePlayerUI();
   }

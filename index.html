@@ -5,7 +5,7 @@
      и отсюда же — app.js, чтобы решить, показывать ли окно. В словаре
      перевода номера нет: там он однажды отстал, и при переключении
      на английский окно объявляло прошлую версию. -->
-<html lang="ru" data-news-version="1.29.1">
+<html lang="ru" data-news-version="1.30.0">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +16,7 @@
   <link rel="icon" href="icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="theme-color" content="#0a0a0f">
-  <link rel="stylesheet" href="style.css?v=1.29.1">
+  <link rel="stylesheet" href="style.css?v=1.30.0">
 </head>
 <body>
 
@@ -200,21 +200,22 @@
          с вопросом «что нового», а не «что вы залатали». Нет новых
          возможностей — наверху стоит строка об этом, и всё. -->
     <ul class="whatsnew-list">
-      <li data-i18n="новости.толькоПочинки">Новых возможностей в этом
-        выпуске нет — только починки. Они ниже.</li>
+      <li data-i18n-html="новости.отсчётВНачале">
+        <b>⏱ Отсчёт в начале песни — и там, где петь надо сразу.</b> Раньше точки
+        показывались только там, где перед строкой есть пауза: у песни, что начинается
+        с голоса, подсказки не было вовсе — вступали наугад. Теперь недостающее время
+        студия добавляет сама: перед песней встаёт короткая тишина, и отсчёт умещается
+        целиком. В начале он и длиннее — пять точек вместо трёх, чтобы успеть вдохнуть.
+        Всё это попадает и в готовое видео.
+      </li>
     </ul>
     <details class="whatsnew-fixes" open>
       <summary data-i18n="новости.починкиЗаголовок">Исправления и улучшения</summary>
     <ul class="whatsnew-list">
-      <li data-i18n-html="новости.спокойныйЦвет">
-        <b>Зелёный больше не режет глаз.</b> Кнопки залиты ровным приглушённым зелёным —
-        прежний градиент уходил в кислотный лайм, и резало глаз именно это. Тем же тоном
-        стали текст, ссылки, волна и метки на дорожке: весь цвет студии теперь одной семьи.
-      </li>
-      <li data-i18n-html="новости.однаВысота">
-        <b>Панель над дорожкой — в одну высоту.</b> Пуск, часы, магнит, темп и увеличение
-        стояли лесенкой, каждый своей высоты. Теперь она одна — та же, что у верхнего ряда
-        студии. И кружок с номером шага залит ровно, без градиента.
+      <li data-i18n-html="новости.отсчётПодробности">
+        <b>Отсчёт слушается своей галки.</b> «Оформление → Отсчёт перед строкой» выключает
+        и точки, и добавленную тишину разом. Перемотал в середину песни — играет сразу,
+        без подводки: она нужна только с самого начала.
       </li>
     </ul>
     </details>
@@ -227,6 +228,26 @@
          что был верхним, переезжает сюда под своим номером. -->
     <details class="whatsnew-old">
       <summary data-i18n="новости.раньше">Что было раньше</summary>
+      <h4 class="whatsnew-ver"><span data-i18n="новости.версияСлово">Версия</span> 1.29.1</h4>
+      <ul class="whatsnew-list">
+        <li data-i18n="новости.толькоПочинки">Новых возможностей в этом
+          выпуске нет — только починки. Они ниже.</li>
+      </ul>
+      <details class="whatsnew-fixes">
+        <summary data-i18n="новости.починкиЗаголовок">Исправления и улучшения</summary>
+      <ul class="whatsnew-list">
+        <li data-i18n-html="новости.спокойныйЦвет">
+          <b>Зелёный больше не режет глаз.</b> Кнопки залиты ровным приглушённым зелёным —
+          прежний градиент уходил в кислотный лайм, и резало глаз именно это. Тем же тоном
+          стали текст, ссылки, волна и метки на дорожке: весь цвет студии теперь одной семьи.
+        </li>
+        <li data-i18n-html="новости.однаВысота">
+          <b>Панель над дорожкой — в одну высоту.</b> Пуск, часы, магнит, темп и увеличение
+          стояли лесенкой, каждый своей высоты. Теперь она одна — та же, что у верхнего ряда
+          студии. И кружок с номером шага залит ровно, без градиента.
+        </li>
+      </ul>
+      </details>
       <h4 class="whatsnew-ver"><span data-i18n="новости.версияСлово">Версия</span> 1.29.0</h4>
       <ul class="whatsnew-list">
         <li class="only-desktop" data-i18n-html="новости.очередь">
@@ -1307,9 +1328,9 @@
     <div class="hero-get only-web">
       <span class="hero-get-buttons">
         <a class="btn btn-primary btn-big" id="dl-mac-hero" data-i18n="герой.мак"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.29.1/Karaoke-Punch-1.29.1-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.30.0/Karaoke-Punch-1.30.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
         <a class="btn btn-primary btn-big" id="dl-win-hero" data-i18n="герой.виндоус"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.29.1/Karaoke-Punch-1.29.1-Windows-Setup.exe">🪟 Скачать для Windows</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.30.0/Karaoke-Punch-1.30.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
       </span>
       <span class="hero-get-label" data-i18n="герой.скачать">Нейросети убирают вокал и размечают текст — прямо на твоём компьютере</span>
       <a class="btn btn-ghost hero-browser" href="#studio" data-i18n="герой.вБраузере">Создать караоке в браузере (beta)</a>
@@ -1362,9 +1383,9 @@
   </p>
   <div class="desktop-buttons">
     <a class="btn btn-primary" id="dl-mac" data-i18n="настольная.мак"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.29.1/Karaoke-Punch-1.29.1-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.30.0/Karaoke-Punch-1.30.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
     <a class="btn btn-primary" id="dl-win" data-i18n="настольная.виндоус"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.29.1/Karaoke-Punch-1.29.1-Windows-Setup.exe">🪟 Скачать для Windows</a>
+       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.30.0/Karaoke-Punch-1.30.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
   </div>
   <p class="desktop-note" data-i18n-html="настольная.заметка">
     Бесплатно и с открытым кодом. Каждая модель скачивается один раз при первом
@@ -1957,7 +1978,7 @@
             <div class="style-row">
               <label class="style-label" for="st-countdown" data-i18n="караоке.отсчёт">Отсчёт перед строкой</label>
               <input type="checkbox" id="st-countdown" checked>
-              <span class="eq-hint" data-i18n="караоке.отсчёт.подсказка">Три точки гаснут за три секунды до вступления — видно, когда вступать после проигрыша</span>
+              <span class="eq-hint" data-i18n="караоке.отсчёт.подсказка">Точки гаснут перед вступлением: три внутри песни и пять в начале. Если голос вступает с первых секунд, студия добавит перед песней тишину — иначе отсчёту негде уместиться</span>
             </div>
             <p class="side-note" data-i18n="караоке.заметка.видео">Оформление попадает и в готовое видео</p>
           </div>
@@ -2601,16 +2622,16 @@
   <button class="footer-link" id="btn-whatsnew" data-i18n="подвал.новости">Что нового в {версия}</button>
 </footer>
 
-<script src="i18n.js?v=1.29.1"></script>
+<script src="i18n.js?v=1.30.0"></script>
 <!-- БПФ и счётчик темпа: общие с рабочими потоками (pitch-worker.js
      считает по fft.js тональность, tempo.js умеет работать и сам
      потоком). Здесь они нужны окну: самопроверке и запасному пути,
      если поток не завёлся. Обязательно ДО app.js. -->
-<script src="fft.js?v=1.29.1"></script>
-<script src="tempo.js?v=1.29.1"></script>
+<script src="fft.js?v=1.30.0"></script>
+<script src="tempo.js?v=1.30.0"></script>
 <!-- Чистая арифметика разметки: строки, слова, распев. Обязательно
      ДО app.js — он зовёт её функции и берёт из неё MIN_SPAN. -->
-<script src="timing.js?v=1.29.1"></script>
-<script src="app.js?v=1.29.1"></script>
+<script src="timing.js?v=1.30.0"></script>
+<script src="app.js?v=1.30.0"></script>
 </body>
 </html>

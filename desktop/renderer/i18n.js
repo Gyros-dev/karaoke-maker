@@ -391,6 +391,8 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.отсчётВНачале': '<b>⏱ A count-in at the start — even when singing begins right away.</b> The dots used to appear only where there was a pause before a line: a song that opens with the voice got no hint at all, and you came in blind. Now the studio adds the missing time itself — a short silence before the song, so the count-in fits whole. At the start it is longer too: five dots instead of three, enough time to take a breath. All of it goes into the finished video as well.',
+  'новости.отсчётПодробности': '<b>The count-in obeys its own switch.</b> “Design → Count-in before a line” turns off both the dots and the added silence at once. Seek into the middle of the song and it plays at once, with no lead-in: that is only for the very beginning.',
   'новости.спокойныйЦвет': '<b>The green does not hurt the eyes any more.</b> Buttons are filled with one calm green — the old gradient ran into an acid lime, and that was what stung. The text, the links, the waveform and the marks on the timeline took the same tone: every colour in the studio now belongs to one family.',
   'новости.однаВысота': '<b>The bar above the timeline is one height.</b> Play, the clock, the magnet, the tempo and the zoom stood like a staircase, each its own height. Now there is one height — the same as the studio’s top row. And the circle with the step number is filled flat, without a gradient.',
   'новости.очередь': '<b>A queue of several songs.</b> Pick several songs at once (and their lyrics, if you have them — a file with the same name), say where to put the results, and walk away. The studio removes the vocals, lays the lyrics out in time and saves the finished projects itself. You can see what each song will get, how much is done, and you can stop it at any moment.',
@@ -774,7 +776,7 @@ I18N.EN = {
   'караоке.выравнивание.центр': 'Middle',
   'караоке.выравнивание.низ': 'Bottom',
   'караоке.отсчёт': 'Count-in before a line',
-  'караоке.отсчёт.подсказка': 'Three dots fade out over the three seconds before you come in — so you know when to start after a break',
+  'караоке.отсчёт.подсказка': 'Dots fade out before you come in: three inside the song, five at the very start. If the voice comes in within the first seconds, the studio adds a moment of silence before the song — otherwise the count-in has nowhere to fit',
   'караоке.заметка.видео': 'The look carries over into the finished video',
   /* Тональность: орган управления на закладке «Звук».
      Key вместо pitch — это то слово, которым про песню и говорят. */
