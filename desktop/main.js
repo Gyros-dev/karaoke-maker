@@ -6463,7 +6463,21 @@ function createWindow() {
              textContent и value и смотрим, сколько раз в них написали. */
           let правок = 0;
           let записей = 0;
-          наблюдатель = new MutationObserver((з) => { правок += з.length; });
+          /* Кто именно правил — в отчёт. Без этого красное говорит
+             «что-то пишет в дерево на паузе» и ищи сам; с именами узлов
+             беда находится за минуту (так нашлась пересборка меню
+             «Сохранить…», которую звали отовсюду). */
+          const ктоПравил = [];
+          наблюдатель = new MutationObserver((з) => {
+            правок += з.length;
+            for (const п of з.slice(0, 4)) {
+              const у = п.target;
+              const имя = у.id || (у.className && String(у.className).slice(0, 30))
+                || у.nodeName;
+              const где = у.parentElement ? (у.parentElement.id || у.parentElement.className) : '';
+              ктоПравил.push(п.type + ' ' + имя + (где ? ' в ' + String(где).slice(0, 24) : ''));
+            }
+          });
           const текстОпис = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
           const полеОпис = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
           let считаемЗаписи = false;
@@ -6497,6 +6511,7 @@ function createWindow() {
           следить();
           await кадры(120);
           const правокНаПаузе = хватит();
+          const ктоНаПаузе = ктоПравил.slice(0, 6);
           const отрисовокНаПаузе = отрисовок;
 
           /* ---- 2. Играем: указатель едет, сетка всплывает ---- */
@@ -6595,7 +6610,7 @@ function createWindow() {
             && указатели.every((v, i) => i === 0 || v > указатели[i - 1]);
 
           return {
-            отрисовокНаПаузе, правокНаПаузе,
+            отрисовокНаПаузе, ктоНаПаузе, правокНаПаузе,
             кадровИгры, отрисовокЗаИгру, прокрутокЗаИгру, прокрутокСдвинуло,
             сеткаВсплыла, текущаяВидна,
             кадровТяги, отрисовокЗаТягу, прокрутокЗаТягу,
@@ -7180,11 +7195,19 @@ function createWindow() {
         вПравке.стало = +state.lines[0].time.toFixed(3);
         вПравке.клавишаМолчит = вПравке.стало === вПравке.было;
 
-        // Enter заканчивает правку — и клавиши снова свои
+        /* Enter заканчивает правку — и клавиши снова свои.
+
+           Ждём итога, а не смотрим сразу: правка кончается не в самом
+           обработчике, а после перерисовки списка, и раз в несколько
+           прогонов проверка успевала спросить раньше. Красное на
+           здоровом коде хуже, чем медленная проверка: оно приучает
+           не верить красному. */
         п2.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-        const послеEnter = {
-          правится: поле() && поле().getAttribute('contenteditable') === 'true',
-        };
+        const правитсяЛи = () => !!(поле() && поле().getAttribute('contenteditable') === 'true');
+        for (let i = 0; i < 20 && правитсяЛи(); i++) {
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        const послеEnter = { правится: правитсяЛи() };
         нажать('Period');
         послеEnter.клавишаВернулась = +state.lines[0].time.toFixed(3) !== вПравке.стало;
 

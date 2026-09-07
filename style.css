@@ -67,7 +67,42 @@
   --part-both: #fbbf24;
   --accent-rgb: 16 185 129;
   --accent-solid: #34d399;
-  --radius: 16px;
+
+  /* ============ Скругления: одна лестница на всё ============
+     Раньше форм было три: таблетки (999px) у кнопок, круги у пуска
+     и вкладок-номеров и прямоугольники у окон. Человек сказал прямо:
+     «все зелёные кнопки у нас скруглённые по стандарту, кнопка
+     пуск/пауза — круглая… я бы хотел привести это больше к стилю
+     Apple… как у нас окна в редакторе — прямоугольные со скруглёнными
+     краями. Вот и все остальные окна и кнопки сделай в том же стиле,
+     а то у нас разброс по стилю».
+
+     Теперь ступеней три, и все они — прямоугольник со скруглением:
+       --r-mini  мелочь: значки-кнопки, ярлыки, номера шагов;
+       --r-ctl   всё, что нажимают: кнопки, вкладки, поля, пункты меню;
+       --r-box   всё, что держит другое: карточки, окна, меню, панели.
+     Круглыми остаются только точки и ручки — они не кнопки:
+     точка несохранённого, отсчёт перед строкой, бегунки ползунков.
+
+     Сами числа взяты с образца: человек прислал снимок панели
+     инструментов Final Cut — «берём скругление этих кнопок как эталон
+     для скругления и окон и кнопок». Там кнопка высотой около трёх
+     десятков точек скруглена примерно на шестую часть своей высоты;
+     отсюда шесть точек у кнопки, четыре у мелочи и восемь у окна.
+     Это заметно строже прежних шестнадцати и совпадает с тем, что
+     уже было на дорожке (--ed-radius: 5px) — то есть студия и её
+     монтажная область наконец одной породы. */
+  --r-mini: 4px;
+  --r-ctl: 6px;
+  --r-box: 8px;
+
+  /* Высота всего, что стоит в верхнем ряду: чип проекта, значки работы
+     с проектом, вкладки шагов, «Как пользоваться». Человек сказал:
+     «сделай все верхние кнопки одной высоты, возьми высоту кнопок
+     сохранения черновика — они корректной высоты». Их высота и стоит
+     здесь; раньше в ряду было четыре разных: 26,6 · 30 · 34,9 · 40. */
+  --top-h: 30px;
+  --radius: var(--r-box);
 }
 
 /* ============ Монтажная плотность студии ============
@@ -280,7 +315,7 @@ section { padding: 5rem 1.5rem; max-width: 1100px; margin: 0 auto; }
   /* Прозрачная рамка, а не её отсутствие: иначе кнопки с рамкой
      на 2px выше соседних и ряд выглядит неровным */
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--r-ctl);
   font-size: 1rem;
   font-weight: 600;
   font-family: inherit;
@@ -420,7 +455,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   gap: 0.25rem;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-ctl);
   color: var(--text-dim);
   font-family: inherit;
   font-size: 0.8rem;
@@ -452,7 +487,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   padding: 0.25rem;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-box);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
 .pick-item {
@@ -522,7 +557,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   display: block;
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   flex-shrink: 0;
 }
 .footer-brand { display: inline-flex; align-items: center; gap: 0.5rem; }
@@ -628,7 +663,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   background: rgba(52, 211, 153, 0.12);
   color: #34d399;
   padding: 0.15rem 0.7rem;
-  border-radius: 999px;
+  border-radius: var(--r-mini);
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -645,7 +680,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   text-align: center;
   background: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.14), transparent 70%), var(--bg-soft);
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: calc(var(--r-box) + 4px);
   padding: 3rem 2rem;
 }
 .desktop-lead {
@@ -702,7 +737,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   padding: 0.7rem 0.9rem;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-ctl);
   color: #34d399;
   font-size: 0.8rem;
   overflow-x: auto;
@@ -734,7 +769,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   flex-shrink: 0;
   width: 40px; height: 40px;
   display: grid; place-items: center;
-  border-radius: 50%;
+  border-radius: var(--r-mini);
   background: var(--grad);
   font-weight: 700;
 }
@@ -788,7 +823,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   scroll-margin-top: calc(var(--header-h, 69px) + 0.5rem);
   background: var(--bg-soft);
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: calc(var(--r-box) + 4px);
   /* Боковое поле — переменной: дорожка выходит из него в край окна
      отрицательным полем ровно на эту величину (см. .timeline-wrap). */
   --studio-pad-x: 1.5rem;
@@ -814,7 +849,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   max-width: 280px;
   padding: 0.35rem 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   background: var(--bg-card);
   color: var(--text);
   font-size: 0.78rem;
@@ -838,8 +873,12 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   top: 50%;
   transform: translateY(-50%);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.35rem 0.85rem;
+  border-radius: var(--r-ctl);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: var(--top-h);
+  padding: 0 0.85rem;
   color: var(--text-dim);
   font-size: 0.85rem;
   font-weight: 600;
@@ -882,8 +921,9 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   min-width: 0;
   max-width: 15rem;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.3rem 0.7rem;
+  border-radius: var(--r-ctl);
+  height: var(--top-h);
+  padding: 0 0.7rem;
   color: var(--text-dim);
   font-size: 0.8rem;
   font-weight: 600;
@@ -928,7 +968,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   padding: 0.45rem 0.7rem;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-ctl);
   color: var(--text);
   font-family: inherit;
   font-size: 0.85rem;
@@ -955,11 +995,11 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: var(--top-h);
+  height: var(--top-h);
   flex: none;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-mini);
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
@@ -1084,19 +1124,20 @@ body.is-desktop .steps-tool-group {
   display: flex; align-items: center; gap: 0.5rem;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-ctl);
   color: var(--text-dim);
   font-family: inherit;
   font-size: 0.92rem;
   font-weight: 600;
-  padding: 0.5rem 1.1rem;
+  height: var(--top-h);
+  padding: 0 1.1rem;
   cursor: pointer;
   transition: all 0.15s;
 }
 .step-tab span {
-  width: 22px; height: 22px;
+  width: 20px; height: 20px;
   display: grid; place-items: center;
-  border-radius: 50%;
+  border-radius: var(--r-mini);
   background: var(--border);
   font-size: 0.75rem;
 }
@@ -1309,7 +1350,7 @@ body.is-desktop .steps-tool-group {
   width: 72px;
   height: 48px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   border: 1px solid var(--border);
 }
 /* Главное действие шага. Порядок на первом шаге — это порядок работы,
@@ -2014,7 +2055,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .edit-stage .stage-line.current { color: var(--st-active); }
 .edit-stage .stage-line.current span.sung { color: var(--st-effect); }
 .edit-stage .stage-line.near { color: var(--st-active); }
-.play-btn.small { width: 36px; height: 36px; font-size: 0.9rem; }
+.play-btn.small { width: 48px; height: 32px; font-size: 0.9rem; }
 
 /* --- Панель управления редактора ---
    Одна полоса на весь редактор, как в монтажной программе: транспорт
@@ -2656,13 +2697,17 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
    высоту у сцены, а сцена здесь главное */
 .transport { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; }
 .player-bar { display: flex; align-items: center; gap: 0.8rem; flex: 1; min-width: 260px; }
+/* Пуск и пауза — не круг, а прямоугольник со скруглением: он в одном
+   ряду с полосой времени и кнопками, и круг среди них выбивался
+   (см. «Скругления: одна лестница на всё»). Шире, чем выше, — как
+   транспорт в монтажной программе. */
 .play-btn {
-  width: 52px; height: 52px;
+  width: 64px; height: 44px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--r-ctl);
   background: var(--accent-btn-bg, var(--grad-btn));
   box-shadow: var(--accent-btn-glow, none);
   color: #fff;
@@ -2886,7 +2931,7 @@ input[type="range"]::-moz-range-thumb {
 .proj-key {
   flex: none;
   padding: 0 0.35rem;
-  border-radius: 999px;
+  border-radius: var(--r-mini);
   background: var(--bg-soft);
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -2939,7 +2984,7 @@ input[type="range"]::-moz-range-thumb {
   flex: 1;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--r-ctl);
   color: var(--text-dim);
   font-family: inherit;
   font-size: 0.85rem;
@@ -3034,7 +3079,7 @@ input[type="range"]::-moz-range-thumb {
   place-items: center;
   background: rgba(10, 10, 15, 0.6);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-ctl);
   color: var(--text-dim);
   font-size: 1rem;
   cursor: pointer;
@@ -3088,7 +3133,7 @@ body.stage-full .site-header { z-index: 1; }
   width: 100%;
   background: var(--bg-soft);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-ctl);
   color: var(--text);
   font-family: inherit;
   font-size: 0.9rem;
@@ -3099,7 +3144,7 @@ body.stage-full .site-header { z-index: 1; }
   height: 26px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   background: var(--bg-soft);
   cursor: pointer;
 }
@@ -3108,7 +3153,7 @@ body.stage-full .site-header { z-index: 1; }
 .seg {
   display: inline-flex;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-ctl);
   overflow: hidden;
 }
 .seg.row-wide { display: flex; }
@@ -3258,7 +3303,7 @@ body.is-desktop .guide-close {
   width: 2rem;
   height: 2rem;
   border: 1px solid var(--border);
-  border-radius: 50%;
+  border-radius: var(--r-ctl);
   background: var(--bg-card);
   color: var(--text-dim);
   cursor: pointer;
@@ -3319,7 +3364,7 @@ body.is-desktop .site-header .footer-link {
   align-items: center;
   gap: 0.5rem;
   padding: 0.3rem 0.9rem;
-  border-radius: 999px;
+  border-radius: var(--r-mini);
   background: var(--grad-btn);
   color: #f2f2f7;
   font-size: 0.8rem;
@@ -3375,7 +3420,7 @@ body.is-desktop .site-header .footer-link {
 }
 .whatsnew-list li {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-box);
   background: var(--bg-soft);
   padding: 0.9rem 1.1rem;
   color: var(--text-dim);
@@ -3403,7 +3448,7 @@ body.is-desktop .site-header .footer-link {
   display: grid;
   place-items: center;
   border: 1px solid var(--border);
-  border-radius: 50%;
+  border-radius: var(--r-ctl);
   background: transparent;
   color: var(--text-dim);
   font-family: inherit;
