@@ -234,7 +234,7 @@ const ASR_CSS = `
   gap: 0.6rem;
   margin-bottom: 0.5rem;
 }
-.asr-source { color: #34d399; font-size: 0.85rem; font-weight: 600; }
+.asr-source { color: var(--accent-solid); font-size: 0.85rem; font-weight: 600; }
 .asr-warning {
   color: var(--text-dim);
   font-size: 0.85rem;
@@ -254,15 +254,15 @@ const ASR_CSS = `
   width: 100%;
   margin: 0 0 0.8rem;
   padding: 0.5rem 0.7rem;
-  border: 1px solid rgba(52, 211, 153, 0.3);
+  border: 1px solid color-mix(in srgb, var(--accent-solid) 30%, transparent);
   border-left-width: 3px;
   border-radius: 8px;
-  background: rgba(16, 185, 129, 0.07);
+  background: rgb(var(--accent-rgb) / 0.07);
   color: var(--text-dim);
   font-size: 0.85rem;
   line-height: 1.5;
 }
-.asr-result b { color: #34d399; font-weight: 600; }
+.asr-result b { color: var(--accent-solid); font-weight: 600; }
 
 /* --- Оценка времени и спрятанные быстрые варианты (только в приложении) ---
 
@@ -281,7 +281,7 @@ const ASR_CSS = `
   font-size: 0.85rem;
   line-height: 1.5;
 }
-.ai-eta b, .asr-eta b { color: #34d399; font-weight: 700; }
+.ai-eta b, .asr-eta b { color: var(--accent-solid); font-weight: 700; }
 .ai-more, .asr-more { flex-basis: 100%; width: 100%; margin-top: 0.6rem; }
 .ai-more > summary, .asr-more > summary {
   display: inline-block;

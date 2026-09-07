@@ -44,11 +44,31 @@
   --border: #26263a;
   --text: #f2f2f7;
   --text-dim: #9a9ab0;
-  --violet: #10b981;
-  --pink: #2dd4bf;
+  /* ---- Зелёный: одна спокойная семья ----
+     Прежний зелёный был неоновый: изумруд #10b981 в заливке, лайм
+     #84cc16 на конце кнопочного градиента, мятный #34d399 в тексте.
+     Человек сказал прямо: «наш зелёный цвет слишком режет глаз», —
+     показал кнопку GitHub и назвал её цвет числом: #359C6E. Он и стал
+     основанием. Остальные ступени — тот же тон (153°) и та же
+     насыщенность, разная только светлота:
+
+       #2C815B  глубокий — низ градиентов и полоса-объявление;
+       #359C6E  основной — заливка кнопок, рамки, ход;
+       #54C492  светлый  — текст, ссылки, кольцо выделения
+                           (контраст 8.3 к панели: читается и мелким);
+       #67CB9E  второй   — ручка ползунка, волна, наведение;
+       #95DBBB  мягкий   — подписи на зелёном фоне;
+       #B3E5CE  самый светлый — огонёк в полосе-объявлении.
+
+     Кнопки больше не радуга: заливка ровная, как у образца. Прежний
+     градиент уходил в лайм, и резало глаз сильнее всего именно это.
+     --grad-btn остался переменной — нейтральная и стальная темы
+     держат в ней свои градиенты, — но в фирменной это ровный цвет. */
+  --violet: #359C6E;
+  --pink: #67CB9E;
   --orange: #f97316;
-  --grad: linear-gradient(90deg, #34d399, #2dd4bf);
-  --grad-btn: linear-gradient(90deg, #047857, #10b981, #84cc16);
+  --grad: linear-gradient(90deg, #54C492, #67CB9E);
+  --grad-btn: #359C6E;
   /* Тот же зелёный числами и сплошным цветом. Он был написан прямо
      цветом в полутора десятках мест — подсветка активного шага,
      текущая строка, закладки оформления, галки, полосы прогресса, —
@@ -65,8 +85,8 @@
   --part-1: #38bdf8;
   --part-2: #fb7185;
   --part-both: #fbbf24;
-  --accent-rgb: 16 185 129;
-  --accent-solid: #34d399;
+  --accent-rgb: 53 156 110;
+  --accent-solid: #54C492;
 
   /* ============ Скругления: одна лестница на всё ============
      Раньше форм было три: таблетки (999px) у кнопок, круги у пуска
@@ -147,15 +167,15 @@
      панели (обычная подсветка), в стальной — наоборот, темнее рабочего
      поля, как в Logic Pro. */
   --tl-heads-bg: rgba(255, 255, 255, 0.025);
-  --sel-ring: #34d399;
-  --sel-ring-bg: rgba(52, 211, 153, 0.14);
-  --sel-ring-glow: rgba(52, 211, 153, 0.5);
+  --sel-ring: #54C492;
+  --sel-ring-bg: rgba(84, 196, 146, 0.14);
+  --sel-ring-glow: rgba(84, 196, 146, 0.5);
   --accent-btn-bg: var(--grad-btn);
-  --accent-btn-glow: 0 4px 16px rgba(16, 185, 129, 0.4);
-  --accent-on-bg: rgba(16, 185, 129, 0.16);
-  --accent-on-border: #2f9d76;
-  --accent-on-text: #9fe9c8;
-  --accent-clock: #7fe3bb;
+  --accent-btn-glow: 0 4px 16px rgba(53, 156, 110, 0.4);
+  --accent-on-bg: rgba(53, 156, 110, 0.16);
+  --accent-on-border: #359C6E;
+  --accent-on-text: #95DBBB;
+  --accent-clock: #7ED3AD;
   /* Полосы прокрутки студии — те же цвета, что и у страницы, но
      посчитанные ЗДЕСЬ: --border и --bg-soft тема переопределяет
      внутри .studio, и только на этом элементе var() даст жёлтые
@@ -244,7 +264,7 @@ html[data-theme="steel"] .studio {
 
    Что нарочно НЕ идёт за темой: сцена караоке и её просмотр (их вид
    человек настраивает сам, и он уходит в видео), значок слов `♪`
-   на дорожке (лаймовый — тем же цветом, что и слова на канвасе,
+   на дорожке (жёлто-зелёный — тем же цветом, что и слова на канвасе,
    это цветовая азбука разметки, а не акцент оболочки) и окно
    «Что нового» — оно вне .studio, как и весь остальной сайт. */
 
@@ -404,7 +424,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   gap: 0.9rem;
   flex-wrap: wrap;
   padding: 0.7rem 1.5rem;
-  background: linear-gradient(90deg, rgba(4, 120, 87, 0.95), rgba(16, 185, 129, 0.95));
+  background: linear-gradient(90deg, rgba(44, 129, 91, 0.95), rgba(53, 156, 110, 0.95));
   color: #f2f2f7;
   font-size: 0.95rem;
   font-weight: 600;
@@ -412,8 +432,8 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
 .update-dot {
   width: 9px; height: 9px;
   border-radius: 50%;
-  background: #d9f99d;
-  box-shadow: 0 0 10px #d9f99d;
+  background: #B3E5CE;
+  box-shadow: 0 0 10px #B3E5CE;
 }
 .update-bar .btn-primary { background: #0a0a0f; box-shadow: none; }
 .update-bar .btn-primary:hover { background: #16161f; transform: none; }
@@ -613,7 +633,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   height: 1100px;
   top: -450px;
   left: calc(8% - 300px);
-  background: radial-gradient(closest-side, rgb(16 185 129 / 0.35), rgb(16 185 129 / 0));
+  background: radial-gradient(closest-side, rgb(53 156 110 / 0.35), rgb(53 156 110 / 0));
 }
 .hero-glow-2 {
   width: 1000px;
@@ -623,7 +643,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   background: radial-gradient(closest-side, rgb(45 212 191 / 0.22), rgb(45 212 191 / 0));
 }
 .hero-inner { position: relative; max-width: 800px; margin: 0 auto; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #54C492; box-shadow: 0 0 8px #54C492; }
 /* Имя студии крупно, Bungee Shade. Мельче ставить нельзя: у этого
    шрифта буква нарисована вместе с объёмной тенью, и на маленьком
    кегле тень слипается с самой буквой в грязь. Отсюда и нижняя
@@ -634,11 +654,11 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   font-size: clamp(1.55rem, 5.2vw, 3.2rem);
   line-height: 1.25;
   letter-spacing: 0.01em;
-  color: #34d399;
+  color: #54C492;
   margin-bottom: 1rem;
   /* Тень нарисована в самом шрифте, поэтому свечение вокруг делаем
      мягким и слабым — иначе оно забивает рельеф букв */
-  text-shadow: 0 0 28px rgba(52, 211, 153, 0.35);
+  text-shadow: 0 0 28px rgba(84, 196, 146, 0.35);
 }
 .hero h1 {
   font-size: clamp(2.1rem, 5.4vw, 3.6rem);
@@ -660,8 +680,8 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
 }
 .hero-note { margin-top: 1.4rem; color: var(--text-dim); font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem; }
 .pill {
-  background: rgba(52, 211, 153, 0.12);
-  color: #34d399;
+  background: rgba(84, 196, 146, 0.12);
+  color: #54C492;
   padding: 0.15rem 0.7rem;
   border-radius: var(--r-mini);
   font-size: 0.8rem;
@@ -678,7 +698,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   padding-left: 0;
   padding-right: 0;
   text-align: center;
-  background: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.14), transparent 70%), var(--bg-soft);
+  background: radial-gradient(ellipse at 50% 0%, rgba(53, 156, 110, 0.14), transparent 70%), var(--bg-soft);
   border: 1px solid var(--border);
   border-radius: calc(var(--r-box) + 4px);
   padding: 3rem 2rem;
@@ -701,7 +721,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   max-width: 560px;
   margin: 0 auto;
 }
-.desktop-note a { color: #34d399; }
+.desktop-note a { color: #54C492; }
 
 .first-run {
   max-width: 620px;
@@ -738,7 +758,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r-ctl);
-  color: #34d399;
+  color: #54C492;
   font-size: 0.8rem;
   overflow-x: auto;
 }
@@ -756,7 +776,7 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
 .card-icon { font-size: 2rem; margin-bottom: 0.8rem; }
 .card h3 { margin-bottom: 0.5rem; font-size: 1.15rem; }
 .card p { color: var(--text-dim); font-size: 0.95rem; }
-.card a, .faq a { color: #34d399; }
+.card a, .faq a { color: #54C492; }
 
 /* ============ Как это работает ============ */
 /* Шаги стоят сеткой 2×2, а не строкой из четырёх: в руководстве под
@@ -1142,7 +1162,12 @@ body.is-desktop .steps-tool-group {
   font-size: 0.75rem;
 }
 .step-tab.active { border-color: var(--violet); color: var(--text); background: rgb(var(--accent-rgb) / 0.1); }
-.step-tab.active span { background: var(--grad); color: var(--accent-ink, inherit); }
+/* Кружок активного шага залит ровно. Градиент здесь был последним
+   на верхнем ряду, и человек сказал убрать: «убери градиент на верхних
+   кнопках». Берём --violet — сплошной акцент темы, тот же, что красит
+   рамку самой вкладки: зелёный в фирменной, жёлтый в нейтральной,
+   синий в стальной. */
+.step-tab.active span { background: var(--violet); color: var(--accent-ink, inherit); }
 .step-tab:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .step-panel { display: none; max-width: 720px; width: 100%; margin: 0 auto; }
@@ -1699,7 +1724,7 @@ body.is-desktop .steps-tool-group {
    renderEditList): помечаются, наоборот, строки БЕЗ ручной разметки —
    и тогда она приглушённая и с пунктирной обводкой, чтобы «нет» нельзя
    было спутать с «да». */
-.word-mark { color: #84cc16; flex-shrink: 0; display: inline-flex; }
+.word-mark { color: #92C270; flex-shrink: 0; display: inline-flex; }
 .word-mark .icon { width: 0.85em; height: 0.85em; }
 .word-mark-off {
   color: var(--text-dim);
@@ -2039,7 +2064,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
   justify-content: center;
   gap: 0.5rem;
   text-align: center;
-  background: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.1), transparent 70%), var(--bg-card);
+  background: radial-gradient(ellipse at 50% 0%, rgba(53, 156, 110, 0.1), transparent 70%), var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem 1.2rem;
@@ -2055,7 +2080,16 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .edit-stage .stage-line.current { color: var(--st-active); }
 .edit-stage .stage-line.current span.sung { color: var(--st-effect); }
 .edit-stage .stage-line.near { color: var(--st-active); }
-.play-btn.small { width: 48px; height: 32px; font-size: 0.9rem; }
+/* ---- Одна высота на всю панель редактора ----
+   Ряд над дорожкой был лесенкой: пуск 32 пикселя, часы 29,5, кнопки
+   со значком 18,8, поля темпа 23, метка уверенности 21. Человек
+   показал на часы — «сейчас окно с временем корректной высоты» — и
+   попросил свести к ним всё. Их 30 и оказались ровно --top-h: та же
+   мера, что у верхнего ряда студии (кнопки черновика, вкладки шагов).
+   Значит, высота у нажимаемого в студии теперь ОДНА, сверху донизу;
+   ширина у каждого своя. Подписи (BPM, «с», косая в часах) высоты не
+   получают: это текст между кнопками, а не кнопки. */
+.play-btn.small { width: 48px; height: var(--top-h); font-size: 0.9rem; }
 
 /* --- Панель управления редактора ---
    Одна полоса на весь редактор, как в монтажной программе: транспорт
@@ -2086,15 +2120,26 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 }
 .ed-group { display: flex; align-items: center; gap: 0.4rem; }
 .ed-group .nudge-btn { white-space: nowrap; }
+/* Высота — только здесь, в панели над дорожкой. Кнопка с тем же именем
+   стоит ещё в инспекторе и в настройках караоке: там ряды тесные,
+   и от 30 пикселей инспектор просился бы прокручиваться (самопроверка
+   «панельВыбранного» это и поймала). Кнопки со значком заодно
+   становятся квадратными — 30 на 30. */
+.ed-bar .nudge-btn { height: var(--top-h); }
+.ed-bar .nudge-btn.icon-btn { width: var(--top-h); }
 .ed-right { margin-left: auto; }
 /* Часы — как табло в монтажной: текущее время крупно, длина песни рядом.
    Цифры счётчика — одно из четырёх мест фирменного зелёного
    (--accent-clock); в нейтральной теме это просто цвет текста. */
 .ed-clock {
   display: flex;
-  align-items: baseline;
+  /* Ровно по середине, а не по общей базовой линии: у часов задана
+     высота, и при baseline цифры прижались бы к верхнему краю. */
+  align-items: center;
+  line-height: 1;
+  height: var(--top-h);
   gap: 0.35rem;
-  padding: 0.1rem 0.5rem;
+  padding: 0 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--ed-radius-ctl);
   background: var(--bg-soft);
@@ -2114,6 +2159,7 @@ input.sel-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12);
 .ed-beat { gap: 0.25rem; }
 .beat-num {
   width: 3.2rem;
+  height: var(--top-h);
   padding: 0.15rem 0.3rem;
   border: 1px solid transparent;
   border-radius: var(--ed-radius-ctl);
@@ -2134,6 +2180,10 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
    зелёное включают не глядя, красное лучше проверить или поправить. */
 .beat-conf {
   min-width: 2.6rem;
+  height: var(--top-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.1rem 0.3rem;
   border-radius: var(--ed-radius-ctl);
   background: rgba(255, 255, 255, 0.05);
@@ -2143,7 +2193,7 @@ input.beat-num.bad { border-color: #f97316; background: rgba(249, 115, 22, 0.12)
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
-.beat-conf[data-уровень="высокая"] { color: #a3e635; }
+.beat-conf[data-уровень="высокая"] { color: #AED98F; }
 .beat-conf[data-уровень="средняя"] { color: #facc15; }
 .beat-conf[data-уровень="низкая"] { color: #fb7185; }
 .beat-conf[data-уровень="руками"] { color: var(--sel-ring); }
@@ -2450,9 +2500,9 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
 }
 .sw-orig { background: rgba(251, 113, 133, 0.4); border: 1px solid #fb7185; }
 .sw-voice { background: rgba(56, 189, 248, 0.55); border: 1px solid #38bdf8; }
-.sw-line { background: rgba(16, 185, 129, 0.35); border: 1px solid #10b981; }
+.sw-line { background: rgba(53, 156, 110, 0.35); border: 1px solid #359C6E; }
 .sw-guess { background: rgba(245, 158, 11, 0.3); border: 1px dashed #f59e0b; }
-.sw-word { background: rgba(132, 204, 22, 0.3); border: 1px solid #84cc16; }
+.sw-word { background: rgba(146, 194, 112, 0.3); border: 1px solid #92C270; }
 .sw-own { background: transparent; border-left: 2px dashed #38bdf8; border-radius: 0; width: 4px; }
 .timeline-keys {
   margin-top: 0.35rem;
@@ -2533,7 +2583,7 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   gap: var(--st-gap);
   /* Поля по краям задаёт настройка «Поля по краям» (applyStyle) */
   padding: 2rem clamp(1.5rem, 8%, 4rem);
-  background: radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.12), transparent 70%), var(--bg-card);
+  background: radial-gradient(ellipse at 50% 0%, rgba(53, 156, 110, 0.12), transparent 70%), var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
@@ -3210,13 +3260,13 @@ body.stage-full .site-header { z-index: 1; }
   background: none;
   border: none;
   padding: 0;
-  color: #34d399;
+  color: #54C492;
   font-family: inherit;
   font-size: inherit;
   text-decoration: underline;
   cursor: pointer;
 }
-.footer-link:hover { color: #84cc16; }
+.footer-link:hover { color: #92C270; }
 
 /* ============ Что нового ============
    Окно со списком изменений: показывается один раз после обновления
@@ -3433,7 +3483,7 @@ body.is-desktop .site-header .footer-link {
   color: var(--text-dim);
   font-size: 0.9rem;
 }
-.whatsnew-more a { color: #34d399; }
+.whatsnew-more a { color: #54C492; }
 .whatsnew-actions {
   display: flex;
   justify-content: center;
@@ -3605,7 +3655,7 @@ body.is-desktop .site-header .footer-link {
 .queue-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .queue-state { color: var(--muted); white-space: nowrap; }
 .queue-row.now .queue-state { color: var(--accent); }
-.queue-row.done .queue-state { color: var(--ok, #10b981); }
+.queue-row.done .queue-state { color: var(--ok, #359C6E); }
 .queue-row.bad .queue-state { color: var(--bad, #ef4444); overflow: hidden; text-overflow: ellipsis; }
 .queue-note { margin: 0.6rem 0 0; font-size: 0.82rem; color: var(--muted); }
 

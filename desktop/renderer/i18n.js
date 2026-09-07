@@ -391,6 +391,8 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.спокойныйЦвет': '<b>The green does not hurt the eyes any more.</b> Buttons are filled with one calm green — the old gradient ran into an acid lime, and that was what stung. The text, the links, the waveform and the marks on the timeline took the same tone: every colour in the studio now belongs to one family.',
+  'новости.однаВысота': '<b>The bar above the timeline is one height.</b> Play, the clock, the magnet, the tempo and the zoom stood like a staircase, each its own height. Now there is one height — the same as the studio’s top row. And the circle with the step number is filled flat, without a gradient.',
   'новости.очередь': '<b>A queue of several songs.</b> Pick several songs at once (and their lyrics, if you have them — a file with the same name), say where to put the results, and walk away. The studio removes the vocals, lays the lyrics out in time and saves the finished projects itself. You can see what each song will get, how much is done, and you can stop it at any moment.',
   'новости.lrcОткрыть': '<b>A ready .lrc opens.</b> A button on the “Lyrics” step: the words and the timings arrive together — there is nothing left to time. It reads enhanced LRC too, where every word carries its own timestamp.',
   'новости.сохранитьОдной': '<b>Everything you can take out is under one button.</b> “Save…” instead of a scattering of buttons: video, instrumental, lyrics. The quality and the format of the video are chosen right there, in one window, and the clip itself is now <b>MP4</b> — it opens everywhere, phones and messengers included.',

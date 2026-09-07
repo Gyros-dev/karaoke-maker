@@ -22,7 +22,7 @@ function значокSVG(имя, cls) {
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.29.0';
+const APP_VERSION = '1.29.1';
 
 /* ---------- Модификатор в подписях горячих клавиш ----------
    Сами клавиши код ловит одинаково (metaKey || ctrlKey), а вот подписи
@@ -8911,7 +8911,7 @@ function drawVoiceLane(g, lane, W) {
 /* ---------- Полоса волны ---------- */
 function drawWaveLane(g, lane, W) {
   const { mins, maxs, bucketDur } = editor.peaks;
-  g.fillStyle = 'rgba(45, 212, 191, 0.5)';
+  g.fillStyle = 'rgba(103, 203, 158, 0.5)';
   const mid = lane.y + lane.h / 2;
   for (let x = 0; x < W; x++) {
     const t0 = xToT(x);
@@ -8968,7 +8968,7 @@ function drawBeatGrid(g, L, W, H) {
 
 /* Цвет выделенного диапазона. Сиреневый выбран потому, что все
    остальные породы на дорожке уже заняты: розовый — оригинал,
-   лаймовый — строки, жёлтый — слова, голубой — голос. */
+   зелёный — строки, жёлто-зелёный — слова, голубой — голос. */
 const ЦВЕТ_ДИАПАЗОНА = {
   тень: 'rgba(167, 139, 250, 0.10)',   // заливка на всю высоту дорожки
   полоса: 'rgba(167, 139, 250, 0.34)', // полоса на линейке
@@ -9002,8 +9002,8 @@ function drawLineBlocks(g, lane, W) {
     const h = этаж < 0 ? lane.h - 6 : (lane.h - 6) / 2 - 1;
 
     roundRect(g, x0, y, w, h, 4);
-    g.fillStyle = sel ? 'rgba(132, 204, 22, 0.34)'
-      : guess ? 'rgba(245, 158, 11, 0.22)' : 'rgba(16, 185, 129, 0.24)';
+    g.fillStyle = sel ? 'rgba(146, 194, 112, 0.34)'
+      : guess ? 'rgba(245, 158, 11, 0.22)' : 'rgba(53, 156, 110, 0.24)';
     g.fill();
     /* Блок попал в выделенный диапазон — лёгкая сиреневая подсветка
        поверх своего цвета: видно, что он поедет вместе с остальными,
@@ -9016,7 +9016,7 @@ function drawLineBlocks(g, lane, W) {
        зелёный в фирменной — это её третье из четырёх мест акцента. */
     g.lineWidth = sel ? 2 : 1;
     g.strokeStyle = sel ? edTheme.selRing
-      : вДиап ? ЦВЕТ_ДИАПАЗОНА.контур : guess ? '#f59e0b' : '#10b981';
+      : вДиап ? ЦВЕТ_ДИАПАЗОНА.контур : guess ? '#f59e0b' : '#359C6E';
     g.setLineDash(guess ? [4, 3] : []);
     if (sel) { g.shadowColor = edTheme.selGlow; g.shadowBlur = 6; }
     g.stroke();
@@ -9048,7 +9048,7 @@ function drawLineBlocks(g, lane, W) {
     }
 
     // Ручки по краям — чтобы было видно, за что тянуть
-    g.fillStyle = sel ? edTheme.selRing : guess ? '#f59e0b' : '#10b981';
+    g.fillStyle = sel ? edTheme.selRing : guess ? '#f59e0b' : '#359C6E';
     g.fillRect(x0, y, 2, h);
     g.fillRect(x1 - 2, y, 2, h);
 
@@ -9099,14 +9099,14 @@ function drawWordBlocks(g, lane, W) {
     const width = Math.max(2, x1 - x0);
     const sel = k === editor.wordSel;
     roundRect(g, x0, lane.y + 3, width, lane.h - 7, 3);
-    g.fillStyle = sel ? 'rgba(52, 211, 153, 0.4)' : manual
-      ? (k % 2 ? 'rgba(132, 204, 22, 0.28)' : 'rgba(132, 204, 22, 0.2)')
+    g.fillStyle = sel ? 'rgba(84, 196, 146, 0.4)' : manual
+      ? (k % 2 ? 'rgba(146, 194, 112, 0.28)' : 'rgba(146, 194, 112, 0.2)')
       : (k % 2 ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.13)');
     g.fill();
     // Выбранное слово обведено ярко, тем же цветом, что и выбранная
     // строка (edTheme.selRing) — тема решает, жёлтый он или зелёный
     g.lineWidth = sel ? 2 : 1;
-    g.strokeStyle = sel ? edTheme.selRing : manual ? 'rgba(163, 230, 53, 0.8)' : 'rgba(148, 163, 184, 0.5)';
+    g.strokeStyle = sel ? edTheme.selRing : manual ? 'rgba(174, 217, 143, 0.8)' : 'rgba(148, 163, 184, 0.5)';
     g.setLineDash(sel || manual ? [] : [3, 3]);
     if (sel) { g.shadowColor = edTheme.selGlow; g.shadowBlur = 5; }
     g.stroke();
@@ -9177,7 +9177,7 @@ function drawTimeline() {
     if (b) {
       const x0 = tToX(b.from);
       const x1 = tToX(b.to);
-      g.fillStyle = 'rgba(132, 204, 22, 0.09)';
+      g.fillStyle = 'rgba(146, 194, 112, 0.09)';
       // L.ruler — полоса, а не число: раньше здесь стояло само L.ruler,
       // и высота выходила NaN, то есть подсветка не рисовалась вовсе
       g.fillRect(x0, L.ruler.y, Math.max(1, x1 - x0), H - L.ruler.y);
@@ -9508,7 +9508,7 @@ const ВЕС_МАГНИТА = {
   указатель: 0, строка: 1, оригинал: 1, слово: 1, голос: 2, край: 3, доля: 4,
 };
 const ЦВЕТ_МАГНИТА = {
-  указатель: '#f2f2f7', строка: '#a3e635', оригинал: '#fb7185', слово: '#facc15',
+  указатель: '#f2f2f7', строка: '#54C492', оригинал: '#fb7185', слово: '#facc15',
   голос: '#38bdf8', край: '#9a9ab0', доля: ЦВЕТ_ДОЛИ.магнит,
 };
 
@@ -12763,7 +12763,7 @@ function прочитатьТему() {
 
 let тема = прочитатьТему();
 
-const edTheme = { selRing: '#34d399', selGlow: 'rgba(52, 211, 153, 0.5)', ground: '#0e0e15' };
+const edTheme = { selRing: '#54C492', selGlow: 'rgba(84, 196, 146, 0.5)', ground: '#0e0e15' };
 function обновитьЦветаТемы() {
   const узел = document.querySelector('.studio');
   if (!узел) return;
