@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const КОРЕНЬ = path.join(__dirname, '..');
-const файлы = ['timing.js', 'qr.js', 'fft.js', 'tempo.js', 'pitch-worker.js'];
+const файлы = ['timing.js', 'fft.js', 'tempo.js', 'pitch-worker.js'];
 let бед = 0;
 for (const имя of файлы) {
   const сайт = fs.readFileSync(path.join(КОРЕНЬ, имя), 'utf8');

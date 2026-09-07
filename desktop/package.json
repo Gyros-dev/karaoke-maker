@@ -35,7 +35,6 @@
     "files": [
       "main.js",
       "preload.js",
-      "phone.html",
       "renderer/**/*"
     ],
     "extraResources": [
@@ -60,10 +59,7 @@
       "category": "public.app-category.music",
       "identity": null,
       "icon": "build/icon.icns",
-      "artifactName": "Karaoke-Punch-${version}-macOS-${arch}.${ext}",
-      "extendInfo": {
-        "NSLocalNetworkUsageDescription": "Чтобы петь с телефона: студия открывает страницу с текстом песни в вашей домашней сети. Наружу, в интернет, ничего не уходит."
-      }
+      "artifactName": "Karaoke-Punch-${version}-macOS-${arch}.${ext}"
     },
     "win": {
       "target": [

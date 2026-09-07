@@ -667,10 +667,6 @@ I18N.EN = {
 
   /* ---------- Шаг 2 ---------- */
   'шаг2.поле': 'Paste the lyrics here…\n\nOne line is one karaoke line.\nEmpty lines don’t count.',
-  'петь.кнопка': 'Sing from your phone',
-  'петь.кнопка.подсказка': 'Open the stage on your phone: point the camera at the code, and the lyrics and the music play there',
-  'петь.заголовок': 'Sing from your phone',
-  'петь.подсказка': 'Point your phone’s camera at the code. The phone has to be on the same network as the computer, and the studio has to stay open.',
   'очередь.кнопка': 'Queue up several songs…',
   'очередь.кнопка.подсказка': 'Pick several songs — the studio separates and times them one after another and puts the finished projects into the folder you choose',
   'очередь.подсказка': 'Pick the songs and their lyrics together: <b>song.mp3</b> with <b>song.txt</b> (or <b>song.lrc</b>) beside it — then the timing falls into place as well.',
@@ -1745,19 +1741,6 @@ I18N.СТРОКИ = {
     ru: 'Не получилось открыть папку с журналом.',
     en: 'Could not open the folder with the log.',
   },
-  'петь.нетПесни': {
-    ru: 'Сначала открой песню.',
-    en: 'Open a song first.',
-  },
-  'петь.нетРазметки': {
-    ru: 'Сначала размести текст по времени — петь пока не по чему.',
-    en: 'Time the lyrics first — there is nothing to sing along to yet.',
-  },
-  'петь.неПоднялся': {
-    ru: 'Не получилось открыть страницу для телефона: {причина}',
-    en: 'Could not open the page for the phone: {причина}',
-  },
-  'петь.остановить': { ru: 'Остановить', en: 'Stop' },
   'очередь.нетПесен': {
     ru: 'Среди выбранных файлов нет ни одной песни. Выбери аудиофайлы, а рядом с ними — тексты .txt или .lrc, если они есть.',
     en: 'There is not a single song among the files you picked. Pick audio files, and .txt or .lrc lyrics beside them if you have any.',

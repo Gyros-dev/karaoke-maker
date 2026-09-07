@@ -86,19 +86,6 @@
      Показывается один раз после обновления и по ссылке в подвале.
      Пункты с классом only-desktop видны только в приложении,
      only-web — только на сайте (переключает CSS по классу body). -->
-<!-- Ссылка на сцену для телефона: код, сам адрес и кнопка «Остановить».
-     Окно того же устройства, что и прочие окна ожидания. -->
-<div class="export-overlay hidden" id="sing-overlay">
-  <div class="export-box sing-box">
-    <h3 data-i18n="петь.заголовок">Петь с телефона</h3>
-    <p class="sing-hint" data-i18n="петь.подсказка">Наведи камеру телефона на код.
-      Телефон должен быть в той же сети, что и компьютер, а студия — открыта.</p>
-    <canvas id="sing-qr" width="264" height="264" aria-hidden="true"></canvas>
-    <p class="sing-url" id="sing-url"></p>
-    <button class="btn btn-ghost" id="sing-stop" data-i18n="петь.остановить">Остановить</button>
-  </div>
-</div>
-
 <!-- Ход очереди: список песен и что с каждой сейчас. Окно того же
      устройства, что и прочие окна ожидания (.export-overlay), — значит,
      и клавиши редактора под ним молчат (см. окноПоверхСтудии). -->
@@ -1935,12 +1922,6 @@
       <button class="btn btn-ghost hidden" id="btn-export-lrc-words"
         data-i18n-title="экспорт.lrcСлова.подсказка"
         title="Расширенный LRC: время каждого слова внутри строки"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.lrcСлова">.lrc со словами</span></button>
-      <!-- Петь, глядя в телефон: студия поднимает страницу в местной
-           сети и показывает ссылку кодом. Только в приложении: сайту
-           поднять сервер негде. -->
-      <button class="btn btn-ghost only-desktop" id="btn-sing-phone"
-        data-i18n-title="петь.кнопка.подсказка"
-        title="Открыть сцену на телефоне: наведи камеру на код, и текст с музыкой пойдут там"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg><span data-i18n="петь.кнопка">Петь с телефона</span></button>
       <button class="btn btn-ghost" id="btn-export-wav"
         data-i18n-title="экспорт.wav.подсказка"
         title="Минусовка с оригиналом на отрезках, размеченных в редакторе"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span data-i18n="экспорт.wav">Минусовка .wav</span></button>
