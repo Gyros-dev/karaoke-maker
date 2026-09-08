@@ -2679,17 +2679,20 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
 .stage-line.wrap { white-space: normal; overflow-wrap: anywhere; }
 .stage-line.wrap .w { white-space: pre-wrap; overflow-wrap: anywhere; }
 .stage-line.current { opacity: 1; filter: none; }
-/* Эффект «заливка» — классическое караоке */
-/* Подсветка идёт по словам: каждое слово — свой элемент со своей
-   долей закраски. Так выделение переключается на границах слов,
-   а не ползёт сквозь них с постоянной скоростью. */
+/* Эффект «заливка» — классическое караоке. Идёт ПО СЛОВАМ: каждое
+   слово — свой элемент со своей долей закраски, поэтому цвет
+   переключается на границах слов, а не ползёт сквозь них с постоянной
+   скоростью. */
 [data-effect="fill"] .stage-line.current .w {
   background: linear-gradient(90deg, var(--st-effect) var(--wfill, 0%), var(--st-active) var(--wfill, 0%));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
-[data-effect="highlight"] .stage-line.current .w.sung { color: var(--st-effect); }
+/* Правила для .w.sung при «подсветке» здесь больше нет: строка целиком
+   уже покрашена ниже тем же цветом, и слово-в-слово оно ничего не меняло,
+   зато читалось как «подсветка идёт по словам» — и кадр видео был написан
+   именно так, по словам. Расхождение вылезло у человека в готовом файле. */
 [data-effect="none"] .stage-line.current .w { color: var(--st-active); }
 .stage-line .w { white-space: pre; }
 /* Эффект «подсветка» — вся строка цветом */
@@ -3682,6 +3685,16 @@ body.is-desktop .site-header .footer-link {
   margin: 0.5rem 0; font-size: 0.88rem;
 }
 .video-row select { min-width: 200px; }
+/* Цена выбора: вес файла и время записи. Не подсказка мелким шрифтом,
+   а число в одну строку под самим выбором — его читают, а подсказки нет. */
+.video-size {
+  margin: 0.35rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.video-size b { color: var(--text); font-weight: 600; }
+.video-size.тяжело b { color: var(--orange); }
 .video-hint { margin: 0.8rem 0 0; font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
 /* Кнопка «Сохранить…» — та же машинка, что у чипа проекта: кнопка
    с уголком и меню (см. .pick-switch в шапке). Но открывается оно

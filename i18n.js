@@ -391,6 +391,9 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.подсветкаВВидео': '<b>“Highlight” in the video now matches the screen.</b> On stage it colours the whole line, but the saved file got a word-by-word fill instead: you picked one thing and got another. Both surfaces now paint the same, and a dedicated check watches over it.',
+  'новости.ценаРолика': '<b>You can see what the clip will cost.</b> The “Save video” window now shows, right under the quality, how large the file will be and how long the recording takes. On a machine with 8 GB of memory Full HD is offered by default and 2K is marked as heavy — that is exactly the machine where a 2K export ended in a black screen.',
+  'новости.журналВидео': '<b>The log knows about recording.</b> If the studio dies mid-save, the log now holds more than a bare “page died”: the quality, the format, how far the recording got and how much memory was in use.',
   'новости.отсчётВНачале': '<b>⏱ A count-in at the start — even when singing begins right away.</b> The dots used to appear only where there was a pause before a line: a song that opens with the voice got no hint at all, and you came in blind. Now the studio adds the missing time itself — a short silence before the song, so the count-in fits whole. At the start it is longer too: five dots instead of three, enough time to take a breath. All of it goes into the finished video as well.',
   'новости.отсчётПодробности': '<b>The count-in obeys its own switch.</b> “Design → Count-in before a line” turns off both the dots and the added silence at once. Seek into the middle of the song and it plays at once, with no lead-in: that is only for the very beginning.',
   'новости.спокойныйЦвет': '<b>The green does not hurt the eyes any more.</b> Buttons are filled with one calm green — the old gradient ran into an acid lime, and that was what stung. The text, the links, the waveform and the marks on the timeline took the same tone: every colour in the studio now belongs to one family.',
@@ -713,7 +716,7 @@ I18N.EN = {
   'караоке.вкл.сцена.подсказка': 'How many lines show, where they sit and how they appear',
   'караоке.вкл.звук.подсказка': 'Equaliser: you hear it in the player and it goes into the video',
   'караоке.эффект.заливка.подсказка': 'The line fills with colour left to right as it is sung',
-  'караоке.эффект.подсветка.подсказка': 'The word being sung lights up whole, with no letter-by-letter fill',
+  'караоке.эффект.подсветка.подсказка': 'The whole line lights up in the effect colour as soon as its turn comes',
   'караоке.эффект.нет.подсказка': 'No effect: the line simply brightens when its turn comes',
   'караоке.фон.какбыло.подсказка': 'Stage background as it was: your picture, or the plain dark ground',
   'караоке.фон.цветом.подсказка': 'Fill the stage with the chosen colour instead of a picture',
@@ -1439,6 +1442,15 @@ I18N.СТРОКИ = {
   },
   'экспорт.готовимШрифт': { ru: 'Готовим шрифт…', en: 'Preparing the font…' },
   'экспорт.записываем': { ru: 'Записываем видео…', en: 'Recording the video…' },
+  /* Цена выбора в окне видео. Жирным — сам вес: ради него строка и есть. */
+  'экспорт.цена': {
+    ru: 'Файл выйдет <b>до {мб} МБ</b>, запись займёт {время} — столько же, сколько длится песня.',
+    en: 'The file will be <b>up to {мб} MB</b>, and recording takes {время} — as long as the song itself.',
+  },
+  'экспорт.цена.тесно': {
+    ru: 'Файл выйдет <b>до {мб} МБ</b>, запись займёт {время}. На машине с {гб} ГБ памяти это тяжело: надёжнее Full HD.',
+    en: 'The file will be <b>up to {мб} MB</b>, and recording takes {время}. On a machine with {гб} GB of memory that is heavy — Full HD is safer.',
+  },
   'экспорт.записываемХод': { ru: 'Записываем видео… {at} / {всего}', en: 'Recording the video… {at} / {всего}' },
 
   /* ---------- Редактор ---------- */
