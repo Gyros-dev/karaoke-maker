@@ -9426,6 +9426,72 @@ function createWindow() {
         }
       })`);
 
+      /* Картинка в ролике не отстаёт от звука.
+
+         Человек написал: «при экспорте кажется, что заливка и подсветка
+         чуть-чуть отстают от того, что показано на предпросмотре и в режиме
+         караоке. Все три варианта должны быть идентичными». Так и было.
+         Замерено щелчком в звуке против метки яркости, вшитой в кадр:
+         до правки картинка отставала на 10–45 мс и тем сильнее, чем выше
+         качество (45 и 25 на 1080p, 10 на 720p); после — 20, −5, −5, 30,
+         5, −5, то есть разброс вокруг нуля вместо односторонней задержки.
+
+         Мерить это разрешением в один кадр (33 мс) на каждом прогоне
+         бессмысленно: шум замера того же порядка, что и сама беда, —
+         раздел получился бы мигающим. Поэтому стережём не итог, а саму
+         поправку: она обязана быть живой, не нулевой и не безумной.
+         Полкадра — её нижняя граница, потолок отрисовки — верхняя. */
+      report.упреждениеКадра = await win.webContents.executeJavaScript(`__раздел('упреждениеКадра', async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былТекст = document.getElementById('lyrics-input').value;
+        const былDownload = window.download;
+        try {
+          const сек = 4;
+          const c = new OfflineAudioContext(2, 48000 * сек, 48000);
+          state.originalBuffer = c.createBuffer(2, 48000 * сек, 48000);
+          state.instrumentalBuffer = state.originalBuffer;
+          state.fileName = 'проба.mp3';
+          const тексты = ['Первая строка', 'Вторая строка'];
+          document.getElementById('lyrics-input').value = тексты.join('\\n');
+          state.lines = тексты.map((t, i) => ({
+            text: t, time: 1 + i, end: 2 + i,
+            ручноеНачало: true, ручнойКонец: true, сомнительная: false,
+          }));
+          document.getElementById('video-quality').value = '720';
+          window.download = () => {};        // файл нам не нужен, только ход
+          videoExport.упреждение = null;
+          exportVideo();
+          const снято = [];
+          for (let i = 0; i < 40 && снято.length < 5; i++) {
+            await new Promise((r) => setTimeout(r, 200));
+            if (videoExport.упреждение != null) снято.push(+videoExport.упреждение.toFixed(4));
+          }
+          videoExport.cancelled = true;
+          if (videoExport.stop) videoExport.stop();
+          await new Promise((r) => setTimeout(r, 500));
+          const полкадра = 1 / 60;
+          return {
+            снято, полкадра: +полкадра.toFixed(4),
+            минимум: снято.length ? Math.min(...снято) : null,
+            максимум: снято.length ? Math.max(...снято) : null,
+            вНорме: снято.length >= 3
+              // Не выродилась в ноль: полкадра там есть всегда
+              && снято.every((у) => у >= полкадра - 1e-6)
+              // И не улетела: потолок отрисовки — две десятых
+              && снято.every((у) => у <= полкадра + 0.2 + 1e-6),
+          };
+        } finally {
+          window.download = былDownload;
+          videoExport.cancelled = false;
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          document.getElementById('lyrics-input').value = былТекст;
+        }
+      })`);
+
       report.финал = await win.webContents.executeJavaScript(`__раздел('финал', () => {
         const поставить = (строки) => {
           state.lines = строки.map((t, i) => ({ text: t, time: 1 + i * 3, end: 3 + i * 3 }));

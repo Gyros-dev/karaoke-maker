@@ -391,6 +391,7 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.картинкаВРовень': '<b>The picture in the clip now runs level with the sound.</b> The fill and the highlight in the saved file lagged slightly behind what you see in the preview and in karaoke — by a third of a frame, and more at high quality. We measured it with a click in the audio against a marker in the frame, and lined it up: all three places now show the song alike.',
   'новости.подсветкаВВидео': '<b>“Highlight” in the video now matches the screen.</b> On stage it colours the whole line, but the saved file got a word-by-word fill instead: you picked one thing and got another. Both surfaces now paint the same, and a dedicated check watches over it.',
   'новости.ценаРолика': '<b>You can see what the clip will cost.</b> The “Save video” window now shows, right under the quality, how large the file will be and how long the recording takes. On a machine with 8 GB of memory Full HD is offered by default and 2K is marked as heavy — that is exactly the machine where a 2K export ended in a black screen.',
   'новости.журналВидео': '<b>The log knows about recording.</b> If the studio dies mid-save, the log now holds more than a bare “page died”: the quality, the format, how far the recording got and how much memory was in use.',
