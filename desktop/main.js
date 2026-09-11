@@ -9526,6 +9526,7 @@ function createWindow() {
         const былТекст = document.getElementById('lyrics-input').value;
         const былОтсчёт = state.style.countdown;
         const былаСкачка = window.download;
+        const былоОкно = window.alert;
         const былРисунок = window.drawVideoFrame;
         const былоКачество = document.getElementById('video-quality').value;
         try {
@@ -9557,16 +9558,29 @@ function createWindow() {
             g.fillRect(0, 0, W, H);
           };
 
-          let файл = null;
-          window.download = (blob) => { файл = blob; };
+          /* Ролик пишется на диск (в самопроверке — во временный файл,
+             без диалога), поэтому ждём не blob, а весть о закрытии.
+             Окно «ролик записан» подменяем: нажимать его некому. */
+          let путьРолика = null;
+          window.alert = () => {};
+          window.download = (blob) => { путьРолика = blob; };   // путь сайта, сюда не придёт
+          const былоClipClose = window.desktop.clipClose;
           const началось = Date.now();
           exportVideo();
-          for (let i = 0; i < 240 && (videoExport.active || !файл); i++) {
+          for (let i = 0; i < 240 && videoExport.active; i++) {
             await new Promise((r) => setTimeout(r, 250));
           }
           const сборкаС = Math.round((Date.now() - началось) / 1000);
           window.drawVideoFrame = былРисунок;
-          if (!файл) return { файлаНет: true, вНорме: false };
+          /* Последний записанный ролик главный процесс называет сам —
+             спрашиваем его тем же мостом, которым читаем проекты. */
+          const местоРолика = await window.desktop.clipLast();
+          if (!местоРолика || !местоРолика.ok || !местоРолика.path) return { файлаНет: true, местоРолика, вНорме: false };
+          const папка = местоРолика.path.slice(0, местоРолика.path.lastIndexOf(местоРолика.sep || '/'));
+          const имяНаДиске = местоРолика.path.slice(папка.length + 1);
+          const прочли = await window.desktop.projectRead(папка, имяНаДиске);
+          if (!прочли || !прочли.ok) return { неПрочёлся: true, вНорме: false };
+          const файл = new Blob([прочли.data], { type: 'video/mp4' });
 
           // Где в готовом файле щелчок
           const ак = new AudioContext();
@@ -9598,6 +9612,7 @@ function createWindow() {
           const расхождение = Math.round((ЩЕЛЧОК - нарисовано) * 1000);
           return {
             путьСборки: await сборкаДоступна(видеоФормат(), 1280, 720),
+            наДиск: true, путь: местоРолика.path,
             размерФайла: файл.size, длинаРолика: +v.duration.toFixed(2), сборкаС,
             щелчокВПесне: ЩЕЛЧОК, щелчокВФайле: +щелчокВФайле.toFixed(3),
             картинкаПоказывает: +нарисовано.toFixed(3), расхождениеМс: расхождение,
@@ -9607,6 +9622,7 @@ function createWindow() {
         } finally {
           window.drawVideoFrame = былРисунок;
           window.download = былаСкачка;
+          window.alert = былоОкно;
           state.lines = былиСтроки;
           state.originalBuffer = былБуфер;
           state.instrumentalBuffer = былМинус;
@@ -11672,6 +11688,88 @@ ipcMain.handle('auto-update-install', () => {
   // Закрываем приложение и ставим скачанное обновление
   setImmediate(() => updater.quitAndInstall(false, true));
   return true;
+});
+
+/* ---------- Запись ролика прямо на диск ----------
+
+   Ролик собирается кусками, и держать его целиком в памяти незачем:
+   именно на этом получался чёрный экран. Двухсотмегабайтный файл на
+   машине с восемью гигабайтами — это не «много», но вместе с разжатой
+   песней, минусовкой и моделью набирается достаточно, чтобы система
+   прибила страницу (в журнале оставалось «страница погибла»).
+
+   Поэтому здесь три простые вещи: спросить у человека место и открыть
+   файл, дописать кусок, закрыть. Кусок приходит со СВОИМ местом в файле:
+   сборщик контейнера в самом конце возвращается назад и правит длину —
+   поэтому пишем позиционно, а не «в хвост».
+
+   Открытый файл ровно один: второй сборки одновременно не бывает
+   (videoExport.active это стережёт), а держать список — значит завести
+   ещё и вопрос, кто его закроет, если страница погибнет. */
+let роликФайл = null;
+
+function закрытьРолик(удалять) {
+  if (!роликФайл) return;
+  try { fs.closeSync(роликФайл.fd); } catch (e) { /* уже закрыт */ }
+  if (удалять) { try { fs.unlinkSync(роликФайл.путь); } catch (e) { /* нечего убирать */ } }
+  роликФайл = null;
+}
+
+ipcMain.handle('clip-open', async (_evt, имя) => {
+  закрытьРолик(true);
+  /* В самопроверке диалога быть не может — он бы просто повис, некому
+     нажать. Пишем во временный файл: так раздел проходит ВЕСЬ путь,
+     до настоящего диска, а не только до памяти. Тем же ключом можно
+     назначить место руками, когда гоняешь экспорт щупом. */
+  const тихое = process.env.KARAOKE_CLIP_PATH
+    || (process.env.KARAOKE_SELFTEST
+      ? path.join(app.getPath('temp'), 'karaoke-проба-' + Date.now() + path.extname(имя || '.mp4'))
+      : null);
+  const { canceled, filePath } = тихое
+    ? { canceled: false, filePath: тихое }
+    : await сОкном(() => dialog.showSaveDialog(win, { defaultPath: имя }));
+  if (canceled || !filePath) return { ok: false };
+  try {
+    роликФайл = { fd: fs.openSync(filePath, 'w'), путь: filePath, байт: 0 };
+    return { ok: true, path: filePath };
+  } catch (e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+});
+
+ipcMain.handle('clip-write', (_evt, { data, position }) => {
+  if (!роликФайл) return { ok: false, error: 'файл не открыт' };
+  try {
+    const буфер = Buffer.from(data);
+    fs.writeSync(роликФайл.fd, буфер, 0, буфер.length, position);
+    роликФайл.байт = Math.max(роликФайл.байт, position + буфер.length);
+    return { ok: true };
+  } catch (e) {
+    закрытьРолик(true);
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+});
+
+/* Закрытие с отменой убирает недописанный файл: огрызок ролика хуже,
+   чем его отсутствие — его можно принять за готовый. */
+let последнийРолик = null;
+
+/* Куда лёг последний собранный ролик. Нужно самопроверке: диалога там
+   нет, путь выбирает главный процесс, и раздел должен его узнать,
+   чтобы прочитать файл и померить, сошлись ли картинка со звуком. */
+ipcMain.handle('clip-last', () => (последнийРолик
+  ? { ok: true, path: последнийРолик, sep: path.sep }
+  : { ok: false }));
+
+ipcMain.handle('clip-close', (_evt, отменено) => {
+  const путь = роликФайл && роликФайл.путь;
+  const байт = роликФайл ? роликФайл.байт : 0;
+  закрытьРолик(!!отменено);
+  if (путь && !отменено) {
+    последнийРолик = путь;
+    записатьВЖурнал('видео', `ролик записан: ${путь} (${Math.round(байт / 1048576)} МБ)`);
+  }
+  return { ok: true, path: отменено ? null : путь, байт };
 });
 
 ipcMain.handle('save-file', async (_evt, { name, data }) => {

@@ -49,6 +49,13 @@ contextBridge.exposeInMainWorld('desktop', {
      из страницы нечем и не нужно — файлы живут в главном процессе. */
   /* Сколько памяти у машины: по этому числу окно видео решает,
      предлагать ли 2K (см. «Сколько будет весить ролик» в app.js). */
+  /* Ролик пишется прямо на диск, кусками: открыть, дописывать, закрыть.
+     Кусок идёт со своим местом в файле — сборщик контейнера в конце
+     возвращается назад и правит длину. */
+  clipOpen: (имя) => ipcRenderer.invoke('clip-open', имя),
+  clipWrite: (data, position) => ipcRenderer.invoke('clip-write', { data, position }),
+  clipClose: (отменено) => ipcRenderer.invoke('clip-close', !!отменено),
+  clipLast: () => ipcRenderer.invoke('clip-last'),
   machineInfo: () => ipcRenderer.invoke('machine-info'),
   /* Идёт ли запись видео и с какими настройками. Главный процесс держит
      это у себя, чтобы вписать в журнал, если страница погибнет посреди

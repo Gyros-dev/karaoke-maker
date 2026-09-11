@@ -391,6 +391,7 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.роликНаДиск': '<b>The clip is written straight to disk.</b> It used to be assembled whole in memory, and on a machine with 8 GB the studio could end in a black screen near the end of saving. Now the finished pieces go into the file as they are made: memory no longer grows along with the clip. That is also why the studio asks where to put the file up front, before building — and simply tells you where it went when it is done.',
   'новости.роликСобирается': '<b>🎬 The clip is now built, not recorded.</b> The studio used to record it in real time and depended on the machine keeping up: on a busy one the highlight in the finished file fell almost half a second behind the music. Now the frames are computed one by one and the studio stamps the time on each one itself — the picture cannot drift away from the sound, however busy the machine is. It is faster, too: a three-minute song is built in about a minute instead of three.',
   'новости.картинкаВРовень': '<b>The picture in the clip now runs level with the sound.</b> The fill and the highlight in the saved file lagged slightly behind what you see in the preview and in karaoke — by a third of a frame, and more at high quality. We measured it with a click in the audio against a marker in the frame, and lined it up: all three places now show the song alike. <i>(The same was already in 1.30.2 — 1.30.3 only changed the explanations inside.)</i>',
   'новости.подсветкаВВидео': '<b>“Highlight” in the video now matches the screen.</b> On stage it colours the whole line, but the saved file got a word-by-word fill instead: you picked one thing and got another. Both surfaces now paint the same, and a dedicated check watches over it.',
@@ -1448,6 +1449,10 @@ I18N.СТРОКИ = {
   /* Сборка ролика. Полоса хода здесь говорит не «сколько песни прошло»,
      а «сколько работы сделано»: сборка не привязана к длине песни
      и на быстрой машине идёт быстрее реального времени. */
+  'экспорт.роликЗаписан': {
+    ru: 'Ролик записан:\n{путь}',
+    en: 'The clip has been written to:\n{путь}',
+  },
   'экспорт.сборкаЗвука': { ru: 'Сводим звук…', en: 'Mixing the sound…' },
   'экспорт.сборкаХод': {
     ru: 'Собираем ролик… {процент}%, осталось примерно {осталось}',
