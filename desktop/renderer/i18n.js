@@ -391,6 +391,7 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
+  'новости.роликСобирается': '<b>🎬 The clip is now built, not recorded.</b> The studio used to record it in real time and depended on the machine keeping up: on a busy one the highlight in the finished file fell almost half a second behind the music. Now the frames are computed one by one and the studio stamps the time on each one itself — the picture cannot drift away from the sound, however busy the machine is. It is faster, too: a three-minute song is built in about a minute instead of three.',
   'новости.картинкаВРовень': '<b>The picture in the clip now runs level with the sound.</b> The fill and the highlight in the saved file lagged slightly behind what you see in the preview and in karaoke — by a third of a frame, and more at high quality. We measured it with a click in the audio against a marker in the frame, and lined it up: all three places now show the song alike. <i>(The same was already in 1.30.2 — 1.30.3 only changed the explanations inside.)</i>',
   'новости.подсветкаВВидео': '<b>“Highlight” in the video now matches the screen.</b> On stage it colours the whole line, but the saved file got a word-by-word fill instead: you picked one thing and got another. Both surfaces now paint the same, and a dedicated check watches over it.',
   'новости.ценаРолика': '<b>You can see what the clip will cost.</b> The “Save video” window now shows, right under the quality, how large the file will be and how long the recording takes. On a machine with 8 GB of memory Full HD is offered by default and 2K is marked as heavy — that is exactly the machine where a 2K export ended in a black screen.',
@@ -1444,6 +1445,18 @@ I18N.СТРОКИ = {
   'экспорт.готовимШрифт': { ru: 'Готовим шрифт…', en: 'Preparing the font…' },
   'экспорт.записываем': { ru: 'Записываем видео…', en: 'Recording the video…' },
   /* Цена выбора в окне видео. Жирным — сам вес: ради него строка и есть. */
+  /* Сборка ролика. Полоса хода здесь говорит не «сколько песни прошло»,
+     а «сколько работы сделано»: сборка не привязана к длине песни
+     и на быстрой машине идёт быстрее реального времени. */
+  'экспорт.сборкаЗвука': { ru: 'Сводим звук…', en: 'Mixing the sound…' },
+  'экспорт.сборкаХод': {
+    ru: 'Собираем ролик… {процент}%, осталось примерно {осталось}',
+    en: 'Building the clip… {процент}%, about {осталось} left',
+  },
+  'экспорт.сборкаНеВышла': {
+    ru: 'Не получилось собрать ролик: {беда}\n\nПопробуй качество пониже или другой формат.',
+    en: 'Could not build the clip: {беда}\n\nTry a lower quality or a different format.',
+  },
   'экспорт.цена': {
     ru: 'Файл выйдет <b>до {мб} МБ</b>, запись займёт {время} — столько же, сколько длится песня.',
     en: 'The file will be <b>up to {мб} MB</b>, and recording takes {время} — as long as the song itself.',

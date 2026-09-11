@@ -80,6 +80,23 @@ onnxruntime-web 1.27.0 — MIT — [18]
   чем у разделения вокала (см. desktop/setup-transformers.js). Лицензия
   та же, MIT, [18].
 
+mp4-muxer 5.2.2 — MIT — [23]
+  https://github.com/Vanilagy/mp4-muxer
+  Складывает уже сжатые кадры H.264 и звук AAC в файл MP4. Нужна
+  при сохранении видео: студия сама кодирует кадры и сама собирает
+  из них файл, не полагаясь на запись в реальном времени. Едет файлом
+  mp4-muxer.js (и его копией в renderer/). ЧТО ИЗМЕНЕНО: ничего, кроме
+  добавленной шапки-комментария. Автор объявил библиотеку устаревшей
+  в пользу своей новой (Mediabunny); мы остаёмся на этой сознательно —
+  она делает одно законченное дело, формат контейнера не меняется,
+  а новая идёт под MPL-2.0 и только модулями.
+
+webm-muxer 5.1.4 — MIT — [24]
+  https://github.com/Vanilagy/webm-muxer
+  То же самое для WebM: складывает кадры VP9 и звук Opus. Нужна там,
+  где выбран формат WebM. Едет файлом webm-muxer.js. ЧТО ИЗМЕНЕНО:
+  ничего, кроме шапки. Про «устарела» — то же, что и выше.
+
 pitchy 4.1.0 — MIT — [21]
   https://github.com/ianprime0509/pitchy
   Определение высоты звука методом Маклауда. Ею считается тональность
@@ -1767,6 +1784,55 @@ SOFTWARE.
 --------------------------------------------------------------------------------
 
 Copyright (c) 2017 Fedor Indutny
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+[23] mp4-muxer — MIT
+
+MIT License
+
+Copyright (c) 2023 Vanilagy
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+[24] webm-muxer — MIT
+
+MIT License
+
+Copyright (c) 2022 Vanilagy
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

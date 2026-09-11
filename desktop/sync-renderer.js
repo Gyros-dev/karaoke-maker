@@ -350,7 +350,8 @@ try {
                          редактор падает на первой же строке.
      Без любого из них приложение молча падало бы: тональность — на
      попытке создать Worker, темп — на попытке подтянуть fft.js. */
-  for (const имя of ['pitch-worker.js', 'tempo.js', 'fft.js', 'timing.js']) {
+  for (const имя of ['pitch-worker.js', 'tempo.js', 'fft.js', 'timing.js',
+    'mp4-muxer.js', 'webm-muxer.js']) {
     const исходник = path.join(WEB, имя);
     if (!fs.existsSync(исходник)) throw new Error(`нет ${имя} в веб-версии`);
     fs.copyFileSync(исходник, path.join(OUT, имя));

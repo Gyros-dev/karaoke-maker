@@ -9440,14 +9440,24 @@ function createWindow() {
          бессмысленно: шум замера того же порядка, что и сама беда, —
          раздел получился бы мигающим. Поэтому стережём не итог, а саму
          поправку: она обязана быть живой, не нулевой и не безумной.
-         Полкадра — её нижняя граница, потолок отрисовки — верхняя. */
+         Полкадра — её нижняя граница, потолок отрисовки — верхняя.
+
+         С тех пор запись в реальном времени стала ЗАПАСНЫМ путём:
+         обычно студия собирает ролик сама, и там метки точные
+         по построению (раздел роликВРовень). Но запасной путь никуда
+         не делся — им идут старые браузеры на сайте, — и поправка в нём
+         по-прежнему должна работать. Поэтому раздел нарочно уводит
+         экспорт на запасной путь: иначе он мерил бы то, чего там нет. */
       report.упреждениеКадра = await win.webContents.executeJavaScript(`__раздел('упреждениеКадра', async () => {
         const былиСтроки = state.lines;
         const былБуфер = state.originalBuffer;
         const былМинус = state.instrumentalBuffer;
         const былТекст = document.getElementById('lyrics-input').value;
         const былDownload = window.download;
+        const былаСборка = window.сборкаДоступна;
         try {
+          // Запасной путь — тот, где поправка и живёт
+          window.сборкаДоступна = async () => false;
           const сек = 4;
           const c = new OfflineAudioContext(2, 48000 * сек, 48000);
           state.originalBuffer = c.createBuffer(2, 48000 * сек, 48000);
@@ -9483,12 +9493,127 @@ function createWindow() {
               && снято.every((у) => у <= полкадра + 0.2 + 1e-6),
           };
         } finally {
+          window.сборкаДоступна = былаСборка;
           window.download = былDownload;
           videoExport.cancelled = false;
           state.lines = былиСтроки;
           state.originalBuffer = былБуфер;
           state.instrumentalBuffer = былМинус;
           document.getElementById('lyrics-input').value = былТекст;
+        }
+      })`);
+
+      /* Картинка в готовом ролике идёт вровень со звуком.
+
+         Человек прислал свой ролик: «в экспортированном видео закраска
+         отстаёт». Померили на его файле — картинка отставала от звука
+         на 270–410 мс. Причина была в самом способе: запись шла
+         в реальном времени, и между «мы отдали кадр» и «кадру поставили
+         метку» лежал чужой конвейер, который на медленной машине копил
+         задержку. Теперь ролик собирается (см. «Ролик СОБИРАЕТСЯ»
+         в app.js): метку каждому кадру ставим мы сами.
+
+         Раздел меряет ИТОГ, а не намерение. В звук кладётся щелчок
+         на известной секунде, а в кадр — ровное поле, яркость которого
+         кодирует то время, для которого кадр нарисован. Потом в готовом
+         файле ищется щелчок и читается кадр на той же метке: сколько
+         песни показывает картинка в то мгновение, когда звучит щелчок.
+         Расхождение больше двух кадров — это уже беда. */
+      report.роликВРовень = await win.webContents.executeJavaScript(`__раздел('роликВРовень', async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былТекст = document.getElementById('lyrics-input').value;
+        const былОтсчёт = state.style.countdown;
+        const былаСкачка = window.download;
+        const былРисунок = window.drawVideoFrame;
+        const былоКачество = document.getElementById('video-quality').value;
+        try {
+          const ЧД = 48000, ЩЕЛЧОК = 3.0, СЕК = 6;
+          const c = new OfflineAudioContext(2, ЧД * СЕК, ЧД);
+          const буф = c.createBuffer(2, ЧД * СЕК, ЧД);
+          for (const ch of [0, 1]) {
+            const д = буф.getChannelData(ch);
+            for (let i = 0; i < ЧД * 0.005; i++) д[Math.round(ЧД * ЩЕЛЧОК) + i] = i % 2 ? 1 : -1;
+          }
+          state.originalBuffer = буф;
+          state.instrumentalBuffer = буф;
+          state.fileName = 'проба.mp3';
+          const тексты = ['Первая строка', 'Вторая строка'];
+          document.getElementById('lyrics-input').value = тексты.join('\\n');
+          state.lines = тексты.map((t, i) => ({
+            text: t, time: 1 + i * 2.5, end: 3 + i * 2.5,
+            ручноеНачало: true, ручнойКонец: true, сомнительная: false,
+          }));
+          state.style.countdown = false;   // без подводки: ноль песни — это ноль ролика
+          state.vocalMix = 100;
+          document.getElementById('video-quality').value = '720';
+
+          /* Вместо сцены — ровное поле: яркость кодирует время кадра
+             с шагом 5 мс. Ровное поле кодек передаёт почти без потерь. */
+          window.drawVideoFrame = (g, W, H, фон, время) => {
+            const я = 16 + Math.round((время - Math.floor(время)) * 200);
+            g.fillStyle = 'rgb(' + я + ',' + я + ',' + я + ')';
+            g.fillRect(0, 0, W, H);
+          };
+
+          let файл = null;
+          window.download = (blob) => { файл = blob; };
+          const началось = Date.now();
+          exportVideo();
+          for (let i = 0; i < 240 && (videoExport.active || !файл); i++) {
+            await new Promise((r) => setTimeout(r, 250));
+          }
+          const сборкаС = Math.round((Date.now() - началось) / 1000);
+          window.drawVideoFrame = былРисунок;
+          if (!файл) return { файлаНет: true, вНорме: false };
+
+          // Где в готовом файле щелчок
+          const ак = new AudioContext();
+          const зв = await ак.decodeAudioData(await файл.arrayBuffer());
+          const д = зв.getChannelData(0);
+          let макс = 0, где = 0;
+          for (let i = 0; i < д.length; i++) { const a = Math.abs(д[i]); if (a > макс) { макс = a; где = i; } }
+          const щелчокВФайле = где / зв.sampleRate;
+          await ак.close();
+
+          // Что показывает картинка в то же мгновение
+          const v = document.createElement('video');
+          v.src = URL.createObjectURL(файл);
+          v.muted = true;
+          await new Promise((r) => { v.onloadedmetadata = r; setTimeout(r, 8000); });
+          const х = document.createElement('canvas');
+          х.width = 16; х.height = 16;
+          const g = х.getContext('2d', { willReadFrequently: true });
+          v.currentTime = щелчокВФайле;
+          await new Promise((r) => { v.onseeked = r; setTimeout(r, 5000); });
+          g.drawImage(v, 0, 0, 16, 16);
+          const п = g.getImageData(8, 8, 1, 1).data;
+          const я = Math.round((п[0] + п[1] + п[2]) / 3);
+          let нарисовано = Math.floor(v.currentTime) + (я - 16) / 200;
+          if (нарисовано - v.currentTime > 0.5) нарисовано -= 1;
+          if (v.currentTime - нарисовано > 0.5) нарисовано += 1;
+          URL.revokeObjectURL(v.src);
+
+          const расхождение = Math.round((ЩЕЛЧОК - нарисовано) * 1000);
+          return {
+            путьСборки: await сборкаДоступна(видеоФормат(), 1280, 720),
+            размерФайла: файл.size, длинаРолика: +v.duration.toFixed(2), сборкаС,
+            щелчокВПесне: ЩЕЛЧОК, щелчокВФайле: +щелчокВФайле.toFixed(3),
+            картинкаПоказывает: +нарисовано.toFixed(3), расхождениеМс: расхождение,
+            // Два кадра при тридцати в секунду — это 67 мс; берём с запасом
+            вНорме: файл.size > 10000 && Math.abs(расхождение) <= 80,
+          };
+        } finally {
+          window.drawVideoFrame = былРисунок;
+          window.download = былаСкачка;
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          state.style.countdown = былОтсчёт;
+          document.getElementById('lyrics-input').value = былТекст;
+          document.getElementById('video-quality').value = былоКачество;
+          player.stageKey = null;
         }
       })`);
 
