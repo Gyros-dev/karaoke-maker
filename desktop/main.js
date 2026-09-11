@@ -9374,7 +9374,9 @@ function createWindow() {
           await new Promise((r) => setTimeout(r, 250));
           const строка = document.getElementById('video-size');
           const видно = строка ? строка.textContent.trim() : '';
-          const мбВСтроке = (видно.match(/(\\d+)/) || [])[1];
+          /* Берём именно мегабайты: в строке теперь первым стоит время
+             («Ролик выйдет длиной 0:40…»), и первое число — не вес. */
+          const мбВСтроке = (видно.match(/(\\d+)\\s*МБ/) || [])[1];
           показатьОкноВидео(false);
 
           const машина = window.desktop && window.desktop.machineInfo
@@ -9410,6 +9412,11 @@ function createWindow() {
               && длина >= сек
               // Число дошло до человека
               && !!мбВСтроке && +мбВСтроке === веса[Number(document.getElementById('video-quality').value) || 1080]
+              /* И строка не обещает записи в реальном времени: сборка
+                 втрое быстрее песни с 1.31.0, а текст остался старым
+                 и врал — «запись займёт 2:36, столько же, сколько
+                 длится песня» при сборке за десять секунд. */
+              && !/в реальном времени|столько же/.test(видно)
               // Машина отвечает разумным числом гигабайт
               && !!машина && машина.памятьГБ >= 1 && машина.памятьГБ <= 1024
               // На тесной машине 2K помечено и сказано про память
@@ -9630,97 +9637,6 @@ function createWindow() {
           document.getElementById('lyrics-input').value = былТекст;
           document.getElementById('video-quality').value = былоКачество;
           player.stageKey = null;
-        }
-      })`);
-
-      /* Пипетка берёт цвет со сцены.
-
-         Человек написал: «в режиме караоке выбор цвета пипеткой нигде
-         не работает — пипетка вызывается, но всегда показывает чёрный
-         цвет». Это пипетка СИСТЕМНОГО окна выбора цвета: на macOS её
-         увеличительное стекло снимает экран, а без права «Запись экрана»
-         снимок выходит чёрным. Просить такое право у караоке-программы
-         незачем, поэтому пипетка теперь своя и берёт цвет не с экрана,
-         а из кадра — того самого, что уйдёт в видео.
-
-         Раздел кладёт на фон две половины, красную и синюю, и тычет
-         пипеткой в каждую: взятый цвет обязан совпасть с тем, куда
-         ткнули, и доехать до оформления. Заодно проверяется, что режим
-         включается, и что Esc его отменяет. */
-      report.пипетка = await win.webContents.executeJavaScript(`__раздел('пипетка', async () => {
-        const былиСтроки = state.lines;
-        const былБуфер = state.originalBuffer;
-        const былМинус = state.instrumentalBuffer;
-        const былТекст = document.getElementById('lyrics-input').value;
-        const былФон = state.bgImage;
-        const былСтиль = JSON.stringify(state.style);
-        const былоВремя = audio.position;
-        try {
-          const c = new OfflineAudioContext(2, 48000 * 30, 48000);
-          state.originalBuffer = c.createBuffer(2, 48000 * 30, 48000);
-          state.instrumentalBuffer = state.originalBuffer;
-          state.lines = [{ text: 'Проверка пипетки', time: 1, end: 6, ручноеНачало: true, ручнойКонец: true }];
-          document.getElementById('lyrics-input').value = 'Проверка пипетки';
-          const хф = document.createElement('canvas');
-          хф.width = 320; хф.height = 180;
-          const гф = хф.getContext('2d');
-          гф.fillStyle = '#cc2222'; гф.fillRect(0, 0, 160, 180);
-          гф.fillStyle = '#2244cc'; гф.fillRect(160, 0, 160, 180);
-          setBgImage(хф.toDataURL('image/png'));
-          state.style.scrim = 0;      // подложка закрыла бы фон
-          state.style.outline = 0;
-          applyStyle();
-          goToStep(4);
-          audio.position = () => 0.2; // до первой строки: текста в кадре нет
-          player.stageKey = null;
-          renderStage();
-          updateStageFill();
-          await new Promise((r) => setTimeout(r, 500));
-
-          const вход = document.getElementById('st-col-active');
-          const кнопка = document.querySelector('.pipette[data-цвет="st-col-active"]');
-          if (!кнопка) return { кнопкиНет: true, вНорме: false };
-          const сцена = document.getElementById('lyrics-stage');
-          const к = сцена.getBoundingClientRect();
-          const ткнуть = async (доля) => {
-            кнопка.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-            const ждёт = document.body.classList.contains('берём-цвет');
-            сцена.dispatchEvent(new MouseEvent('click', {
-              bubbles: true, clientX: к.left + к.width * доля, clientY: к.top + к.height * 0.5,
-            }));
-            await new Promise((r) => setTimeout(r, 200));
-            return { ждёт, цвет: вход.value };
-          };
-          const слева = await ткнуть(0.2);
-          const справа = await ткнуть(0.8);
-          const вОформлении = state.style.active;
-
-          кнопка.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-          const ждётДоEsc = document.body.classList.contains('берём-цвет');
-          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-          const отменилось = !document.body.classList.contains('берём-цвет');
-
-          const близко = (a, b) => {
-            const ч = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
-            const x = ч(a), y = ч(b);
-            return Math.abs(x[0] - y[0]) < 26 && Math.abs(x[1] - y[1]) < 26 && Math.abs(x[2] - y[2]) < 26;
-          };
-          return {
-            слева, справа, вОформлении, ждётДоEsc, отменилось,
-            вНорме: слева.ждёт && справа.ждёт && ждётДоEsc && отменилось
-              && близко(слева.цвет, '#cc2222') && близко(справа.цвет, '#2244cc')
-              && вОформлении === справа.цвет,
-          };
-        } finally {
-          audio.position = былоВремя;
-          setBgImage(былФон);
-          Object.assign(state.style, JSON.parse(былСтиль));
-          state.lines = былиСтроки;
-          state.originalBuffer = былБуфер;
-          state.instrumentalBuffer = былМинус;
-          document.getElementById('lyrics-input').value = былТекст;
-          player.stageKey = null;
-          applyStyle();
         }
       })`);
 
@@ -10467,6 +10383,140 @@ function createWindow() {
         };
       })`);
 
+      /* Кнопки в «Параметрах» не прыгают местами.
+
+         Было так: у строки размечены слова — кнопок семь; правкой текста
+         метки сбросились — «сбросить слова» исчезала, и весь ряд съезжал
+         на одно место. «Удалить» вставала ровно туда, где секунду назад
+         был «оригинал»: рука уже летит — и строки нет. Теперь кнопка
+         гаснет, но остаётся на месте. Сверяем именно положение
+         на экране, а не число кнопок. */
+      report.кнопкиНеПрыгают = await win.webContents.executeJavaScript(`__раздел('кнопкиНеПрыгают', async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былТекст = document.getElementById('lyrics-input').value;
+        try {
+          const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+          state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+          state.instrumentalBuffer = state.originalBuffer;
+          const тексты = ['Первая строка песни', 'Вторая строка песни'];
+          document.getElementById('lyrics-input').value = тексты.join('\\n');
+          state.lines = тексты.map((text, i) => ({
+            text, time: 5 + i * 6, end: 9 + i * 6,
+            ручнойКонец: true, ручноеНачало: true, сомнительная: false,
+          }));
+          state.lines[0].words = [
+            { text: 'Первая', time: 5, end: 6.3, ручнойКонец: true },
+            { text: 'строка', time: 6.3, end: 7.6, ручнойКонец: true },
+            { text: 'песни', time: 7.6, end: 9, ручнойКонец: true },
+          ];
+          goToStep(3);
+          renderEditList();
+          selectLine(0, {});
+          await new Promise((r) => setTimeout(r, 150));
+          const место = (id) => {
+            const к = document.getElementById(id);
+            const r = к.getBoundingClientRect();
+            return Math.round(r.left) + ':' + Math.round(r.top);
+          };
+          const сМетками = {
+            удалить: место('btn-sel-del'),
+            оригинал: место('btn-sel-orig'),
+            сброс: { виден: !document.getElementById('btn-sel-words-reset').classList.contains('hidden'),
+              гаснет: document.getElementById('btn-sel-words-reset').disabled },
+          };
+
+          // Метки слов пропали (так их сбрасывает правка текста строки)
+          delete state.lines[0].words;
+          updateSelInfo();
+          await new Promise((r) => setTimeout(r, 150));
+          const безМеток = {
+            удалить: место('btn-sel-del'),
+            оригинал: место('btn-sel-orig'),
+            сброс: { виден: !document.getElementById('btn-sel-words-reset').classList.contains('hidden'),
+              гаснет: document.getElementById('btn-sel-words-reset').disabled },
+          };
+
+          return {
+            сМетками, безМеток,
+            вНорме: сМетками.удалить === безМеток.удалить
+              && сМетками.оригинал === безМеток.оригинал
+              // кнопка на месте в обоих случаях, а без меток — приглушена
+              && сМетками.сброс.виден && безМеток.сброс.виден
+              && !сМетками.сброс.гаснет && безМеток.сброс.гаснет,
+          };
+        } finally {
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          document.getElementById('lyrics-input').value = былТекст;
+          editor.sel = -1;
+          renderEditList();
+          updateSelInfo();
+        }
+      })`);
+
+      /* Верхний ряд не налезает сам на себя в узком окне.
+
+         Было так: чип работы со значками и ссылка на руководство стояли
+         поверх ряда (position: absolute), а шаги — посередине. Стоило
+         сузить окно, и они сходились в одном месте: при 860 точках
+         значок «выгрузить разметку» оказывался внутри плашки «1 Песня»,
+         при 640 значки, стрелки и плашки лежали друг поверх друга.
+         Теперь ряд — сетка в три столбца, и налезть им негде.
+
+         Меряем в самом узком окне, какое приложение вообще разрешает
+         (minWidth), и сразу возвращаем размер: соседние разделы меряют
+         раскладку и от чужого размера покраснели бы. */
+      {
+        const былРазмер = win.getSize();
+        win.setSize(900, 700);
+        await new Promise((r) => setTimeout(r, 500));
+        report.верхнийРяд = await win.webContents.executeJavaScript(`__раздел('верхнийРяд', async () => {
+          /* Показываем чип работы: без открытого проекта его нет,
+             а он — самая широкая часть левого столбца. */
+          const свитч = document.getElementById('proj-switch');
+          const былСкрыт = свитч.classList.contains('hidden');
+          const былоИмя = document.getElementById('proj-name').textContent;
+          try {
+            свитч.classList.remove('hidden');
+            document.getElementById('proj-name').textContent = 'Песня с длинным именем';
+            await new Promise((r) => setTimeout(r, 150));
+            const ряд = document.querySelector('.steps-nav');
+            const дети = [...ряд.querySelectorAll('.step-tab, .steps-tool, .proj-chip, .steps-help')]
+              .filter((э) => э.offsetParent !== null);
+            const коробки = дети.map((э) => ({
+              имя: э.id || э.textContent.trim().slice(0, 10) || '?',
+              r: э.getBoundingClientRect(),
+            }));
+            const пары = [];
+            for (let i = 0; i < коробки.length; i++) {
+              for (let j = i + 1; j < коробки.length; j++) {
+                const a = коробки[i].r;
+                const b = коробки[j].r;
+                if (a.left < b.right - 1 && b.left < a.right - 1
+                  && a.top < b.bottom - 1 && b.top < a.bottom - 1) {
+                  пары.push(коробки[i].имя + ' × ' + коробки[j].имя);
+                }
+              }
+            }
+            // И ничего не торчит за край окна
+            const заКраем = коробки.filter((к) => к.r.left < -1 || к.r.right > innerWidth + 1);
+            return {
+              ширина: innerWidth, видно: коробки.length,
+              пары: пары.slice(0, 5), заКраем: заКраем.map((к) => к.имя),
+              вНорме: коробки.length >= 6 && !пары.length && !заКраем.length,
+            };
+          } finally {
+            if (былСкрыт) свитч.classList.add('hidden');
+            document.getElementById('proj-name').textContent = былоИмя;
+          }
+        })`);
+        win.setSize(былРазмер[0], былРазмер[1]);
+        await new Promise((r) => setTimeout(r, 400));
+      }
+
       /* Цвета дуэта выбирает человек, а не код.
 
          Цвета партий стояли числами в двух местах разом — в app.js
@@ -10496,11 +10546,18 @@ function createWindow() {
         applyStyle();
         const было = корень();
 
-        // Человек выбирает цвет пипеткой
-        const поле = document.getElementById('st-col-part1');
+        /* Человек выбирает цвет так, как он это делает руками: щёлкает
+           по образцу и вписывает код в своём окошке выбора. Системного
+           окна у нас больше нет, см. «Свой выбор цвета» в app.js. */
+        document.getElementById('st-col-part1').click();
+        await new Promise((r) => setTimeout(r, 80));
+        const окошкоВидно = !document.getElementById('color-pop').classList.contains('hidden');
+        const поле = document.getElementById('cp-hex');
         поле.value = '#00ff88';
         поле.dispatchEvent(new Event('input'));
         await new Promise((r) => setTimeout(r, 120));
+        document.getElementById('cp-done').click();
+        await new Promise((r) => setTimeout(r, 60));
 
         const стало = корень();
         const ряд = document.querySelector('#edit-list .edit-row.part-1');
@@ -10516,11 +10573,11 @@ function createWindow() {
 
         return {
           было, стало, полоска, вКадре, вПроекте: проект.style.part1, изПроекта,
-          послеСброса, вПолях: {
+          окошкоВидно, послеСброса, вПолях: {
             есть: !!document.getElementById('st-col-part2')
               && !!document.getElementById('st-col-part-both'),
           },
-          вНорме: было === '#38bdf8' && стало === '#00ff88'
+          вНорме: было === '#38bdf8' && стало === '#00ff88' && окошкоВидно
             // цвет дошёл до списка строк, до кадра видео и до проекта
             && polоска(полоска) && вКадре === '#00ff88'
             && проект.style.part1 === '#00ff88' && изПроекта === '#00ff88'
@@ -10529,6 +10586,98 @@ function createWindow() {
             && !!document.getElementById('st-col-part2'),
         };
         function polоска(v) { return String(v).replace(/\\s/g, '') === 'rgb(0,255,136)'; }
+      })`);
+
+      /* Своё окошко выбора цвета.
+
+         Беда, ради которой оно сделано: системное окно (<input type="color">)
+         на macOS — общая панель «Цвета». Проверяющий открыл её дважды,
+         а дальше ни один образец больше не отвечал на щелчки: панель
+         уже открыта, живёт позади студии, и вернуть её нечем — помогал
+         только перезапуск. Вписать цвет числом в неё тоже нельзя,
+         а самопроверке её не видно совсем.
+
+         Проверяем то, чего от системного окна было не добиться: окошко
+         открывается по щелчку и закрывается вторым, готовый цвет и код
+         числом доходят до оформления, ползунки дают тот же цвет, что
+         показывает код, а Esc возвращает цвет, каким он был до правки. */
+      report.выборЦвета = await win.webContents.executeJavaScript(`__раздел('выборЦвета', async () => {
+        const пауза = (м) => new Promise((r) => setTimeout(r, м));
+        const окошко = document.getElementById('color-pop');
+        const образец = document.getElementById('st-col-effect');
+        const видно = () => !окошко.classList.contains('hidden');
+        state.style.accent = '#f97316';
+        applyStyle();
+        const до = state.style.accent;
+
+        образец.click();
+        await пауза(80);
+        const открылось = видно();
+        const наЭкране = (() => {
+          const r = окошко.getBoundingClientRect();
+          return r.width > 150 && r.left >= 0 && r.top >= 0
+            && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1;
+        })();
+
+        // Готовый цвет из палитры
+        const готовый = document.querySelector('#cp-ready button[data-цвет="#38bdf8"]');
+        if (готовый) готовый.click();
+        await пауза(80);
+        const послеПалитры = {
+          стиль: state.style.accent,
+          образец: document.getElementById('st-col-effect').dataset.цвет,
+          вКоде: document.getElementById('cp-hex').value,
+        };
+
+        // Цвет числом
+        const код = document.getElementById('cp-hex');
+        код.value = '#00ff88';
+        код.dispatchEvent(new Event('input'));
+        await пауза(80);
+        const послеКода = { стиль: state.style.accent, ползунки: [
+          document.getElementById('cp-h').value,
+          document.getElementById('cp-s').value,
+          document.getElementById('cp-v').value,
+        ].join('/') };
+
+        // Ползунок тона: цвет меняется, а код показывает то же, что стиль
+        const тон = document.getElementById('cp-h');
+        тон.value = '0';
+        тон.dispatchEvent(new Event('input'));
+        await пауза(80);
+        const послеПолзунка = {
+          стиль: state.style.accent,
+          вКоде: document.getElementById('cp-hex').value,
+        };
+
+        // Esc — отказ: цвет возвращается таким, каким был до открытия
+        окошко.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await пауза(100);
+        const послеОтказа = { стиль: state.style.accent, видно: видно() };
+
+        // Щелчок по тому же образцу открывает и закрывает
+        образец.click();
+        await пауза(60);
+        const сноваОткрыто = видно();
+        образец.click();
+        await пауза(60);
+        const закрылось = !видно();
+
+        return {
+          до, открылось, наЭкране, послеПалитры, послеКода, послеПолзунка,
+          послеОтказа, сноваОткрыто, закрылось,
+          вНорме: открылось && наЭкране
+            && послеПалитры.стиль === '#38bdf8'
+            && послеПалитры.образец === '#38bdf8'
+            && послеПалитры.вКоде === '#38bdf8'
+            && послеКода.стиль === '#00ff88'
+            // код пересчитался в ползунки: зелёный — тон 152°
+            && послеКода.ползунки === '152/100/100'
+            && послеПолзунка.стиль === '#ff0000'
+            && послеПолзунка.вКоде === '#ff0000'
+            && послеОтказа.стиль === '#f97316' && !послеОтказа.видно
+            && сноваОткрыто && закрылось,
+        };
       })`);
 
       /* Место параметров и ширина дорожки — по-монтажному.
@@ -10982,6 +11131,11 @@ function createWindow() {
                 (${JSON.stringify(process.env.KARAOKE_SHOT_TAB || 'color')}) + '"]');
               if (вкл) вкл.click();
               await new Promise((r) => setTimeout(r, 400));
+              /* KARAOKE_SHOT_CHIP=st-col-bg заодно открывает наш выбор
+                 цвета на этом образце: окошко надо видеть глазом —
+                 влезло ли, не уехало ли за край. */
+              const образец = document.getElementById(${JSON.stringify(process.env.KARAOKE_SHOT_CHIP || '')});
+              if (образец) { образец.click(); await new Promise((r) => setTimeout(r, 300)); }
               return 'ок';
             }
             goToStep(3);

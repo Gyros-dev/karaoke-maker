@@ -5479,100 +5479,6 @@ $('vocal-mix').addEventListener('input', () => {
 /* ---------- Оформление текста ---------- */
 
 /* Раскладываем настройки в CSS-переменные обеих сцен */
-/* ============================================================
-   Пипетка: цвет берётся со сцены, а не у системы
-
-   Человек написал: «в режиме караоке выбор цвета пипеткой нигде
-   не работает — пипетка вызывается, но всегда показывает чёрный цвет».
-   Это не наша беда и не чинится нашим кодом: пипетку показывает
-   системное окно выбора цвета, а на macOS её увеличительное стекло
-   снимает экран — без права «Запись экрана» оно отдаёт чёрное. Просить
-   у караоке-программы право снимать экран ради выбора цвета — плохой
-   размен, да и включается оно только с перезапуском.
-
-   Поэтому пипетка у нас своя, и она лучше системной для этого дела:
-   берёт цвет не с экрана, а ИЗ КАДРА — того самого, который уйдёт
-   в видео. Значит, взятый цвет ровно тот, что окажется в ролике, без
-   поправок на масштаб окна и цветовой профиль монитора.
-
-   Устроена просто: нажали пипетку у нужного цвета — сцена ждёт тычка;
-   ткнули — кадр рисуется в маленький холст, оттуда и читается точка.
-   Esc или второе нажатие отменяют. ============================================================ */
-let пипетка = null;
-
-/* Картинка фона как объект — кадру нужна именно она, а не адрес.
-   Держим одну и ту же, пока не сменился адрес: пересоздавать её
-   на каждый тычок значило бы ждать загрузку. */
-let фонКадраКэш = { адрес: null, картинка: null };
-function картинкаФонаКадра() {
-  if (!state.bgImage) return null;
-  if (фонКадраКэш.адрес !== state.bgImage) {
-    const и = new Image();
-    и.src = state.bgImage;
-    фонКадраКэш = { адрес: state.bgImage, картинка: и };
-  }
-  const и = фонКадраКэш.картинка;
-  return и && и.complete && и.naturalWidth ? и : null;
-}
-
-function цветВКадре(долюX, долюY) {
-  const W = 640, H = 360;
-  const холст = document.createElement('canvas');
-  холст.width = W; холст.height = H;
-  const g = холст.getContext('2d', { willReadFrequently: true });
-  drawVideoFrame(g, W, H, картинкаФонаКадра(), audio.position(), null);
-  const x = Math.max(0, Math.min(W - 1, Math.round(долюX * W)));
-  const y = Math.max(0, Math.min(H - 1, Math.round(долюY * H)));
-  const п = g.getImageData(x, y, 1, 1).data;
-  return '#' + [п[0], п[1], п[2]].map((v) => v.toString(16).padStart(2, '0')).join('');
-}
-
-function кончитьПипетку() {
-  пипетка = null;
-  document.body.classList.remove('берём-цвет');
-  document.querySelectorAll('.pipette.on').forEach((к) => к.classList.remove('on'));
-}
-
-function начатьПипетку(кнопка) {
-  const вход = $(кнопка.dataset.цвет);
-  if (!вход) return;
-  const уже = пипетка && пипетка.вход === вход;
-  кончитьПипетку();
-  if (уже) return;               // второе нажатие — передумал
-  пипетка = { вход };
-  кнопка.classList.add('on');
-  document.body.classList.add('берём-цвет');
-}
-
-document.addEventListener('click', (e) => {
-  const кн = e.target.closest && e.target.closest('.pipette');
-  if (кн) { e.preventDefault(); начатьПипетку(кн); }
-}, true);
-
-document.addEventListener('keydown', (e) => {
-  if (пипетка && e.key === 'Escape') { e.preventDefault(); кончитьПипетку(); }
-}, true);
-
-/* Тычок по сцене. Ловим на всплытии вниз (capture), чтобы опередить
-   всё прочее, что на сцене нажимается. */
-document.addEventListener('click', (e) => {
-  if (!пипетка) return;
-  const сцена = e.target.closest && e.target.closest('#lyrics-stage');
-  if (!сцена) return;
-  e.preventDefault();
-  e.stopPropagation();
-  const к = сцена.getBoundingClientRect();
-  if (!к.width || !к.height) { кончитьПипетку(); return; }
-  const цвет = цветВКадре((e.clientX - к.left) / к.width, (e.clientY - к.top) / к.height);
-  const вход = пипетка.вход;
-  кончитьПипетку();
-  вход.value = цвет;
-  /* Тем же путём, каким цвет приходит из системного окна: пусть
-     обработчики оформления отработают ровно как обычно. */
-  вход.dispatchEvent(new Event('input', { bubbles: true }));
-  вход.dispatchEvent(new Event('change', { bubbles: true }));
-}, true);
-
 function applyStyle() {
   const s = state.style;
   const stages = [$('lyrics-stage'), $('edit-stage')];
@@ -5589,6 +5495,9 @@ function applyStyle() {
     stage.style.setProperty('--st-effect', s.accent);
     stage.style.setProperty('--st-outline-c', s.outlineColor);
     stage.style.setProperty('--st-outline', `${s.outline}px`);
+    /* Слой обводки рисуется только когда она есть: пустой ::before
+       всё равно занял бы строку текста (см. .stage-line::before). */
+    stage.classList.toggle('has-outline', (+s.outline || 0) > 0);
     stage.style.setProperty('--st-ls', `${s.letter}px`);
     // Просвет между строками ставит fitStageLines: он считается от кегля,
     // а кегль известен только после замера ширины сцены
@@ -5650,16 +5559,16 @@ function updateStyleUI() {
   $('st-size-val').textContent = `${s.size}%`;
   $('st-weight').value = s.weight;
   $('st-weight-val').textContent = s.weight;
-  $('st-col-part1').value = s.part1;
-  $('st-col-part2').value = s.part2;
-  $('st-col-part-both').value = s.partBoth;
-  $('st-col-inactive').value = s.inactive;
-  $('st-col-active').value = s.active;
-  $('st-col-effect').value = s.accent;
-  $('st-col-outline').value = s.outlineColor;
+  красить($('st-col-part1'), s.part1);
+  красить($('st-col-part2'), s.part2);
+  красить($('st-col-part-both'), s.partBoth);
+  красить($('st-col-inactive'), s.inactive);
+  красить($('st-col-active'), s.active);
+  красить($('st-col-effect'), s.accent);
+  красить($('st-col-outline'), s.outlineColor);
   $('st-outline').value = s.outline;
   $('st-outline-val').textContent = s.outline;
-  $('st-col-bg').value = s.bgColor;
+  красить($('st-col-bg'), s.bgColor);
   $('st-letter').value = s.letter;
   $('st-letter-val').textContent = s.letter;
   $('st-line').value = s.line;
@@ -5758,12 +5667,226 @@ $('st-font').addEventListener('change', () => setStyle('font', $('st-font').valu
       updateStyleUI();
     });
   });
-[['st-col-inactive', 'inactive'], ['st-col-active', 'active'], ['st-col-effect', 'accent'],
- ['st-col-outline', 'outlineColor'], ['st-col-bg', 'bgColor'],
- ['st-col-part1', 'part1'], ['st-col-part2', 'part2'], ['st-col-part-both', 'partBoth']]
-  .forEach(([id, key]) => {
-    $(id).addEventListener('input', () => setStyle(key, $(id).value));
+/* ---------- Свой выбор цвета ----------
+
+   Было системное окно — <input type="color">. На macOS за ним стоит
+   общая панель «Цвета», и она живёт отдельно от студии: открывается
+   позади окна, а уже открытая на щелчки по другим образцам не отвечает
+   (проверяющий щёлкал по шести образцам подряд — не открылся ни один,
+   помог только перезапуск). Вдобавок цвет в неё не вписать числом,
+   тёмный цвет в образце читался как пустая рамка, а самопроверке
+   системное окно не видно совсем.
+
+   Поэтому выбор свой: одно окошко на все образцы — готовые цвета,
+   тон/насыщенность/яркость и код цвета числом. Правка идёт живьём,
+   как и раньше, а Esc — отказ, тем же правилом, что в правке текста. */
+
+/* Готовые цвета: шесть серых от белого до чёрного (ими красят текст,
+   обводку и фон сцены) и шесть ярких на эффект и партии. */
+const ГОТОВЫЕ_ЦВЕТА = ['#ffffff', '#f2f2f7', '#9a9ab0', '#3a3a4a', '#16161f', '#000000',
+  '#f97316', '#facc15', '#4ade80', '#38bdf8', '#a78bfa', '#fb7185'];
+
+const ЦВЕТА_ОБРАЗЦОВ = [['st-col-inactive', 'inactive'], ['st-col-active', 'active'],
+  ['st-col-effect', 'accent'], ['st-col-outline', 'outlineColor'], ['st-col-bg', 'bgColor'],
+  ['st-col-part1', 'part1'], ['st-col-part2', 'part2'], ['st-col-part-both', 'partBoth']];
+
+const цветВыбор = { ключ: null, чип: null, было: null, h: 0, s: 0, v: 0 };
+
+/* Цвет в образце — заливкой во всю кнопку, и он же лежит в data-цвет:
+   оттуда его читают самопроверка и само окошко выбора. */
+function красить(чип, цвет) {
+  if (!чип) return;
+  чип.style.setProperty('--chip', цвет);
+  чип.dataset.цвет = цвет;
+}
+
+function цвет2rgb(цвет) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(цвет == null ? '' : цвет).trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rgb2цвет(r, g, b) {
+  const дв = (x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0');
+  return '#' + дв(r) + дв(g) + дв(b);
+}
+
+function цвет2hsv(цвет) {
+  const [r, g, b] = (цвет2rgb(цвет) || [0, 0, 0]).map((x) => x / 255);
+  const мак = Math.max(r, g, b);
+  const мин = Math.min(r, g, b);
+  const d = мак - мин;
+  let h = 0;
+  if (d) {
+    if (мак === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    else if (мак === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+  }
+  return [h, мак ? (d / мак) * 100 : 0, мак * 100];
+}
+
+/* Обычная формула HSV→RGB: k = (n + тон/60) mod 6, дальше одна и та же
+   свёртка для n = 5, 3, 1 — красного, зелёного и синего. */
+function hsv2цвет(h, s, v) {
+  const S = s / 100;
+  const V = v / 100;
+  const доля = (n) => {
+    const k = (n + h / 60) % 6;
+    return (V - V * S * Math.max(0, Math.min(k, 4 - k, 1))) * 255;
+  };
+  return rgb2цвет(доля(5), доля(3), доля(1));
+}
+
+/* Желобки ползунков показывают, что получится: насыщенность красится
+   под нынешний тон, яркость — от чёрного к нынешнему цвету. Без этого
+   три серых полосы не говорили бы человеку ничего. */
+function обновитьВыборЦвета(цвет, изКода) {
+  const { h, s, v } = цветВыбор;
+  $('cp-h').value = Math.round(h);
+  $('cp-s').value = Math.round(s);
+  $('cp-v').value = Math.round(v);
+  $('cp-s').style.setProperty('--жел',
+    `linear-gradient(90deg, ${hsv2цвет(h, 0, v)}, ${hsv2цвет(h, 100, v)})`);
+  $('cp-v').style.setProperty('--жел',
+    `linear-gradient(90deg, #000000, ${hsv2цвет(h, s, 100)})`);
+  $('cp-now').style.background = цвет;
+  /* Поле кода не переписываем только тогда, когда в нём же и набирают:
+     иначе «#0f0» из-под пальцев превращалось бы в «#00ff00». В остальных
+     случаях — палитра, ползунки — код обязан показывать нынешний цвет. */
+  if (!изКода) $('cp-hex').value = цвет;
+}
+
+function применитьЦвет(цвет, изКода) {
+  if (!цветВыбор.ключ) return;
+  setStyle(цветВыбор.ключ, цвет);   // setStyle сам перекрасит образец
+  обновитьВыборЦвета(цвет, изКода);
+}
+
+function поставитьОкошкоЦвета() {
+  const окошко = $('color-pop');
+  const чип = цветВыбор.чип;
+  if (!чип) return;
+  const r = чип.getBoundingClientRect();
+  const ш = окошко.offsetWidth;
+  const в = окошко.offsetHeight;
+  окошко.style.left = Math.round(Math.min(Math.max(8, r.left), innerWidth - ш - 8)) + 'px';
+  /* Обычно окошко висит под образцом, а если снизу не помещается —
+     над ним. И в любом случае прижимаем к окну: на сайте студия лежит
+     в длинной странице, и образец может оказаться за краем видимого —
+     тогда окошко уехало бы вместе с ним неизвестно куда. */
+  const низ = r.bottom + 6;
+  const верх = низ + в > innerHeight - 8 ? r.top - в - 6 : низ;
+  окошко.style.top = Math.round(
+    Math.min(Math.max(8, верх), Math.max(8, innerHeight - в - 8))) + 'px';
+}
+
+function открытьВыборЦвета(чип, ключ) {
+  const цвет = цвет2rgb(state.style[ключ]) ? state.style[ключ] : '#000000';
+  цветВыбор.ключ = ключ;
+  цветВыбор.чип = чип;
+  цветВыбор.было = цвет;
+  const [h, s, v] = цвет2hsv(цвет);
+  цветВыбор.h = h;
+  цветВыбор.s = s;
+  цветВыбор.v = v;
+  $('color-pop').classList.remove('hidden');
+  обновитьВыборЦвета(цвет);
+  поставитьОкошкоЦвета();
+  document.querySelectorAll('.col-chip.открыт').forEach((c) => c.classList.remove('открыт'));
+  чип.classList.add('открыт');
+  $('cp-hex').focus();
+  $('cp-hex').select();
+}
+
+function закрытьВыборЦвета(отказ) {
+  if (!цветВыбор.ключ) return;
+  if (отказ && цветВыбор.было) setStyle(цветВыбор.ключ, цветВыбор.было);
+  const чип = цветВыбор.чип;
+  цветВыбор.ключ = null;
+  цветВыбор.чип = null;
+  $('color-pop').classList.add('hidden');
+  if (чип) {
+    чип.classList.remove('открыт');
+    чип.focus();   // вернуть клавиатуру туда, откуда открывали
+  }
+}
+
+ЦВЕТА_ОБРАЗЦОВ.forEach(([id, key]) => {
+  $(id).addEventListener('click', () => {
+    /* Щелчок по тому же образцу закрывает окошко: второй щелчок
+       по открытому образцу человек делает, чтобы убрать его с глаз. */
+    if (цветВыбор.ключ === key) закрытьВыборЦвета(false);
+    else открытьВыборЦвета($(id), key);
   });
+});
+
+ГОТОВЫЕ_ЦВЕТА.forEach((цвет) => {
+  const кн = document.createElement('button');
+  кн.type = 'button';
+  кн.style.background = цвет;
+  кн.title = цвет;
+  кн.dataset.цвет = цвет;
+  $('cp-ready').appendChild(кн);
+});
+
+$('cp-ready').addEventListener('click', (e) => {
+  const кн = e.target.closest('button[data-цвет]');
+  if (!кн) return;
+  const [h, s, v] = цвет2hsv(кн.dataset.цвет);
+  цветВыбор.h = h;
+  цветВыбор.s = s;
+  цветВыбор.v = v;
+  применитьЦвет(кн.dataset.цвет);
+});
+
+[['cp-h', 'h'], ['cp-s', 's'], ['cp-v', 'v']].forEach(([id, поле]) => {
+  $(id).addEventListener('input', () => {
+    цветВыбор[поле] = +$(id).value;
+    применитьЦвет(hsv2цвет(цветВыбор.h, цветВыбор.s, цветВыбор.v));
+  });
+});
+
+/* Цвет числом. Пока набранное не похоже на цвет — молчим: человек
+   печатает по одному знаку, и дёргать сцену на каждом знаке нельзя. */
+$('cp-hex').addEventListener('input', () => {
+  const цвет = цвет2rgb($('cp-hex').value);
+  if (!цвет) return;
+  const готов = rgb2цвет(цвет[0], цвет[1], цвет[2]);
+  const [h, s, v] = цвет2hsv(готов);
+  цветВыбор.h = h;
+  цветВыбор.s = s;
+  цветВыбор.v = v;
+  применитьЦвет(готов, true);
+});
+
+$('cp-done').addEventListener('click', () => закрытьВыборЦвета(false));
+
+$('color-pop').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    закрытьВыборЦвета(true);    // отказ: цвет возвращается, каким был
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    e.stopPropagation();
+    закрытьВыборЦвета(false);
+  }
+});
+
+/* Щелчок мимо окошка закрывает его и оставляет выбранный цвет:
+   так же ведут себя все наши списки (см. показатьСписок). */
+document.addEventListener('pointerdown', (e) => {
+  if (!цветВыбор.ключ) return;
+  if (e.target.closest('#color-pop') || e.target.closest('.col-chip')) return;
+  закрытьВыборЦвета(false);
+});
+
+/* Колонка настроек прокручивается, а окошко стоит поверх страницы —
+   значит при прокрутке и смене размера его надо переставлять, иначе
+   оно останется висеть над пустым местом. */
+window.addEventListener('resize', () => { if (цветВыбор.ключ) поставитьОкошкоЦвета(); });
+document.addEventListener('scroll', () => { if (цветВыбор.ключ) поставитьОкошкоЦвета(); }, true);
 [['st-effect', 'effect'], ['st-bg-mode', 'bgMode'], ['st-anim', 'anim'], ['st-valign', 'valign']]
   .forEach(([id, key]) => {
     $(id).addEventListener('click', (e) => {
@@ -6887,6 +7010,11 @@ function snapshotEqual(a, b) {
   for (let i = 0; i < a.length; i++) {
     const x = a[i];
     const y = b[i];
+    /* Текст сверяем наравне со временем: правка текста строки ложится
+       в стек отдельным шагом, и без этой строчки «ничего не менялось»
+       считалось бы и про неё — снимок перед правкой выкидывался бы
+       как пустой, и вернуть прежний текст было бы нечем. */
+    if (x.text !== y.text) return false;
     if (x.time !== y.time || x.end !== y.end || x.hand !== y.hand || x.guess !== y.guess) return false;
     if (!!x.handStart !== !!y.handStart) return false;
     // Партия — такая же правка, как время: без этой строчки смена
@@ -6962,6 +7090,9 @@ function applySnapshot(snap) {
         ручнойКонец: s.hand,
         ручноеНачало: !!s.handStart,
         сомнительная: s.guess,
+        // Партию восстанавливаем и здесь: обычная отмена её возвращает
+        // (см. ниже), а пересборка списка целиком — теряла
+        партия: s.партия || 0,
       };
       if (s.words) l.words = s.words.map((w) => ({ ...w }));
       return l;
@@ -7409,8 +7540,34 @@ $('edit-list').addEventListener('click', (e) => {
 /* Вход в правку текста и выход из неё. Пока поле не в правке, оно
    обычный текст: клавиши редактора слышны, длинная строка обрезается
    многоточием. В правке — поле как поле, с курсором и прокруткой. */
+/* Каким текст был до правки. Нужно на два дела.
+
+   Esc должен вернуть как было: пока он просто закрывал поле, «согласился»
+   и «отказался» делались одной и той же клавишей — дописанное оставалось
+   в строке, и человек об этом не знал.
+
+   И отмена в панели должна считать правку текста отдельным шагом. Снимок
+   кладём до первой буквы: без него один «отменить» откатывал заодно и то,
+   что человек делал до правки (протяжку границы, например), а на пустом
+   стеке правка текста не отменялась вовсе — кнопка просто гасла. */
+let правкаТекста = null;
+
 function правитьТекстСтроки(el) {
   if (!el || el.getAttribute('contenteditable') === 'true') return;
+  const i = +el.dataset.textI;
+  const line = state.lines[i];
+  if (line) {
+    const было = editor.history.length;
+    pushHistory();
+    правкаТекста = {
+      i,
+      text: line.text,
+      words: hasWords(line) ? line.words.map((w) => ({ ...w })) : null,
+      /* Снимок мог и не лечь (наверху стека уже лежит ровно это
+         состояние) — тогда и убирать его потом нечего. */
+      положен: editor.history.length > было,
+    };
+  }
   el.setAttribute('contenteditable', 'true');
   el.focus();
   const r = document.createRange();
@@ -7426,6 +7583,35 @@ function закончитьПравкуТекста(el) {
   el.setAttribute('contenteditable', 'false');
   const s = window.getSelection();
   if (s) s.removeAllRanges();
+  /* Вышли, ничего не изменив, — снимок перед правкой лишний, иначе
+     отмена срабатывала бы «вхолостую». Текст теперь входит в сверку
+     снимков, так что изменённый текст этот снимок не потеряет. */
+  const п = правкаТекста;
+  правкаТекста = null;
+  if (п && п.положен) dropEmptyHistory();
+}
+
+/* Отказ от правки по Esc: текст и метки слов возвращаются такими,
+   какими были до двойного щелчка. */
+function отменитьПравкуТекста(el) {
+  const п = правкаТекста;
+  правкаТекста = null;
+  const line = п ? state.lines[п.i] : null;
+  el.blur();                 // из поля выходим первым делом: дальше список перерисуется
+  if (!line) return;
+  line.text = п.text;
+  if (п.words) line.words = п.words;
+  else delete line.words;
+  if (п.положен) dropEmptyHistory();
+  $('lyrics-input').value = state.lines.map((l) => l.text).join('\n');
+  editor.stageKey = '';
+  editor.spansKey = '';
+  renderEditList();          // вернуть «♪» у строки и подписи на дорожке
+  updateSelInfo();
+  updateWordExportBtn();
+  renderEditStage();
+  drawTimeline();
+  saveProject();
 }
 
 /* Двойной клик по тексту строки открывает её правку, двойной клик
@@ -8167,13 +8353,19 @@ $('edit-list').addEventListener('focusout', (e) => {
   el.textContent = line.text;   // пользовательский текст — только textContent
 });
 
-/* Enter и Esc заканчивают правку: перевода строки в строке караоке
-   быть не может, а Esc — привычный способ выйти из поля куда угодно.
+/* Enter заканчивает правку и оставляет набранное: перевода строки
+   в строке караоке быть не может. Esc — отказ: возвращает, как было.
    Клавиши редактора после этого снова свои. */
 $('edit-list').addEventListener('keydown', (e) => {
   const el = e.target.closest && e.target.closest('.edit-text');
   if (!el || el.getAttribute('contenteditable') !== 'true') return;
-  if (e.key === 'Enter' || e.key === 'Escape') {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    отменитьПравкуТекста(el);
+    return;
+  }
+  if (e.key === 'Enter') {
     e.preventDefault();
     e.stopPropagation();
     el.blur();
@@ -9947,7 +10139,11 @@ function updateSelInfo() {
   // по классу .marked) — раньше подпись целиком переписывалась текстом
   // «слова ✓», но textContent стёр бы вложенные <svg> значков
   $('btn-sel-words').classList.toggle('marked', marked);
-  $('btn-sel-words-reset').classList.toggle('hidden', !marked);
+  /* «Сбросить слова» гасим, а не прячем. Пока она исчезала, весь ряд
+     кнопок съезжал на одно место: стоило правкой текста сбросить метки —
+     и «удалить» вставала ровно туда, где секунду назад был «оригинал».
+     Промахнуться и снести строку было проще простого. */
+  $('btn-sel-words-reset').disabled = !marked;
 
   /* «Распределить» — только там, где есть сам алгоритм (см. распределитьСлова)
      и строка, где действительно есть что раскладывать (больше одного слова) */
@@ -11973,7 +12169,8 @@ function сообщитьОЗаписи(что) {
 const КАДРОВ_В_СЕКУНДУ = 30;
 const ПОЛКАДРА = 1 / (2 * КАДРОВ_В_СЕКУНДУ);
 
-/* Это ВЕРХНЯЯ ГРАНИЦА, и в окне так и написано — «до N МБ». Битрейт
+/* Это ВЕРХНЯЯ ГРАНИЦА, и в окне так и написано — «не больше N МБ,
+   обычно вдвое-втрое меньше». Битрейт
    у нас потолок, а не норма: кодек берёт столько, сколько нужно картинке.
    Замерено на одной и той же студии: при 1440p с текстом во весь кадр
    сорок секунд дали 94,2 МБ — ровно потолок (расчёт 94); а при 720p
@@ -12676,7 +12873,23 @@ async function собратьРолик(о) {
 
   $('export-status').textContent = t('экспорт.сборкаЗвука');
   const звук = await свестиЗвукДляРолика(всяДлина, подводка);
-  if (videoExport.cancelled) return;
+  if (videoExport.cancelled) {
+    /* Отмена на сведении звука. Убираем ЗДЕСЬ, а не через прибрать():
+       её ещё нет — ни кодеков, ни файла на этот миг не заведено,
+       закрывать нечего, а вот окно и признак «идёт запись» снять
+       обязательно.
+
+       Раньше тут стоял голый return, и выходило скверно вдвойне: окно
+       «Сводим звук…» оставалось на экране навсегда (под ним заблокирована
+       вся студия, выход — только убить программу), а videoExport.active
+       так и застревал в true — из-за чего СЛЕДУЮЩЕЕ нажатие «Сохранить»
+       молча ничего не делало. Нашлось живой проверкой: «нажал Отменить
+       через полторы секунды — окно не закрывается, ждал две минуты». */
+    videoExport.active = false;
+    сообщитьОЗаписи({ идёт: false, отменено: true });
+    $('export-overlay').classList.add('hidden');
+    return;
+  }
 
   const частота = звук.sampleRate;
   const каналов = звук.numberOfChannels;

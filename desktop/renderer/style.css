@@ -678,7 +678,38 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   max-width: 620px;
   margin: 0 auto 1.6rem;
 }
-.hero-note { margin-top: 1.4rem; color: var(--text-dim); font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem; }
+/* Повод скачать — на первом экране, без прокрутки. Раньше первый экран
+   обещал караоке вообще, а чем приложение лучше браузера, человек узнавал
+   только пролистав вниз — и кнопки скачивания приходилось рисовать дважды.
+   Теперь причина стоит рядом с кнопкой, а вторая пара кнопок убрана. */
+.hero-why {
+  list-style: none;
+  margin: 0.9rem auto 0;
+  padding: 0;
+  max-width: 30rem;
+  display: grid;
+  gap: 0.45rem;
+  text-align: left;
+  color: var(--text-dim);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.hero-why li {
+  padding-left: 1.5rem;
+  position: relative;
+}
+/* Галочка вместо маркера: это перечень того, что человек получит. */
+.hero-why li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--accent-solid);
+  font-weight: 700;
+}
+.hero-why b { color: var(--text); font-weight: 600; }
+
+.hero-note.hero-note { margin-top: 1.4rem; color: var(--text-dim); font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem; }
 .pill {
   background: rgba(84, 196, 146, 0.12);
   color: #54C492;
@@ -884,14 +915,36 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
      иначе она сама себя закрывала бы, встав под курсором */
   pointer-events: none;
 }
-.steps-nav { position: relative; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
-/* Ссылка на руководство: вынесена из потока, поэтому ряд шагов остаётся
-   ровно посередине, а высоты рабочее место не теряет ни пикселя. */
+/* Ряд шагов: слева работа (чип проекта и значки), посередине сами шаги,
+   справа ссылка на руководство. Три столбца сеткой, а не две плашки
+   поверх ряда. Пока стороны стояли absolute, узкое окно ломало ряд:
+   при 860 точках значок «выгрузить разметку» оказывался ВНУТРИ плашки
+   «1 Песня», при 640 значки, стрелки и плашки лежали друг поверх друга
+   и прочитать их было нельзя. Теперь стороны занимают место
+   по-настоящему: шаги ужимаются и переносятся, но ни на что не лезут.
+   Крайние столбцы равны (1fr) — ряд шагов стоит ровно посередине,
+   как и стоял, и высоты рабочее место не теряет. */
+.steps-nav {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+/* Столбцы называем поимённо: в разметке шаги идут первыми, и без
+   этого они вставали в левый столбец, а работа — в средний. */
+.steps-tabs {
+  grid-column: 2;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 .steps-help {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
   border: 1px solid var(--border);
   border-radius: var(--r-ctl);
   display: inline-flex;
@@ -907,33 +960,23 @@ body.is-desktop .btn.icon-btn .icon { margin: 0; }
   transition: color 0.15s, border-color 0.15s;
 }
 .steps-help:hover { color: var(--text); border-color: var(--violet); }
-/* Что в памяти студии и черновик. Как и ссылка на руководство, вынесены
-   из потока: ряд шагов остаётся ровно посередине, а высоты рабочее
-   место не теряет ни пикселя. */
-/* Коробка чипа стоит слева от ряда шагов и по его середине.
+/* Что в памяти студии и черновик — левый столбец ряда шагов.
 
-   Середину держим растяжкой сверху донизу, а НЕ переносом
-   (transform: translateY(-50%)), как было. Перенос заводит для коробки
+   Коробка стоит в потоке обычным элементом сетки. Никакого absolute
+   и никакого transform: translateY(-50%) — перенос заводил для коробки
    свой слой отрисовки, и выпадающее меню чипа уезжало в этот слой:
    на снимке человека сквозь список читалось «поиск по строкам» и весь
    список строк под ним. Разметка при этом была верной — под точками
    внутри меню лежало меню, — но составитель кадра рисовал окно студии
-   поверх чужого слоя.
-
-   Растянутая коробка перехватывала бы нажатия своим пустым местом,
-   поэтому она их не ловит вовсе, а ловят только её дети. */
+   поверх чужого слоя. */
 .proj-box {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  max-width: 40%;
-  pointer-events: none;
+  min-width: 0;
 }
-.proj-box > * { pointer-events: auto; }
 .proj-chip {
   display: inline-flex;
   align-items: center;
@@ -2567,43 +2610,6 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
 }
 .export-hint { color: var(--text-dim); font-size: 0.85rem; }
 
-/* ---- Пипетка у каждого цвета ----
-   Системная пипетка в окне выбора цвета на macOS отдаёт чёрное без
-   права «Запись экрана» (см. «Пипетка» в app.js), поэтому у каждого
-   цвета своя — маленькая, рядом со своим образцом, чтобы не гадать,
-   куда ляжет взятый цвет. */
-/* Размер выбран не на глаз: образец цвета 34 пикселя, а подпись под ним
-   («неактив.») шире — именно она и задаёт ширину столбика. Пипетка
-   в 20 пикселей с щелью в 2 укладывается в ту же ширину, и ряд из трёх
-   цветов не разъезжается. С кнопкой в 24 он разъехался — панель
-   «Цвет» перестала влезать в колонку, и это поймал раздел
-   самопроверки «настройкиВлезают». */
-.pipette {
-  width: 20px;
-  height: 20px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-mini);
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
-.pipette .icon { width: 12px; height: 12px; margin: 0; }
-.pipette:hover { color: var(--text); border-color: var(--violet); }
-/* Ждём тычка: кнопка горит акцентом, а над сценой крест вместо стрелки. */
-.pipette.on {
-  color: var(--accent-ink, #fff);
-  border-color: var(--violet);
-  background: var(--violet);
-}
-body.берём-цвет #lyrics-stage,
-body.берём-цвет #lyrics-stage * { cursor: crosshair; }
-/* Образец и пипетка стоят парой, подпись — под обоими */
-
 /* --- Шаг 4: караоке --- */
 .lyrics-stage {
   /* Настраиваемое оформление текста (панель «Оформление») */
@@ -2683,6 +2689,43 @@ body.берём-цвет #lyrics-stage * { cursor: crosshair; }
 .edit-stage > .stage-line,
 .edit-stage > .stage-empty { position: relative; z-index: 1; }
 .lyrics-stage.has-bg .stage-line:not(.current) { text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8); }
+
+/* ---- Обводка: отдельный слой ПОД текстом ----
+
+   Была она на самой строке, через -webkit-text-stroke с paint-order.
+   У неактивных строк выходило верно — обводка снаружи буквы. А у той,
+   которую поют, нет: её заливка рисуется не цветом текста, а ФОНОМ,
+   обрезанным по буквам (background-clip: text — так и делается бегущая
+   закраска). Фон лежит ниже текста, обводка — часть текста, значит,
+   обводка оказывалась ПОВЕРХ заливки и съедала букву изнутри. Человек
+   это и увидел: «неактивная строка — внешняя обводка, активная —
+   внутренняя».
+
+   Теперь обводка вынесена в ::before: тот же текст (он есть в data-text),
+   без заливки, одним слоем ПОЗАДИ строки. Что бы ни рисовала сама
+   строка — ровный цвет, бегущую заливку, подсветку, — обводка всегда
+   под ней, то есть всегда наружная. Ровно так же её рисует и кадр
+   видео: strokeIfNeeded обводит до заливки, шириной в два раза больше
+   заданной, — поэтому и здесь удвоение. */
+.stage-line::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* Пробелы внутри строки хранятся при словах (splitWords клеит пробел
+     к слову), поэтому слой обязан их сохранять — иначе текст разъедется
+     с настоящим на ширину схлопнутых пробелов. */
+  white-space: pre-wrap;
+  -webkit-text-stroke: calc(var(--st-outline) * 2) var(--st-outline-c);
+  color: transparent;
+  pointer-events: none;
+  z-index: -1;
+}
+/* Без обводки слой не нужен вовсе: пустой ::before всё равно создаёт
+   строку текста и мог бы влиять на высоту. */
+.lyrics-stage:not(.has-outline) .stage-line::before,
+.edit-stage:not(.has-outline) .stage-line::before { content: none; }
 .stage-line {
   font-family: var(--st-font);
   /* Текст караоке всегда по середине — так же, как его рисует кадр
@@ -2701,15 +2744,8 @@ body.берём-цвет #lyrics-stage * { cursor: crosshair; }
   line-height: var(--st-lh, 1.3);
   font-weight: var(--st-weight);
   letter-spacing: var(--st-ls);
-  /* Обводка — НАРУЖНАЯ. -webkit-text-stroke сам по себе рисует по центру
-     контура и поверх заливки: половина ширины съедает саму букву, и на
-     экране она читалась как внутренняя. paint-order кладёт обводку ПОД
-     заливку — внутренняя половина закрывается буквой, снаружи остаётся
-     ровно заданная ширина. Ширину поэтому удваиваем: так же считает
-     и кадр видео (strokeIfNeeded: lineWidth = outline * 2, обводка
-     рисуется до заливки), и обе поверхности сходятся. */
-  -webkit-text-stroke: calc(var(--st-outline) * 2) var(--st-outline-c);
-  paint-order: stroke fill;
+  /* Обводки на самой строке нет: она рисуется отдельным слоем под
+     текстом, см. .stage-line::before ниже. */
   color: var(--st-inactive);
   /* Приглушение только прозрачностью и размытием: размер строк
      не меняется никогда, иначе текст «прыгает» на каждой смене */
@@ -3237,16 +3273,15 @@ body.stage-full .site-header { z-index: 1; }
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  /* Зазор между столбиками цветов ужат с 0,6rem: у каждого столбика
-     прибавилась пипетка в 20 пикселей, и с прежним зазором третий цвет
-     уезжал на вторую строку. */
+  /* Зазор между столбиками цветов ужат с 0,6rem: с прежним зазором
+     третий цвет уезжал на вторую строку, а закладка «Цвет» от этого
+     перестаёт влезать в колонку (см. настройкиВлезают). */
   gap: 0.4rem 0.3rem;
 }
 .style-row .row-colors input[type="range"] { grid-column: auto; flex: 1; min-width: 90px; }
-/* Пипетка с подписью. Зазор и кегль подписи выбраны так, чтобы ТРИ
-   пипетки вставали в ряд одной строкой: с прежними числами третья
-   переносилась, и ряд занимал вдвое больше высоты — а закладка «Цвет»
-   от этого переставала влезать в колонку (см. настройкиВлезают). */
+/* Образец цвета с подписью. Кегль подписи и зазор выбраны так, чтобы
+   ТРИ столбика вставали в ряд одной строкой: с прежними числами третий
+   переносился, и ряд занимал вдвое больше высоты. */
 .color-pick { display: inline-flex; align-items: center; gap: 0.15rem; }
 .style-row select {
   width: 100%;
@@ -3258,15 +3293,107 @@ body.stage-full .site-header { z-index: 1; }
   font-size: 0.9rem;
   padding: 0.45rem 0.7rem;
 }
-.style-row input[type="color"] {
+/* Образец цвета. Раньше это был системный <input type="color">,
+   и цвет в нём рисовался внутренней плашкой с серой каймой: тёмный
+   цвет (фон сцены, #16161f) от этого читался как пустой прямоугольник
+   в рамке. Теперь цвет залит во всю кнопку — видно, что он задан. */
+.col-chip {
   width: 34px;
   height: 26px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--r-ctl);
+  background: var(--chip, #000);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.col-chip:hover { border-color: var(--accent-solid); }
+.col-chip.открыт { box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 0.55); }
+
+/* --- Свой выбор цвета --- */
+.color-pop {
+  position: fixed;
+  z-index: 80;
+  width: 232px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.6rem;
   background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+.cp-ready {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.25rem;
+}
+.cp-ready button {
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   cursor: pointer;
 }
+.cp-ready button:hover { border-color: var(--accent-solid); }
+.cp-row {
+  display: grid;
+  grid-template-columns: 4.6em minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+/* Желобок показывает, что получится: полосу кладём через --жел,
+   её ставит сам выбор (см. обновитьВыборЦвета) — так ползунок
+   насыщенности красится под нынешний тон, а не радугой вообще. */
+.cp-row input[type="range"] {
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.cp-row input[type="range"]::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--жел, var(--bg));
+}
+.cp-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -3px;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.cp-bottom { display: flex; align-items: center; gap: 0.35rem; }
+.cp-now {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+}
+#cp-hex {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+#cp-done { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
 .style-row input[type="checkbox"] { accent-color: var(--accent-solid); cursor: pointer; }
 .style-row .mini-label { color: var(--text-dim); font-size: 0.75rem; }
 .seg {
@@ -3627,9 +3754,12 @@ body.is-desktop .site-header .footer-link {
     width: calc(100% - 1.5rem);
   }
   .step-panel.active { display: block; }
-  /* На узком экране рядом с шагами места нет: ссылка на руководство
-     встаёт в поток отдельной строкой, а не поверх кнопок */
-  .steps-help { position: static; transform: none; }
+  /* На узком экране три столбца в ряд не встают: работа, шаги
+     и ссылка ложатся друг под друга по середине. */
+  .steps-nav { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .steps-tabs, .proj-box, .steps-help { grid-column: 1; grid-row: auto; }
+  .proj-box { justify-content: center; flex-wrap: wrap; }
+  .steps-help { justify-self: center; }
   .karaoke-layout { grid-template-columns: minmax(0, 1fr); }
   /* В одну колонку места для сторон нет — порядок обычный, разметочный */
   .karaoke-layout > .karaoke-side,

@@ -37,7 +37,6 @@
     <symbol id="i-mic" viewBox="0 0 16 16"><path d="M8 1.8a2.1 2.1 0 0 0-2.1 2.1v3.8a2.1 2.1 0 0 0 4.2 0V3.9A2.1 2.1 0 0 0 8 1.8z" fill="none" stroke="currentColor" stroke-width="1.25"/><path d="M4.3 7.4a3.7 3.7 0 0 0 7.4 0M8 11.1v2.9M6.2 14h3.6" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></symbol>
     <symbol id="i-hourglass" viewBox="0 0 16 16"><path d="M4.3 2h7.4M4.3 14h7.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><path d="M4.8 2c0 2.7 1.6 3.3 3.2 4.2 1.6-.9 3.2-1.5 3.2-4.2M4.8 14c0-2.7 1.6-3.3 3.2-4.2 1.6.9 3.2 1.5 3.2 4.2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></symbol>
     <symbol id="i-palette" viewBox="0 0 16 16"><path d="M8 2.2a5.8 5.8 0 1 0 0 11.6c.9 0 1.3-.45 1.3-1 0-.28-.1-.47-.28-.72-.16-.24-.27-.44-.27-.73 0-.55.47-.95 1.02-.95h1.1a2.9 2.9 0 0 0 2.9-2.9c0-2.9-2.6-5.3-5.77-5.3z" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/><circle cx="5.3" cy="6.4" r=".75" fill="currentColor"/><circle cx="8" cy="4.9" r=".75" fill="currentColor"/><circle cx="10.6" cy="6.4" r=".75" fill="currentColor"/></symbol>
-    <symbol id="i-pipette" viewBox="0 0 16 16"><path d="M13.4 2.6a1.9 1.9 0 0 0-2.7 0l-1 1-.7-.7-1.1 1.1.6.6-5 5v2.5h2.5l5-5 .6.6 1.1-1.1-.7-.7 1-1a1.9 1.9 0 0 0 0-2.7z" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/></symbol>
     <symbol id="i-speaker" viewBox="0 0 16 16"><path d="M2 6.1h2.2L7.8 3.5v9L4.2 9.9H2z" fill="currentColor"/><path d="M10.1 5.6a3.1 3.1 0 0 1 0 4.8M11.9 4.1a5.5 5.5 0 0 1 0 7.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></symbol>
     <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2.3v7.3M4.9 7.3L8 10.5l3.1-3.2M3 13.2h10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-video" viewBox="0 0 16 16"><path d="M2 6.4l.85-3.2h9l-.85 3.2M2 6.4h11V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/><path d="M4.7 3.2l1 3.2M7.7 3.2l1 3.2" stroke="currentColor" stroke-width="1.05"/></symbol>
@@ -87,8 +86,29 @@
      устройства, что и прочие окна ожидания (.export-overlay), — значит,
      и клавиши редактора под ним молчат (см. окноПоверхСтудии). -->
 <!-- Что и как сохранить видео. Отдельным окном, а не строкой в ряду:
-     выбор тут не один (качество, формат), и рядом надо сказать, что
-     запись идёт в реальном времени и что попадёт в кадр. -->
+     выбор тут не один (качество, формат), и рядом надо сказать, чего
+     ждать по времени и весу и что попадёт в кадр. -->
+<!-- Свой выбор цвета, одно окошко на все образцы. Было системное
+     окно (<input type="color">): на macOS это общая панель «Цвета»,
+     она живёт отдельно от студии — открывается позади окна, а уже
+     открытая на щелчки по другим образцам не отвечает; цвет числом
+     в неё не впишешь, и самопроверке она не видна совсем. Своё
+     окошко одинаково на обеих системах и проверяется как всё наше. -->
+<div class="color-pop hidden" id="color-pop">
+  <div class="cp-ready" id="cp-ready"></div>
+  <label class="cp-row"><span data-i18n="цвет.тон">Тон</span>
+    <input type="range" id="cp-h" min="0" max="360" step="1" value="0"></label>
+  <label class="cp-row"><span data-i18n="цвет.насыщ">Насыщ.</span>
+    <input type="range" id="cp-s" min="0" max="100" step="1" value="0"></label>
+  <label class="cp-row"><span data-i18n="цвет.яркость">Яркость</span>
+    <input type="range" id="cp-v" min="0" max="100" step="1" value="0"></label>
+  <div class="cp-bottom">
+    <span class="cp-now" id="cp-now"></span>
+    <input type="text" id="cp-hex" spellcheck="false" autocomplete="off" maxlength="7"
+      title="Цвет числом, например #1E90FF" data-i18n-title="цвет.код">
+    <button type="button" class="btn btn-ghost" id="cp-done" data-i18n="цвет.готово">Готово</button>
+  </div>
+</div>
 <div class="export-overlay hidden" id="video-setup">
   <div class="export-box video-box">
     <h3 data-i18n="экспорт.видео.заголовок">Сохранить видео</h3>
@@ -100,8 +120,8 @@
         <option value="1440">2K · 2560×1440</option>
       </select>
     </label>
-    <!-- Цена выбора словами: сколько займёт файл и сколько идти записи.
-         Без неё «2K» — просто слово, а за ним полтысячи мегабайт. -->
+    <!-- Цена выбора словами: какой длины выйдет ролик и сколько займёт
+         файл. Без неё «2K» — просто слово, а за ним полтысячи мегабайт. -->
     <p class="video-size" id="video-size"></p>
     <label class="video-row" for="video-format">
       <span data-i18n="экспорт.формат">Формат</span>
@@ -112,8 +132,8 @@
     </label>
     <p class="video-hint" data-i18n-html="экспорт.видео.очём"><b>Что попадёт в файл:</b> фон,
       текст с подсветкой, минусовка (и оригинал на размеченных отрезках), знак студии в углу
-      и финальный кадр с похвалой. Запись идёт в реальном времени — займёт столько же,
-      сколько длится песня; окно можно свернуть.</p>
+      и финальный кадр с похвалой. Студия собирает ролик кадр за кадром — это быстрее,
+      чем песня играет, и картинка не разъедется со звуком; окно можно свернуть.</p>
     <!-- Права на песню — здесь, у самого действия: это последнее место,
          где человек решает, забирать ли файл. В приложении строки под
          рядом кнопок нет (она отнимала высоту у сцены), а сказать это
@@ -122,7 +142,7 @@
     <div class="queue-buttons">
       <button class="btn btn-primary" id="btn-export-video"
         data-i18n-title="экспорт.видеоНачать.подсказка"
-        title="Записать ролик со сценой и звуком — займёт столько же, сколько длится песня"><span data-i18n="экспорт.видеоНачать">Сохранить</span></button>
+        title="Собрать ролик со сценой и звуком — это быстрее, чем песня играет"><span data-i18n="экспорт.видеоНачать">Сохранить</span></button>
       <button class="btn btn-ghost" id="video-cancel"
         data-i18n-title="экспорт.отмена.подсказка"
         title="Закрыть, ничего не записывая"><span data-i18n="экспорт.отмена">Отмена</span></button>
@@ -212,11 +232,6 @@
          а сюда поднимается только то, что и правда крупное. -->
     <h4 class="whatsnew-ver" data-i18n="новости.главное">Главное</h4>
     <ul class="whatsnew-list">
-      <li data-i18n-html="новости.главное.пипетка">
-        <b>🎨 Пипетка берёт цвет с картинки.</b> Кнопка у каждого цвета в «Оформлении»:
-        нажал, ткнул в сцену — цвет взят прямо из кадра. Системная пипетка на Маке
-        показывала чёрное и починить это было нечем.
-      </li>
       <li data-i18n-html="новости.главное.ролик">
         <b>🎬 Ролик собирается, а не пишется.</b> Подсветка в готовом видео идёт вровень
         со звуком на любой машине, сборка втрое быстрее записи, а файл пишется сразу
@@ -246,10 +261,6 @@
       <summary data-i18n="новости.раньше">Все изменения — по выпускам</summary>
       <h4 class="whatsnew-ver"><span data-i18n="новости.версияСлово">Версия</span> 1.32.0</h4>
       <ul class="whatsnew-list">
-        <li data-i18n-html="новости.пипетка">
-          <b>Пипетка у каждого цвета.</b> Нажми пипетку рядом с образцом и ткни в сцену —
-          цвет возьмётся из кадра, того самого, что уйдёт в видео. Esc отменяет.
-        </li>
         <li data-i18n-html="новости.подложкаЧестная">
           <b>Подложка под текстом честная.</b> На ста процентах она и правда непрозрачна:
           раньше сквозь неё просвечивала картинка. Прежний вид — ползунок на 85.
@@ -1395,9 +1406,11 @@
     <span class="logo-text">Karaoke&nbsp;Punch</span>
   </a>
   <nav class="site-nav">
-    <a href="#features" data-i18n="шапка.возможности">Возможности</a>
-    <a href="#desktop" data-i18n="шапка.компьютер">Для компьютера</a>
+    <!-- Порядок тот же, что и у разделов на странице: сперва скачать
+         и поставить, потом научиться, а возможности и вопросы — потом. -->
+    <a href="#desktop" data-i18n="шапка.компьютер">Скачать</a>
     <a href="#how" data-i18n="шапка.как">Как это работает</a>
+    <a href="#features" data-i18n="шапка.возможности">Возможности</a>
     <a href="#faq" data-i18n="шапка.вопросы">Вопросы</a>
   </nav>
   <!-- Переключатели языка и темы стоят парой, без флагов и палитр —
@@ -1433,9 +1446,8 @@
     <p class="hero-wordmark">Karaoke Punch</p>
     <h1 data-i18n-html="герой.заголовок">Преврати любую песню<br><span class="grad-text">в караоке</span></h1>
     <p class="hero-sub" data-i18n="герой.подзаголовок">
-      Загрузи песню — студия приглушит вокал, поможет разметить текст
-      по строкам и словам и запустит караоке с пословной подсветкой.
-      Ничего не отправляется на сервер: вся магия происходит на твоём устройстве.
+      Открываешь песню — получаешь караоке с пословной подсветкой
+      и готовое видео. Всё считает твой компьютер, в интернет ничего не уходит.
     </p>
     <!-- Главное действие сайта — скачать приложение, а не открыть
          студию в браузере. Так честнее: нейросети, ради которых студию
@@ -1451,38 +1463,25 @@
         <a class="btn btn-primary btn-big" id="dl-win-hero" data-i18n="герой.виндоус"
            href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.32.0/Karaoke-Punch-1.32.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
       </span>
-      <span class="hero-get-label" data-i18n="герой.скачать">Нейросети убирают вокал и размечают текст — прямо на твоём компьютере</span>
+      <!-- Разметка, а не текст: внутри ссылка. С data-i18n смена языка
+           переписала бы содержимое целиком и ссылку бы стёрло. -->
+      <span class="hero-get-label" data-i18n-html="герой.скачать">Бесплатно, без учётной записи. Ставится за минуту — <a href="#desktop">как поставить</a></span>
+      <!-- Повод скачать — сразу, без прокрутки. Три строки, и каждая
+           про то, чего в браузере нет вовсе, а не про «удобнее». -->
+      <ul class="hero-why">
+        <li data-i18n-html="герой.почему.вокал"><b>Вокал убирает нейросеть</b>, а не фильтр: в браузере от голоса остаются эхо и бэк-вокал</li>
+        <li data-i18n-html="герой.почему.текст"><b>Текст размечается сам</b> — времена строк и слов проставит нейросеть, простукивать руками не нужно</li>
+        <li data-i18n-html="герой.почему.видео"><b>Готовое видео до 2K</b>, минусовка и текст со временем — одной кнопкой</li>
+      </ul>
       <a class="btn btn-ghost hero-browser" href="#studio" data-i18n="герой.вБраузере">Создать караоке в браузере (beta)</a>
     </div>
     <div class="hero-note"><span class="pill" data-i18n="герой.приватно">100% приватно</span> <span data-i18n="герой.файлы">файлы не покидают твой компьютер</span></div>
   </div>
 </section>
 
-<!-- ===================== FEATURES ===================== -->
-<section class="features" id="features">
-  <h2 data-i18n="возможности.заголовок">Всё, что нужно для караоке-вечера</h2>
-  <div class="cards">
-    <div class="card">
-      <div class="card-icon">🎚️</div>
-      <h3 data-i18n="возможности.вокал.заголовок">Приглушение вокала</h3>
-      <p data-i18n-html="возможности.вокал.текст">В браузере голос из центра стереокартины подавляется сразу, а громкость вокала регулируется во время пения. Нужна чистая минусовка — загрузи готовую вторым файлом или возьми <a href="#desktop">версию для компьютера</a> с нейросетью.</p>
-    </div>
-    <div class="card">
-      <div class="card-icon">📝</div>
-      <h3 data-i18n="возможности.текст.заголовок">Разметка текста</h3>
-      <p data-i18n="возможности.текст.текст">Вставь текст песни — и прямо в редакторе отбивай строки клавишей пробел под музыку. Там же правь начала и концы строк, слушай их по отдельности, тяни блоки на дорожке, а кнопкой «♪ слова» простучи и каждое слово внутри строки.</p>
-    </div>
-    <div class="card">
-      <div class="card-icon">🎤</div>
-      <h3 data-i18n="возможности.караоке.заголовок">Режим караоке</h3>
-      <p data-i18n="возможности.караоке.текст">Подсветка переключается по словам, а перед вступлением после проигрыша гаснут три точки отсчёта. Своя картинка фоном, шрифт, размер, цвета, обводка, подложка под текстом, эквалайзер. Готовое выгружается: видео до 2K, минусовка в WAV, текст в LRC — обычный или со временем каждого слова.</p>
-    </div>
-  </div>
-</section>
-
 <!-- ===================== DESKTOP ===================== -->
 <section class="desktop-cta" id="desktop">
-  <h2 data-i18n="настольная.заголовок">Версия для компьютера: две нейросети внутри</h2>
+  <h2 data-i18n="настольная.заголовок">Зачем приложение, если есть браузер</h2>
   <p class="desktop-lead" data-i18n-html="настольная.вокал">
     <b>Убрать вокал.</b> В браузере голос приглушается простым способом — быстро, но эхо
     и бэк-вокал остаются. Настольная версия убирает его локальной моделью
@@ -1500,12 +1499,6 @@
   <p class="desktop-lead" data-i18n="настольная.локально">
     Всё считает твой компьютер, ничего не уходит в интернет.
   </p>
-  <div class="desktop-buttons">
-    <a class="btn btn-primary" id="dl-mac" data-i18n="настольная.мак"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.32.0/Karaoke-Punch-1.32.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
-    <a class="btn btn-primary" id="dl-win" data-i18n="настольная.виндоус"
-       href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.32.0/Karaoke-Punch-1.32.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
-  </div>
   <p class="desktop-note" data-i18n-html="настольная.заметка">
     Бесплатно и с открытым кодом. Каждая модель скачивается один раз при первом
     использовании — дальше интернет не нужен: удаление вокала весит 64 МБ, разметка
@@ -1671,8 +1664,8 @@
           ты оставил оригинал.</p>
         <p data-i18n-html="как.экспорт.видео"><b>Видео</b> — готовый ролик с фоном, текстом и минусовкой в HD, Full HD
           или 2K, файлом <b>.mp4</b>: он открывается везде — на телефоне, в мессенджерах,
-          в соцсетях. Записывается в реальном времени, то есть займёт столько же,
-          сколько длится песня; окно можно свернуть, запись продолжится.</p>
+          в соцсетях. Студия собирает его сама, кадр за кадром: это быстрее, чем песня
+          играет; окно можно свернуть, сборка продолжится.</p>
         <p data-i18n-html="как.экспорт.сохранение">Текст, времена, разметка слов и оформление сохраняются сами и переживают закрытие
           <span class="only-web">вкладки</span><span class="only-desktop">приложения</span>.
           Заново выбрать придётся только сам аудиофайл.</p>
@@ -1696,6 +1689,28 @@
   </div>
 </section>
 
+<!-- ===================== FEATURES ===================== -->
+<section class="features" id="features">
+  <h2 data-i18n="возможности.заголовок">Всё, что нужно для караоке-вечера</h2>
+  <div class="cards">
+    <div class="card">
+      <div class="card-icon">🎚️</div>
+      <h3 data-i18n="возможности.вокал.заголовок">Приглушение вокала</h3>
+      <p data-i18n-html="возможности.вокал.текст">В браузере голос из центра стереокартины подавляется сразу, а громкость вокала регулируется во время пения. Нужна чистая минусовка — загрузи готовую вторым файлом или возьми <a href="#desktop">версию для компьютера</a> с нейросетью.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📝</div>
+      <h3 data-i18n="возможности.текст.заголовок">Разметка текста</h3>
+      <p data-i18n="возможности.текст.текст">Вставь текст песни — и прямо в редакторе отбивай строки клавишей пробел под музыку. Там же правь начала и концы строк, слушай их по отдельности, тяни блоки на дорожке, а кнопкой «♪ слова» простучи и каждое слово внутри строки.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎤</div>
+      <h3 data-i18n="возможности.караоке.заголовок">Режим караоке</h3>
+      <p data-i18n="возможности.караоке.текст">Подсветка переключается по словам, а перед вступлением после проигрыша гаснут три точки отсчёта. Своя картинка фоном, шрифт, размер, цвета, обводка, подложка под текстом, эквалайзер. Готовое выгружается: видео до 2K, минусовка в WAV, текст в LRC — обычный или со временем каждого слова.</p>
+    </div>
+  </div>
+</section>
+
 <!-- ===================== STUDIO ===================== -->
 <section class="studio" id="studio">
   <h2 data-i18n="студия.заголовок">Студия</h2>
@@ -1706,10 +1721,12 @@
     <!-- Переключателя языка здесь нет: он стоит в шапке, а шапка липкая
          и видна с любого шага студии. Два переключателя на одном экране
          сразу выглядели нелепо. -->
+    <div class="steps-tabs">
     <button class="step-tab active" data-step="1" data-i18n-title="студия.шаг1.подсказка" title="Шаг 1: загрузить песню, свою минусовку и картинку для фона" data-i18n-html="студия.шаг1"><span>1</span> Песня</button>
     <button class="step-tab" data-step="2" data-i18n-title="студия.шаг2.подсказка" title="Шаг 2: вставить текст песни — строка текста станет строкой караоке" disabled data-i18n-html="студия.шаг2"><span>2</span> Текст</button>
     <button class="step-tab" data-step="3" data-i18n-title="студия.шаг3.подсказка" title="Шаг 3: разметить время строк и слов на дорожке" disabled data-i18n-html="студия.шаг3"><span>3</span> Редактор</button>
     <button class="step-tab" data-step="4" data-i18n-title="студия.шаг4.подсказка" title="Шаг 4: оформление текста, просмотр и экспорт" disabled data-i18n-html="студия.шаг4"><span>4</span> Караоке</button>
+    </div>
     <!-- Что сейчас в памяти студии — и черновик файлом. Стоит в ряду
          шагов намеренно: чип виден с любого шага, высоты у рабочего
          места не отнимает (как и ссылка на руководство, он вынесен из
@@ -2030,18 +2047,15 @@
               <span class="style-label" data-i18n="караоке.цвета">Цвета</span>
               <span class="row-wide row-colors">
                 <span class="color-pick">
-                  <input type="color" id="st-col-inactive" value="#9a9ab0" title="Неактивный текст" data-i18n-title="караоке.цвет.неактив">
-                  <button type="button" class="pipette" data-цвет="st-col-inactive" data-i18n-title="караоке.пипетка" title="Взять цвет со сцены: нажми, потом ткни в картинку" data-i18n-aria="караоке.пипетка" aria-label="Взять цвет со сцены"><svg class="icon" aria-hidden="true"><use href="#i-pipette"></use></svg></button>
+                  <button type="button" class="col-chip" id="st-col-inactive" style="--chip:#9a9ab0" title="Неактивный текст" data-i18n-title="караоке.цвет.неактив"></button>
                   <span class="mini-label" data-i18n="караоке.цвет.неактив.мини">неактив.</span>
                 </span>
                 <span class="color-pick">
-                  <input type="color" id="st-col-active" value="#f2f2f7" title="Активная строка" data-i18n-title="караоке.цвет.актив">
-                  <button type="button" class="pipette" data-цвет="st-col-active" data-i18n-title="караоке.пипетка" title="Взять цвет со сцены: нажми, потом ткни в картинку" data-i18n-aria="караоке.пипетка" aria-label="Взять цвет со сцены"><svg class="icon" aria-hidden="true"><use href="#i-pipette"></use></svg></button>
+                  <button type="button" class="col-chip" id="st-col-active" style="--chip:#f2f2f7" title="Активная строка" data-i18n-title="караоке.цвет.актив"></button>
                   <span class="mini-label" data-i18n="караоке.цвет.актив.мини">актив.</span>
                 </span>
                 <span class="color-pick">
-                  <input type="color" id="st-col-effect" value="#f97316" title="Цвет эффекта" data-i18n-title="караоке.цвет.эффект">
-                  <button type="button" class="pipette" data-цвет="st-col-effect" data-i18n-title="караоке.пипетка" title="Взять цвет со сцены: нажми, потом ткни в картинку" data-i18n-aria="караоке.пипетка" aria-label="Взять цвет со сцены"><svg class="icon" aria-hidden="true"><use href="#i-pipette"></use></svg></button>
+                  <button type="button" class="col-chip" id="st-col-effect" style="--chip:#f97316" title="Цвет эффекта" data-i18n-title="караоке.цвет.эффект"></button>
                   <span class="mini-label" data-i18n="караоке.цвет.эффект.мини">эффект</span>
                 </span>
               </span>
@@ -2054,18 +2068,15 @@
               <span class="style-label" data-i18n="караоке.цветаПартий">Цвета дуэта</span>
               <span class="row-wide row-colors">
                 <span class="color-pick">
-                  <input type="color" id="st-col-part1" value="#38bdf8" title="Первый голос" data-i18n-title="караоке.цвет.партия1">
-                  <button type="button" class="pipette" data-цвет="st-col-part1" data-i18n-title="караоке.пипетка" title="Взять цвет со сцены: нажми, потом ткни в картинку" data-i18n-aria="караоке.пипетка" aria-label="Взять цвет со сцены"><svg class="icon" aria-hidden="true"><use href="#i-pipette"></use></svg></button>
+                  <button type="button" class="col-chip" id="st-col-part1" style="--chip:#38bdf8" title="Первый голос" data-i18n-title="караоке.цвет.партия1"></button>
                   <span class="mini-label" data-i18n="караоке.цвет.партия1.мини">1-й</span>
                 </span>
                 <span class="color-pick">
-                  <input type="color" id="st-col-part2" value="#fb7185" title="Второй голос" data-i18n-title="караоке.цвет.партия2">
-                  <button type="button" class="pipette" data-цвет="st-col-part2" data-i18n-title="караоке.пипетка" title="Взять цвет со сцены: нажми, потом ткни в картинку" data-i18n-aria="караоке.пипетка" aria-label="Взять цвет со сцены"><svg class="icon" aria-hidden="true"><use href="#i-pipette"></use></svg></button>
+                  <button type="button" class="col-chip" id="st-col-part2" style="--chip:#fb7185" title="Второй голос" data-i18n-title="караоке.цвет.партия2"></button>
                   <span class="mini-label" data-i18n="караоке.цвет.партия2.мини">2-й</span>
                 </span>
                 <span class="color-pick">
-                  <input type="color" id="st-col-part-both" value="#fbbf24" title="Поют вместе" data-i18n-title="караоке.цвет.партияОба">
-                  <button type="button" class="pipette" data-цвет="st-col-part-both" data-i18n-title="караоке.пипетка" title="Взять цвет со сцены: нажми, потом ткни в картинку" data-i18n-aria="караоке.пипетка" aria-label="Взять цвет со сцены"><svg class="icon" aria-hidden="true"><use href="#i-pipette"></use></svg></button>
+                  <button type="button" class="col-chip" id="st-col-part-both" style="--chip:#fbbf24" title="Поют вместе" data-i18n-title="караоке.цвет.партияОба"></button>
                   <span class="mini-label" data-i18n="караоке.цвет.партияОба.мини">вместе</span>
                 </span>
               </span>
@@ -2074,16 +2085,14 @@
               <span class="style-label" data-i18n="караоке.обводка">Обводка</span>
               <span class="eq-val" id="st-outline-val">0</span>
               <span class="row-wide row-colors">
-                <input type="color" id="st-col-outline" value="#000000" title="Цвет обводки" data-i18n-title="караоке.обводка.цвет">
-                  <button type="button" class="pipette" data-цвет="st-col-outline" data-i18n-title="караоке.пипетка" title="Взять цвет со сцены: нажми, потом ткни в картинку" data-i18n-aria="караоке.пипетка" aria-label="Взять цвет со сцены"><svg class="icon" aria-hidden="true"><use href="#i-pipette"></use></svg></button>
+                <button type="button" class="col-chip" id="st-col-outline" style="--chip:#000000" title="Цвет обводки" data-i18n-title="караоке.обводка.цвет"></button>
                 <input type="range" id="st-outline" min="0" max="6" step="0.5" value="0">
               </span>
             </div>
             <div class="style-row">
               <span class="style-label" data-i18n="караоке.фон">Фон сцены</span>
               <span class="row-wide row-colors">
-                <input type="color" id="st-col-bg" value="#16161f">
-                  <button type="button" class="pipette" data-цвет="st-col-bg" data-i18n-title="караоке.пипетка" title="Взять цвет со сцены: нажми, потом ткни в картинку" data-i18n-aria="караоке.пипетка" aria-label="Взять цвет со сцены"><svg class="icon" aria-hidden="true"><use href="#i-pipette"></use></svg></button>
+                <button type="button" class="col-chip" id="st-col-bg" style="--chip:#16161f" title="Цвет, которым заливать сцену вместо картинки" data-i18n-title="караоке.фон.цвет"></button>
                 <span class="seg" id="st-bg-mode">
                   <button data-v="default" class="active" data-i18n-title="караоке.фон.какбыло.подсказка" title="Фон сцены как был: твоя картинка или обычный тёмный грунт" data-i18n="караоке.фон.какбыло">Как было</button>
                   <button data-v="color" data-i18n-title="караоке.фон.цветом.подсказка" title="Залить сцену выбранным цветом вместо картинки" data-i18n="караоке.фон.цветом">Цветом</button>
@@ -2791,7 +2800,7 @@
   </details>
   <details>
     <summary data-i18n="faq.7.вопрос">Каким файлом сохраняется видео?</summary>
-    <p data-i18n="faq.7.ответ">Кнопка «Сохранить видео» записывает готовый ролик с фоном, текстом и минусовкой — качество выбирается рядом: HD 1280×720, Full HD 1920×1080 или 2K 2560×1440. Всё оформление сцены и эквалайзер попадают в запись. Файл в формате WebM: его понимают браузеры, монтажные программы и площадки для видео, конвертировать ничего не нужно. Запись идёт в реальном времени, поэтому займёт столько же, сколько длится песня; окно можно свернуть, экспорт продолжится в фоне.</p>
+    <p data-i18n="faq.7.ответ">Кнопка «Сохранить видео» собирает готовый ролик с фоном, текстом и минусовкой — качество выбирается рядом: HD 1280×720, Full HD 1920×1080 или 2K 2560×1440. Всё оформление сцены и эквалайзер попадают в кадр. Формат на выбор: .mp4 открывается везде, .webm меньше весит. Студия считает кадры сама, а не записывает в реальном времени: это быстрее, чем играет песня, и картинка не может разъехаться со звуком; окно можно свернуть, сборка продолжится в фоне.</p>
   </details>
   <details>
     <summary data-i18n="faq.8.вопрос">Сохранится ли мой проект?</summary>

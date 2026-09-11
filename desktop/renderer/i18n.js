@@ -391,8 +391,6 @@ I18N.EN = {
   'обновление.позже': 'Later',
 
   /* ---------- Окно «Что нового» ---------- */
-  'новости.главное.пипетка': '<b>🎨 The eyedropper takes a colour from the picture.</b> A button next to every colour in “Design”: press it, click the scene — the colour is taken straight from the frame. The system eyedropper on a Mac showed black and there was no fixing that.',
-  'новости.пипетка': '<b>An eyedropper next to every colour.</b> Press the eyedropper beside a swatch and click the scene — the colour is taken from the frame, the very one that goes into the video. Esc cancels.',
   'новости.подложкаЧестная': '<b>The scrim under the text is honest.</b> At a hundred per cent it really is opaque: the picture used to show through. For the old look, set the slider to 85.',
   'новости.обводкаСнаружи': '<b>The outline sits outside the letter, not inside.</b> On screen it used to eat into the letter while the frame drew it outside; now both surfaces draw it the same.',
   'новости.окноНовостей': '<b>This window got shorter.</b> Only the genuinely big things are at the top now, everything else is filed by release. And the close button no longer covers the text as you scroll.',
@@ -547,7 +545,7 @@ I18N.EN = {
 
   /* ---------- Шапка ---------- */
   'шапка.возможности': 'Features',
-  'шапка.компьютер': 'Desktop',
+  'шапка.компьютер': 'Download',
   'шапка.как': 'How it works',
   'шапка.вопросы': 'FAQ',
   'шапка.язык': 'Interface language',
@@ -555,9 +553,12 @@ I18N.EN = {
 
   /* ---------- Первый экран ---------- */
   'герой.заголовок': 'Turn any song<br><span class="grad-text">into karaoke</span>',
-  'герой.подзаголовок': 'Load a song — the studio ducks the vocals, helps you time the lyrics line by line and word by word, and runs karaoke with word-level highlighting. Nothing is uploaded anywhere: it all happens on your device.',
+  'герой.подзаголовок': 'Open a song — get karaoke with word-by-word highlighting and a finished video. Your own computer does the work; nothing goes to the internet.',
+  'герой.почему.вокал': '<b>A neural network removes the vocals</b>, not a filter: in the browser the echo and the backing vocals stay behind',
+  'герой.почему.текст': '<b>The lyrics time themselves</b> — a neural network sets the timing of every line and word, no tapping it out by hand',
+  'герой.почему.видео': '<b>A finished video up to 2K</b>, the instrumental and timed lyrics — all from one button',
   'герой.вБраузере': 'Make karaoke in the browser (beta)',
-  'герой.скачать': 'Neural networks remove the vocals and time the lyrics — right on your computer',
+  'герой.скачать': 'Free, no account. A minute to set up — <a href="#desktop">how to install</a>',
   'герой.мак': '🍎 Download for macOS',
   'герой.виндоус': '🪟 Download for Windows',
   'герой.приватно': '100% private',
@@ -573,7 +574,7 @@ I18N.EN = {
   'возможности.караоке.текст': 'Highlighting steps word by word, and three count-in dots fade out before you come in after a break. Your own background image, font, size, colours, outline, scrim under the text, equaliser. Export what you made: video up to 2K, instrumental as WAV, lyrics as LRC — plain or with a timestamp on every word.',
 
   /* ---------- Настольная версия ---------- */
-  'настольная.заголовок': 'Desktop version: two neural networks inside',
+  'настольная.заголовок': 'Why an app when there is a browser',
   'настольная.вокал': '<b>Remove the vocals.</b> In the browser the voice is ducked the simple way — fast, but reverb tails and backing vocals stay. The desktop version strips it out with the local UVR-MDX-NET-Inst_HQ_3 model — the very one UVR5 runs. The model downloads once, weighs 64 MB, and works offline afterwards.',
   'настольная.текст': '<b>Time the lyrics.</b> Paste the lyrics and the Whisper model listens to the singing, finds where each word is sung, and lays your lines out on those marks. Line and word timings appear by themselves — no tapping needed. The words stay yours: only the timing comes from the network, and it gets timing wrong far less often than letters. It comes out better if you remove the vocals first: then the network hears a clean voice instead of a mix.',
   'настольная.локально': 'Your computer does all the work; nothing goes to the internet.',
@@ -619,7 +620,7 @@ I18N.EN = {
   'как.экспорт.оформление': '<b>Look.</b> Tabs down the right of the “Karaoke” step: font and size, colours, stage (where the lines sit, the scrim under the text, blur on the inactive lines, the three-dot count-in before a line) and sound (vocal level and equaliser). The panel sits where the editor’s inspector does — parameters always on the same side. Everything shows up straight away in the preview on the left, and the F key blows it up full screen.',
   'как.экспорт.lrc': '<b>.lrc</b> is the standard synced-lyrics format: a line and its time. Plenty of players read it. Next to it, “.lrc with words” — the extended variant with a timestamp on every word.',
   'как.экспорт.wav': '<b>Instrumental .wav</b> — the audio without vocals as a single file, including the stretches where you kept the original.',
-  'как.экспорт.видео': '<b>Video</b> — a finished clip with background, text and instrumental in HD, Full HD or 2K, as an <b>.mp4</b> file that opens everywhere — on a phone, in messengers, on social media. It records in real time, so it takes exactly as long as the song; you can minimise the window and recording carries on.',
+  'как.экспорт.видео': '<b>Video</b> — a finished clip with background, text and instrumental in HD, Full HD or 2K, as an <b>.mp4</b> file that opens everywhere — on a phone, in messengers, on social media. The studio builds it itself, frame by frame: faster than the song plays; you can minimise the window and the building carries on.',
   'как.экспорт.чип': '<b>Where the work lives.</b> On the left of the step row there is a chip with the project name: click it and everything you can do with the project is there — save, save as, open another one, show the folder in the system. A dot next to the name means there are changes that aren’t in the folder yet. And on the first step, while no song is open, recent projects are listed under the drop zone — one click back to yesterday’s work.',
   'как.журнал': '<b>If something goes wrong.</b> The studio keeps a log: the launch with the version number, the notable steps and every error. It sits in a file next to the app’s settings, it is never sent anywhere, and there is nothing personal in it — only file names and our own messages. Show it when you report a problem: it says what happened.',
   'как.журнал.кнопка': 'Show the log',
@@ -761,7 +762,6 @@ I18N.EN = {
   'караоке.цвет.партия2.мини': '2nd',
   'караоке.цвет.партияОба': 'Both sing',
   'караоке.цвет.партияОба.мини': 'both',
-  'караоке.пипетка': 'Take a colour from the scene: press this, then click the picture',
   'караоке.цвета': 'Colours',
   'караоке.цвет.неактив': 'Inactive text',
   'караоке.цвет.неактив.мини': 'inactive',
@@ -772,6 +772,14 @@ I18N.EN = {
   'караоке.обводка': 'Outline',
   'караоке.обводка.цвет': 'Outline colour',
   'караоке.фон': 'Stage background',
+  'караоке.фон.цвет': 'The colour to fill the stage with instead of a picture',
+  /* Своё окошко выбора цвета — вместо системного (см. «Свой выбор цвета»
+     в app.js: системная панель на macOS открывалась позади студии). */
+  'цвет.тон': 'Hue',
+  'цвет.насыщ': 'Sat.',
+  'цвет.яркость': 'Light',
+  'цвет.код': 'The colour as a number, for example #1E90FF',
+  'цвет.готово': 'Done',
   'караоке.фон.какбыло': 'As is',
   'караоке.фон.цветом': 'Colour',
   'караоке.приглушение': 'Dimming',
@@ -832,9 +840,9 @@ I18N.EN = {
   'экспорт.формат': 'Format',
   'экспорт.формат.mp4': 'MP4 · opens everywhere',
   'экспорт.формат.webm': 'WebM · smaller file',
-  'экспорт.видео.очём': '<b>What goes into the file:</b> the background, the lyrics with their highlighting, the instrumental (and the original on the stretches you marked), the studio’s mark in the corner and the closing frame with the praise. It records in real time — it takes exactly as long as the song; you can minimise the window.',
+  'экспорт.видео.очём': '<b>What goes into the file:</b> the background, the lyrics with their highlighting, the instrumental (and the original on the stretches you marked), the studio’s mark in the corner and the closing frame with the praise. The studio builds the clip frame by frame — faster than the song plays, and the picture cannot drift from the sound; you can minimise the window.',
   'экспорт.видеоНачать': 'Save',
-  'экспорт.видеоНачать.подсказка': 'Record the clip of the stage with sound — it takes exactly as long as the song',
+  'экспорт.видеоНачать.подсказка': 'Build the clip of the stage with sound — faster than the song plays',
   'экспорт.отмена.подсказка': 'Close without recording anything',
   'экспорт.отмена': 'Cancel',
   'экспорт.качество': 'Quality',
@@ -971,7 +979,7 @@ I18N.EN = {
   'faq.6.ответ1': 'It’s the standard format for synced lyrics: every line is tagged with a time. Plenty of players and karaoke programs read these files.',
   'faq.6.ответ2': 'The “⬇ .lrc with words” button saves the extended variant — with a timestamp on every word inside a line. Players that don’t understand it will still read the lyrics line by line; the ones that do will highlight word by word.',
   'faq.7.вопрос': 'What kind of file is the video saved as?',
-  'faq.7.ответ': 'The “Save video” button records a finished clip with background, text and instrumental — quality is chosen next to it: HD 1280×720, Full HD 1920×1080 or 2K 2560×1440. The whole stage look and the equaliser go into the recording. The file is WebM: browsers, editing suites and video sites all read it, so nothing needs converting. Recording runs in real time, so it takes as long as the song; you can minimise the window and the export carries on in the background.',
+  'faq.7.ответ': 'The “Save video” button records a finished clip with background, text and instrumental — quality is chosen next to it: HD 1280×720, Full HD 1920×1080 or 2K 2560×1440. The whole stage look and the equaliser go into the recording. The format is yours to pick: .mp4 opens everywhere, .webm weighs less. The studio counts the frames itself instead of recording in real time: that is faster than the song plays, and the picture cannot drift from the sound; you can minimise the window and the building carries on in the background.',
   'faq.8.вопрос': 'Will my project be saved?',
   'faq.8.ответ': 'Lyrics, line timings, word timing, the look, the equaliser and the background image are saved in the browser automatically. You’ll have to pick the audio file again next time — browsers don’t keep large files.',
 
@@ -1476,12 +1484,12 @@ I18N.СТРОКИ = {
     en: 'Could not build the clip: {беда}\n\nTry a lower quality or a different format.',
   },
   'экспорт.цена': {
-    ru: 'Файл выйдет <b>до {мб} МБ</b>, запись займёт {время} — столько же, сколько длится песня.',
-    en: 'The file will be <b>up to {мб} MB</b>, and recording takes {время} — as long as the song itself.',
+    ru: 'Ролик выйдет длиной {время}, файл — не больше <b>{мб} МБ</b> (обычно вдвое-втрое меньше). Сборка быстрее, чем играет песня.',
+    en: 'The clip will run {время}; the file will be <b>no more than {мб} MB</b>, usually two or three times less. Building is faster than the song plays.',
   },
   'экспорт.цена.тесно': {
-    ru: 'Файл выйдет <b>до {мб} МБ</b>, запись займёт {время}. На машине с {гб} ГБ памяти это тяжело: надёжнее Full HD.',
-    en: 'The file will be <b>up to {мб} MB</b>, and recording takes {время}. On a machine with {гб} GB of memory that is heavy — Full HD is safer.',
+    ru: 'Ролик выйдет длиной {время}, файл — не больше <b>{мб} МБ</b>. На машине с {гб} ГБ памяти 2K тяжело: надёжнее Full HD.',
+    en: 'The clip will run {время}; the file will be <b>no more than {мб} MB</b>. On a machine with {гб} GB of memory 2K is heavy — Full HD is safer.',
   },
   'экспорт.записываемХод': { ru: 'Записываем видео… {at} / {всего}', en: 'Recording the video… {at} / {всего}' },
 
