@@ -22,7 +22,7 @@ function значокSVG(имя, cls) {
 
 /* Версия студии — сверяется с version.json, чтобы предупредить,
    что браузер показывает устаревшую копию из кэша */
-const APP_VERSION = '1.31.1';
+const APP_VERSION = '1.32.0';
 
 /* ---------- Модификатор в подписях горячих клавиш ----------
    Сами клавиши код ловит одинаково (metaKey || ctrlKey), а вот подписи
@@ -4589,9 +4589,14 @@ function scrimStops(s, geom) {
   const конец = спад + 16 * рост;       // здесь подложки нет вовсе
 
   const clamp = (v) => Math.max(0, Math.min(100, v)) / 100;
+  /* Сто процентов — это СТО процентов. Под самим текстом стояло 0,86,
+     и человек написал прямо: «подложка — написано 100%, но она всё равно
+     просвечивает, сделай честно». Теперь плато непрозрачно, а спад —
+     ровно половина от него: прежний вид, если он нравился, получается
+     ползунком на 85. */
   return [
-    [mid - конец, 0], [mid - спад, 0.42], [mid - плато, 0.86],
-    [mid + плато, 0.86], [mid + спад, 0.42], [mid + конец, 0],
+    [mid - конец, 0], [mid - спад, 0.5], [mid - плато, 1],
+    [mid + плато, 1], [mid + спад, 0.5], [mid + конец, 0],
   ].map(([at, a]) => ({ at: clamp(at), alpha: +(a * k).toFixed(3) }));
 }
 
@@ -5474,6 +5479,100 @@ $('vocal-mix').addEventListener('input', () => {
 /* ---------- Оформление текста ---------- */
 
 /* Раскладываем настройки в CSS-переменные обеих сцен */
+/* ============================================================
+   Пипетка: цвет берётся со сцены, а не у системы
+
+   Человек написал: «в режиме караоке выбор цвета пипеткой нигде
+   не работает — пипетка вызывается, но всегда показывает чёрный цвет».
+   Это не наша беда и не чинится нашим кодом: пипетку показывает
+   системное окно выбора цвета, а на macOS её увеличительное стекло
+   снимает экран — без права «Запись экрана» оно отдаёт чёрное. Просить
+   у караоке-программы право снимать экран ради выбора цвета — плохой
+   размен, да и включается оно только с перезапуском.
+
+   Поэтому пипетка у нас своя, и она лучше системной для этого дела:
+   берёт цвет не с экрана, а ИЗ КАДРА — того самого, который уйдёт
+   в видео. Значит, взятый цвет ровно тот, что окажется в ролике, без
+   поправок на масштаб окна и цветовой профиль монитора.
+
+   Устроена просто: нажали пипетку у нужного цвета — сцена ждёт тычка;
+   ткнули — кадр рисуется в маленький холст, оттуда и читается точка.
+   Esc или второе нажатие отменяют. ============================================================ */
+let пипетка = null;
+
+/* Картинка фона как объект — кадру нужна именно она, а не адрес.
+   Держим одну и ту же, пока не сменился адрес: пересоздавать её
+   на каждый тычок значило бы ждать загрузку. */
+let фонКадраКэш = { адрес: null, картинка: null };
+function картинкаФонаКадра() {
+  if (!state.bgImage) return null;
+  if (фонКадраКэш.адрес !== state.bgImage) {
+    const и = new Image();
+    и.src = state.bgImage;
+    фонКадраКэш = { адрес: state.bgImage, картинка: и };
+  }
+  const и = фонКадраКэш.картинка;
+  return и && и.complete && и.naturalWidth ? и : null;
+}
+
+function цветВКадре(долюX, долюY) {
+  const W = 640, H = 360;
+  const холст = document.createElement('canvas');
+  холст.width = W; холст.height = H;
+  const g = холст.getContext('2d', { willReadFrequently: true });
+  drawVideoFrame(g, W, H, картинкаФонаКадра(), audio.position(), null);
+  const x = Math.max(0, Math.min(W - 1, Math.round(долюX * W)));
+  const y = Math.max(0, Math.min(H - 1, Math.round(долюY * H)));
+  const п = g.getImageData(x, y, 1, 1).data;
+  return '#' + [п[0], п[1], п[2]].map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+
+function кончитьПипетку() {
+  пипетка = null;
+  document.body.classList.remove('берём-цвет');
+  document.querySelectorAll('.pipette.on').forEach((к) => к.classList.remove('on'));
+}
+
+function начатьПипетку(кнопка) {
+  const вход = $(кнопка.dataset.цвет);
+  if (!вход) return;
+  const уже = пипетка && пипетка.вход === вход;
+  кончитьПипетку();
+  if (уже) return;               // второе нажатие — передумал
+  пипетка = { вход };
+  кнопка.classList.add('on');
+  document.body.classList.add('берём-цвет');
+}
+
+document.addEventListener('click', (e) => {
+  const кн = e.target.closest && e.target.closest('.pipette');
+  if (кн) { e.preventDefault(); начатьПипетку(кн); }
+}, true);
+
+document.addEventListener('keydown', (e) => {
+  if (пипетка && e.key === 'Escape') { e.preventDefault(); кончитьПипетку(); }
+}, true);
+
+/* Тычок по сцене. Ловим на всплытии вниз (capture), чтобы опередить
+   всё прочее, что на сцене нажимается. */
+document.addEventListener('click', (e) => {
+  if (!пипетка) return;
+  const сцена = e.target.closest && e.target.closest('#lyrics-stage');
+  if (!сцена) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const к = сцена.getBoundingClientRect();
+  if (!к.width || !к.height) { кончитьПипетку(); return; }
+  const цвет = цветВКадре((e.clientX - к.left) / к.width, (e.clientY - к.top) / к.height);
+  const вход = пипетка.вход;
+  кончитьПипетку();
+  вход.value = цвет;
+  /* Тем же путём, каким цвет приходит из системного окна: пусть
+     обработчики оформления отработают ровно как обычно. */
+  вход.dispatchEvent(new Event('input', { bubbles: true }));
+  вход.dispatchEvent(new Event('change', { bubbles: true }));
+}, true);
+
 function applyStyle() {
   const s = state.style;
   const stages = [$('lyrics-stage'), $('edit-stage')];
@@ -13202,11 +13301,36 @@ function isFirstVisit() {
   return true;
 }
 
+/* Выпуск, от которого на этой стороне ничего не осталось. Часть пунктов
+   помечена «только в приложении», и на сайте они скрыты — а заголовок
+   выпуска оставался, и в архиве стояло «ВЕРСИЯ 1.31.1» с пустотой под
+   ним. Убираем и список, и заголовок.
+
+   Почему кодом, а не в CSS: выразить «заголовок, за которым идёт список
+   без видимых пунктов» одним селектором нельзя — :has() внутри :has()
+   не допускается, и правило целиком отбрасывается (проверено: оно молча
+   не доезжало до страницы). */
+function прибратьПустыеВыпуски() {
+  const вПриложении = document.body.classList.contains('is-desktop');
+  if (вПриложении) return;
+  document.querySelectorAll('#whatsnew .whatsnew-ver').forEach((заголовок) => {
+    const список = заголовок.nextElementSibling;
+    if (!список || !список.classList.contains('whatsnew-list')) return;
+    const естьЧтоПоказать = [...список.children]
+      .some((пункт) => !пункт.classList.contains('only-desktop'));
+    заголовок.classList.toggle('hidden', !естьЧтоПоказать);
+    список.classList.toggle('hidden', !естьЧтоПоказать);
+  });
+}
+
 function showWhatsNew() {
+  прибратьПустыеВыпуски();
   $('whatsnew').classList.remove('hidden');
   // Окно длинное и прокручивается: открываем его всегда сверху,
   // а фокус ставим без прокрутки, иначе список сразу уезжает в конец
   document.querySelector('.whatsnew-box').scrollTop = 0;
+  const прокрутка = document.querySelector('.whatsnew-scroll');
+  if (прокрутка) прокрутка.scrollTop = 0;
   $('whatsnew-ok').focus({ preventScroll: true });
 }
 

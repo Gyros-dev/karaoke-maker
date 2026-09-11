@@ -2538,6 +2538,20 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   text-align: center;
 }
 .export-box p { margin-bottom: 1rem; }
+/* Строка хода не должна дёргать окно. Беда была видна на глаз: текст
+   «Собираем ролик… 87%, осталось примерно 0:07» то влезал в строку,
+   то не влезал, — и всё окно вместе с полосой и кнопкой прыгало вверх-вниз
+   несколько раз в секунду. Поэтому здесь две меры: место под ДВЕ строки
+   отведено всегда (не влезло — окно не растёт, влезло — не сжимается),
+   а цифры моноширинные, чтобы смена 8 на 0 не меняла ширину. */
+#export-status {
+  /* Две строки с запасом: при 3,1em длинный текст перерастал мерку
+     на пиксель, и окно всё равно подрагивало. */
+  min-height: 3.45em;
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+}
 .export-bar {
   height: 10px;
   border-radius: 5px;
@@ -2552,6 +2566,43 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   transition: width 0.3s linear;
 }
 .export-hint { color: var(--text-dim); font-size: 0.85rem; }
+
+/* ---- Пипетка у каждого цвета ----
+   Системная пипетка в окне выбора цвета на macOS отдаёт чёрное без
+   права «Запись экрана» (см. «Пипетка» в app.js), поэтому у каждого
+   цвета своя — маленькая, рядом со своим образцом, чтобы не гадать,
+   куда ляжет взятый цвет. */
+/* Размер выбран не на глаз: образец цвета 34 пикселя, а подпись под ним
+   («неактив.») шире — именно она и задаёт ширину столбика. Пипетка
+   в 20 пикселей с щелью в 2 укладывается в ту же ширину, и ряд из трёх
+   цветов не разъезжается. С кнопкой в 24 он разъехался — панель
+   «Цвет» перестала влезать в колонку, и это поймал раздел
+   самопроверки «настройкиВлезают». */
+.pipette {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-mini);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.pipette .icon { width: 12px; height: 12px; margin: 0; }
+.pipette:hover { color: var(--text); border-color: var(--violet); }
+/* Ждём тычка: кнопка горит акцентом, а над сценой крест вместо стрелки. */
+.pipette.on {
+  color: var(--accent-ink, #fff);
+  border-color: var(--violet);
+  background: var(--violet);
+}
+body.берём-цвет #lyrics-stage,
+body.берём-цвет #lyrics-stage * { cursor: crosshair; }
+/* Образец и пипетка стоят парой, подпись — под обоими */
 
 /* --- Шаг 4: караоке --- */
 .lyrics-stage {
@@ -2650,7 +2701,15 @@ input[type="range"].tl-gain:focus-visible { outline: 1px solid var(--sel-ring); 
   line-height: var(--st-lh, 1.3);
   font-weight: var(--st-weight);
   letter-spacing: var(--st-ls);
-  -webkit-text-stroke: var(--st-outline) var(--st-outline-c);
+  /* Обводка — НАРУЖНАЯ. -webkit-text-stroke сам по себе рисует по центру
+     контура и поверх заливки: половина ширины съедает саму букву, и на
+     экране она читалась как внутренняя. paint-order кладёт обводку ПОД
+     заливку — внутренняя половина закрывается буквой, снаружи остаётся
+     ровно заданная ширина. Ширину поэтому удваиваем: так же считает
+     и кадр видео (strokeIfNeeded: lineWidth = outline * 2, обводка
+     рисуется до заливки), и обе поверхности сходятся. */
+  -webkit-text-stroke: calc(var(--st-outline) * 2) var(--st-outline-c);
+  paint-order: stroke fill;
   color: var(--st-inactive);
   /* Приглушение только прозрачностью и размытием: размер строк
      не меняется никогда, иначе текст «прыгает» на каждой смене */
@@ -3178,14 +3237,17 @@ body.stage-full .site-header { z-index: 1; }
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.4rem 0.6rem;
+  /* Зазор между столбиками цветов ужат с 0,6rem: у каждого столбика
+     прибавилась пипетка в 20 пикселей, и с прежним зазором третий цвет
+     уезжал на вторую строку. */
+  gap: 0.4rem 0.3rem;
 }
 .style-row .row-colors input[type="range"] { grid-column: auto; flex: 1; min-width: 90px; }
 /* Пипетка с подписью. Зазор и кегль подписи выбраны так, чтобы ТРИ
    пипетки вставали в ряд одной строкой: с прежними числами третья
    переносилась, и ряд занимал вдвое больше высоты — а закладка «Цвет»
    от этого переставала влезать в колонку (см. настройкиВлезают). */
-.color-pick { display: inline-flex; align-items: center; gap: 0.2rem; }
+.color-pick { display: inline-flex; align-items: center; gap: 0.15rem; }
 .style-row select {
   width: 100%;
   background: var(--bg-soft);
@@ -3496,10 +3558,15 @@ body.is-desktop .site-header .footer-link {
   justify-content: center;
   margin-top: 1.4rem;
 }
+/* Крестик стоит В ПОТОКЕ, а не поверх содержимого. Раньше он был
+   absolute в углу карточки, и при прокрутке текст уезжал под него:
+   человек это и увидел — кнопка наезжала на блоки. Теперь он занимает
+   свою строку над прокруткой, и заехать под него нечему. Отрицательные
+   поля возвращают его в угол, каким он и был на вид. */
 .whatsnew-close {
-  position: absolute;
-  top: 0.9rem;
-  right: 0.9rem;
+  align-self: flex-end;
+  flex: none;
+  margin: -1rem -1rem 0.3rem 0;
   width: 32px;
   height: 32px;
   display: grid;

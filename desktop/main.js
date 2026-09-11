@@ -9633,6 +9633,97 @@ function createWindow() {
         }
       })`);
 
+      /* Пипетка берёт цвет со сцены.
+
+         Человек написал: «в режиме караоке выбор цвета пипеткой нигде
+         не работает — пипетка вызывается, но всегда показывает чёрный
+         цвет». Это пипетка СИСТЕМНОГО окна выбора цвета: на macOS её
+         увеличительное стекло снимает экран, а без права «Запись экрана»
+         снимок выходит чёрным. Просить такое право у караоке-программы
+         незачем, поэтому пипетка теперь своя и берёт цвет не с экрана,
+         а из кадра — того самого, что уйдёт в видео.
+
+         Раздел кладёт на фон две половины, красную и синюю, и тычет
+         пипеткой в каждую: взятый цвет обязан совпасть с тем, куда
+         ткнули, и доехать до оформления. Заодно проверяется, что режим
+         включается, и что Esc его отменяет. */
+      report.пипетка = await win.webContents.executeJavaScript(`__раздел('пипетка', async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былТекст = document.getElementById('lyrics-input').value;
+        const былФон = state.bgImage;
+        const былСтиль = JSON.stringify(state.style);
+        const былоВремя = audio.position;
+        try {
+          const c = new OfflineAudioContext(2, 48000 * 30, 48000);
+          state.originalBuffer = c.createBuffer(2, 48000 * 30, 48000);
+          state.instrumentalBuffer = state.originalBuffer;
+          state.lines = [{ text: 'Проверка пипетки', time: 1, end: 6, ручноеНачало: true, ручнойКонец: true }];
+          document.getElementById('lyrics-input').value = 'Проверка пипетки';
+          const хф = document.createElement('canvas');
+          хф.width = 320; хф.height = 180;
+          const гф = хф.getContext('2d');
+          гф.fillStyle = '#cc2222'; гф.fillRect(0, 0, 160, 180);
+          гф.fillStyle = '#2244cc'; гф.fillRect(160, 0, 160, 180);
+          setBgImage(хф.toDataURL('image/png'));
+          state.style.scrim = 0;      // подложка закрыла бы фон
+          state.style.outline = 0;
+          applyStyle();
+          goToStep(4);
+          audio.position = () => 0.2; // до первой строки: текста в кадре нет
+          player.stageKey = null;
+          renderStage();
+          updateStageFill();
+          await new Promise((r) => setTimeout(r, 500));
+
+          const вход = document.getElementById('st-col-active');
+          const кнопка = document.querySelector('.pipette[data-цвет="st-col-active"]');
+          if (!кнопка) return { кнопкиНет: true, вНорме: false };
+          const сцена = document.getElementById('lyrics-stage');
+          const к = сцена.getBoundingClientRect();
+          const ткнуть = async (доля) => {
+            кнопка.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            const ждёт = document.body.classList.contains('берём-цвет');
+            сцена.dispatchEvent(new MouseEvent('click', {
+              bubbles: true, clientX: к.left + к.width * доля, clientY: к.top + к.height * 0.5,
+            }));
+            await new Promise((r) => setTimeout(r, 200));
+            return { ждёт, цвет: вход.value };
+          };
+          const слева = await ткнуть(0.2);
+          const справа = await ткнуть(0.8);
+          const вОформлении = state.style.active;
+
+          кнопка.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+          const ждётДоEsc = document.body.classList.contains('берём-цвет');
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          const отменилось = !document.body.classList.contains('берём-цвет');
+
+          const близко = (a, b) => {
+            const ч = (s) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+            const x = ч(a), y = ч(b);
+            return Math.abs(x[0] - y[0]) < 26 && Math.abs(x[1] - y[1]) < 26 && Math.abs(x[2] - y[2]) < 26;
+          };
+          return {
+            слева, справа, вОформлении, ждётДоEsc, отменилось,
+            вНорме: слева.ждёт && справа.ждёт && ждётДоEsc && отменилось
+              && близко(слева.цвет, '#cc2222') && близко(справа.цвет, '#2244cc')
+              && вОформлении === справа.цвет,
+          };
+        } finally {
+          audio.position = былоВремя;
+          setBgImage(былФон);
+          Object.assign(state.style, JSON.parse(былСтиль));
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          document.getElementById('lyrics-input').value = былТекст;
+          player.stageKey = null;
+          applyStyle();
+        }
+      })`);
+
       report.финал = await win.webContents.executeJavaScript(`__раздел('финал', () => {
         const поставить = (строки) => {
           state.lines = строки.map((t, i) => ({ text: t, time: 1 + i * 3, end: 3 + i * 3 }));
