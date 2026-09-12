@@ -9,7 +9,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://gc.zgo.at; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://karaokepunch.goatcounter.com; media-src 'self' blob:; connect-src 'self' https://karaokepunch.goatcounter.com; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title data-i18n="мета.заголовок">Karaoke Punch — создай караоке из любой песни</title>
   <meta name="description" data-i18n-content="мета.описание" content="Караоке-студия для Mac и Windows: нейросеть убирает вокал и сама расставляет времена по твоему тексту. Пой с пословной подсветкой и сохраняй готовое видео. Бесплатно, без серверов и регистрации.">
   <!-- КАРТОЧКА ССЫЛКИ. Мессенджеры и соцсети разворачивают ссылку
@@ -2859,7 +2859,7 @@
   </details>
   <details>
     <summary data-i18n="faq.3.вопрос">Мои файлы куда-то загружаются?</summary>
-    <p data-i18n="faq.3.ответ">Нет. Всё происходит в твоём браузере через Web Audio API. Сайт вообще не имеет сервера — можно даже отключить интернет после загрузки страницы. В настольной версии так же: нейросети считают на твоём компьютере, звук никуда не отправляется. Единственное, что приложение качает из интернета, — сами модели, и то один раз.</p>
+    <p data-i18n="faq.3.ответ">Нет. Всё происходит в твоём браузере через Web Audio API. Сайт вообще не имеет сервера — можно даже отключить интернет после загрузки страницы. В настольной версии так же: нейросети считают на твоём компьютере, звук никуда не отправляется. Единственное, что приложение качает из интернета, — сами модели, и то один раз. У самой страницы стоит счётчик заходов (GoatCounter): он считает, что страницу открыли, без куков, без отпечатка браузера и не сохраняя твой адрес. В приложении счётчика нет вовсе.</p>
   </details>
   <details>
     <summary data-i18n="faq.4.вопрос">Что за подсветка по словам и зачем размечать слова?</summary>
@@ -2916,5 +2916,20 @@
 <script src="webm-muxer.js?v=1.34.0"></script>
 <script src="timing.js?v=1.34.0"></script>
 <script src="app.js?v=1.34.0"></script>
+<!-- СЧЁТЧИК ПОСЕЩЕНИЙ. GoatCounter: без куков, без отпечатка браузера,
+     адрес посетителя не хранится. Считает заходы на страницу — и всё.
+
+     Почему вообще чужой скрипт на странице, которая хвалится тем, что
+     ничего никуда не отправляет: узнать, приходит ли кто-нибудь, иначе
+     нечем — GitHub Pages логов не отдаёт. Поэтому взят самый тихий
+     из счётчиков, в политике безопасности ему открыты ровно два адреса
+     (сам скрипт и приёмник), и об этом честно сказано в вопросах.
+
+     В ПРИЛОЖЕНИИ ЭТОГО НЕТ: sync-renderer вырезает строку при сборке
+     (см. СЧЁТЧИК там же) и ставит свою политику, где чужих адресов
+     нет вовсе. Стережёт это быстрая проверка «в приложении нет
+     счётчика». -->
+<script data-goatcounter="https://karaokepunch.goatcounter.com/count"
+  async src="https://gc.zgo.at/count.js"></script>
 </body>
 </html>
