@@ -10992,6 +10992,74 @@ function createWindow() {
         }
       })`);
 
+      /* Метка о готовой разметке не переживает смену работы.
+
+         Человек очистил проект, открыл другую песню, убрал вокал —
+         и ещё до того, как вставил текст, прочитал на шаге «Текст»:
+         «Времена проставлены. Строк: 28, слов: 125». Метка осталась
+         от прежней работы: гасла она только когда поле текста чистили
+         РУКАМИ (по событию input), а очистка проекта и загрузка песни
+         меняют поле кодом. */
+      report.меткаРазметкиНеВрёт = await win.webContents.executeJavaScript(`__раздел('меткаРазметкиНеВрёт', async () => {
+        const былиСтроки = state.lines;
+        const былоИмя = state.fileName;
+        const былТекст = document.getElementById('lyrics-input').value;
+        const былиASR = window.__asrLines;
+        try {
+          const видна = () => !document.getElementById('asr-result').classList.contains('hidden');
+          const метка = window.__меткаРазметки;
+          if (!метка) return { крючкаНет: true, вНорме: false };
+
+          // Разметка только что прошла: песня, текст и времена на месте
+          state.fileName = 'песня-раз.mp3';
+          document.getElementById('lyrics-input').value = 'Первая строка\\nВторая строка';
+          state.lines = [
+            { text: 'Первая строка', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+            { text: 'Вторая строка', time: 12, end: 16, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+          ];
+          window.__asrLines = null;
+          метка.показать(() => ({ заголовок: 'Времена проставлены. Строк: 2', пояснение: 'проба' }), true);
+          const послеРазметки = видна();
+
+          // Пришли на шаг «Текст» — метка верна, работа та же
+          document.dispatchEvent(new CustomEvent('шаг', { detail: { шаг: 2 } }));
+          await new Promise((r) => setTimeout(r, 60));
+          const наСвоёмМесте = видна();
+
+          /* А теперь то, что делал человек: очистил проект и открыл
+             другую песню. Поле текста чистит код, не рука. */
+          state.fileName = 'песня-два.mp3';
+          state.lines = [];
+          document.getElementById('lyrics-input').value = '';
+          document.dispatchEvent(new CustomEvent('шаг', { detail: { шаг: 2 } }));
+          await new Promise((r) => setTimeout(r, 60));
+          const послеСменыПесни = видна();
+
+          /* И ещё случай: текст на месте, песня та же, а времён нет —
+             человек вставил новый текст поверх прежнего. */
+          state.fileName = 'песня-три.mp3';
+          document.getElementById('lyrics-input').value = 'Совсем другой текст';
+          state.lines = [{ text: 'Совсем другой текст', time: null, end: null }];
+          метка.показать(() => ({ заголовок: 'Времена проставлены. Строк: 1', пояснение: 'проба' }), true);
+          state.lines = [{ text: 'Совсем другой текст', time: null, end: null }];
+          document.dispatchEvent(new CustomEvent('шаг', { detail: { шаг: 2 } }));
+          await new Promise((r) => setTimeout(r, 60));
+          const безВремён = видна();
+
+          return {
+            послеРазметки, наСвоёмМесте, послеСменыПесни, безВремён,
+            вНорме: послеРазметки && наСвоёмМесте
+              && !послеСменыПесни && !безВремён,
+          };
+        } finally {
+          window.__меткаРазметки.показать(null, true);
+          window.__asrLines = былиASR;
+          state.lines = былиСтроки;
+          state.fileName = былоИмя;
+          document.getElementById('lyrics-input').value = былТекст;
+        }
+      })`);
+
       /* Цвета дуэта выбирает человек, а не код.
 
          Цвета партий стояли числами в двух местах разом — в app.js
