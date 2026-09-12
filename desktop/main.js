@@ -4971,6 +4971,11 @@ function createWindow() {
               шагРамка: c(шаг, 'borderTopColor'),
               кружок: заливка(кружок),
               строка: c(ряд, 'backgroundColor'),
+              /* Ссылка «Что нового» в подвале. Она лежит ВНЕ .studio,
+                 где заведены переменные темы, и её цвет был вписан
+                 числом: всё вокруг синело или желтело, а она оставалась
+                 фирменно-зелёной в любой теме. */
+              новости: c(document.getElementById('btn-whatsnew'), 'color'),
             };
           };
 
@@ -4991,8 +4996,8 @@ function createWindow() {
           await new Promise((r) => setTimeout(r, 320));
 
           /* Фирменная тема зелёная нарочно — там зелёный и обязан быть
-             во всех шести местах сразу. В двух других его нет ни в одном. */
-          const фирменнаяЗелёная = цвета.signature.зелёного.length === 6;
+             во всех семи местах сразу. В двух других его нет ни в одном. */
+          const фирменнаяЗелёная = цвета.signature.зелёного.length === 7;
           const чужихЗелёных = цвета.neutral.зелёного.length + цвета.steel.зелёного.length;
           return {
             цвета, фирменнаяЗелёная, чужихЗелёных,
@@ -10516,6 +10521,296 @@ function createWindow() {
         win.setSize(былРазмер[0], былРазмер[1]);
         await new Promise((r) => setTimeout(r, 400));
       }
+
+      /* Время строки всюду одно.
+
+         Было так: в списке у строки стояло 0:06,46, в «Параметрах» —
+         начало 0:06,120, а в сохранённом .lrc — 06.46; ролик же начинал
+         красить строку с 6,12. Разошлось потому, что список и простой
+         .lrc брали сырое line.time, а сцена, ролик, «Параметры»
+         и расширенный .lrc — начало строки с подтяжкой к голосу
+         (lineStart). Число одно и то же должно быть везде.
+
+         Голос подделываем: настоящая огибающая берётся из нейросети,
+         а нам нужно ровно одно — чтобы подтяжка сработала. */
+      report.времяСтрокиОдно = await win.webContents.executeJavaScript(`__раздел('времяСтрокиОдно', async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былТекст = document.getElementById('lyrics-input').value;
+        const былиПрогоны = voice.runs;
+        const былОнсет = window.voiceOnsetNear;
+        const былаВыгрузка = window.download;
+        try {
+          const c = new OfflineAudioContext(1, 60 * 8000, 8000);
+          state.originalBuffer = c.createBuffer(1, 60 * 8000, 8000);
+          state.instrumentalBuffer = state.originalBuffer;
+          const тексты = ['Первая строка', 'Вторая строка'];
+          document.getElementById('lyrics-input').value = тексты.join('\\n');
+          state.lines = [
+            // время не рукой — значит, подтяжка к голосу разрешена
+            { text: тексты[0], time: 6.46, end: 9.8, ручнойКонец: true, ручноеНачало: false, сомнительная: false },
+            { text: тексты[1], time: 20.76, end: 24, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+          ];
+          /* Голос «есть»: подтяжка спрашивает ровно voice.runs, а где
+             именно вступает голос — отвечаем сами, чтобы число в проверке
+             не зависело от разбора настоящей огибающей. */
+          voice.runs = [[6.12, 9.5]];
+          window.voiceOnsetNear = (t) => (Math.abs(t - 6.46) < 0.6 ? 6.12 : null);
+          editor.spansKey = '';
+          goToStep(3);
+          renderEditList();
+          selectLine(0, {});
+          await new Promise((r) => setTimeout(r, 200));
+
+          const вСписке = document.querySelector('#edit-list .ts[data-ts-i="0"]').textContent;
+          const вПараметрах = document.getElementById('sel-start').value;
+          const наСцене = stagePhase(6.2);
+          const доВступления = stagePhase(6.0);
+
+          // .lrc собираем по-настоящему и читаем, что в нём написано
+          let файл = '';
+          window.download = async (blob) => { файл = await blob.text(); };
+          сохранитьLrc();
+          await new Promise((r) => setTimeout(r, 200));
+          const метка = (файл.split('\\n').find((s) => s.includes('Первая строка')) || '').slice(0, 10);
+
+          return {
+            вСписке, вПараметрах, метка,
+            наСцене: наСцене.cur, доВступления: доВступления.cur,
+            вторая: document.querySelector('#edit-list .ts[data-ts-i="1"]').textContent,
+            вНорме: вСписке === '0:06,12' && вПараметрах === '0:06,120'
+              && метка === '[00:06.12]'
+              // строка уже поётся в 6,2 и ещё не поётся в 6,0
+              && наСцене.cur === 0 && доВступления.cur === -1
+              // а поставленное рукой время подтяжка не трогает
+              && document.querySelector('#edit-list .ts[data-ts-i="1"]').textContent === '0:20,76',
+          };
+        } finally {
+          voice.runs = былиПрогоны;
+          window.voiceOnsetNear = былОнсет;
+          window.download = былаВыгрузка;
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          document.getElementById('lyrics-input').value = былТекст;
+          editor.sel = -1;
+          editor.spansKey = '';
+          renderEditList();
+          updateSelInfo();
+        }
+      })`);
+
+      /* Дописанные строки не уезжают за конец песни.
+
+         Проверяющий вставил текст длиннее песни: строки 43, 44 и 45
+         получили времена 2:23,99, 2:24,06 и 2:24,13 при песне 2:24,03.
+         Две последние начинались уже после её конца — на дорожке их
+         не видно, мышью не поправить, в караоке они не загорятся
+         никогда, а в .lrc уехали ровно эти времена. */
+      report.строкиВПесне = await win.webContents.executeJavaScript(`__раздел('строкиВПесне', async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былТекст = document.getElementById('lyrics-input').value;
+        try {
+          const сек = 20;
+          const c = new OfflineAudioContext(1, сек * 8000, 8000);
+          state.originalBuffer = c.createBuffer(1, сек * 8000, 8000);
+          state.instrumentalBuffer = state.originalBuffer;
+          // Три размеченные строки, последняя — у самого конца песни
+          state.lines = [
+            { text: 'Первая', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+            { text: 'Вторая', time: 12, end: 16, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+            { text: 'Третья', time: 19.4, end: 19.9, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+          ];
+          // И четыре дописанных в самый конец — им песни уже не хватает
+          const новые = new Set();
+          for (let i = 0; i < 4; i++) {
+            state.lines.push({ text: 'Дописанная ' + (i + 1), time: null, end: null });
+            новые.add(state.lines.length - 1);
+          }
+          расставитьНовыеСтроки(state.lines, новые);
+          const времена = state.lines.map((l) => (l.time == null ? null : +l.time.toFixed(3)));
+          const хвост = времена.slice(3);
+          let порядок = true;
+          for (let i = 1; i < времена.length; i++) {
+            if (времена[i] == null || времена[i] <= времена[i - 1]) порядок = false;
+          }
+          return {
+            времена, длинаПесни: сек,
+            вНорме: порядок
+              // все дописанные начинаются внутри песни
+              && хвост.every((t) => t != null && t < сек)
+              // и не раньше последней размеченной
+              && хвост[0] > 19.4,
+          };
+        } finally {
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          document.getElementById('lyrics-input').value = былТекст;
+          editor.spansKey = '';
+        }
+      })`);
+
+      /* Итог «Убрать вокал» стоит в своей карточке.
+
+         Было так: нажимаешь «Убрать вокал» в карточке нейросети —
+         а галочка «✓ нейросеть (UVR-MDX-NET-Inst_HQ_3)» вылезает
+         в СОСЕДНЕЙ карточке «Своя минусовка», которая про готовый файл
+         из UVR5. Карточка нейросети при этом не менялась совсем: та же
+         кнопка «Убрать вокал», та же подпись — по ней нельзя понять,
+         что дело уже сделано, и расчёт запускали второй раз. */
+      report.итогВСвоейКарточке = await win.webContents.executeJavaScript(`__раздел('итогВСвоейКарточке', async () => {
+        const былаСвоя = state.customInst;
+        const былоИмя = state.instName;
+        const былИсточник = state.instИсточник;
+        try {
+          const снять = () => ({
+            уНейросети: {
+              видно: !document.getElementById('ai-done').classList.contains('hidden'),
+              текст: document.getElementById('ai-done').textContent,
+              кнопка: document.getElementById('btn-ai-run').textContent,
+            },
+            уСвоей: {
+              видно: !document.getElementById('inst-status').classList.contains('hidden'),
+              текст: document.getElementById('inst-status').textContent,
+              убрать: !document.getElementById('btn-inst-remove').classList.contains('hidden'),
+            },
+          });
+
+          // Вокал убрала нейросеть
+          state.customInst = true;
+          state.instИсточник = 'нейросеть';
+          state.instName = t('ии.имя');
+          updateInstUI();
+          const нейросеть = снять();
+
+          // А теперь человек выбрал свой файл
+          state.instИсточник = 'файл';
+          state.instName = 'минус.wav';
+          updateInstUI();
+          const файл = снять();
+
+          // И убрал его совсем
+          state.customInst = false;
+          state.instИсточник = null;
+          state.instName = null;
+          updateInstUI();
+          const ничего = снять();
+
+          return {
+            нейросеть, файл, ничего,
+            вНорме: нейросеть.уНейросети.видно && !нейросеть.уСвоей.видно
+              && нейросеть.уНейросети.текст.includes('вокал убран')
+              && нейросеть.уНейросети.кнопка === t('ии.кнопкаСнова')
+              // «убрать» в чужой карточке тоже не предлагается
+              && !нейросеть.уСвоей.убрать
+              // свой файл — наоборот: он в своей карточке
+              && файл.уСвоей.видно && файл.уСвоей.текст.includes('минус.wav')
+              && !файл.уНейросети.видно
+              && файл.уНейросети.кнопка === t('ии.кнопка')
+              && файл.уСвоей.убрать
+              // ничего нет — обе карточки чисты
+              && !ничего.уСвоей.видно && !ничего.уНейросети.видно,
+          };
+        } finally {
+          state.customInst = былаСвоя;
+          state.instName = былоИмя;
+          state.instИсточник = былИсточник;
+          updateInstUI();
+        }
+      })`);
+
+      /* Узкий блок на дорожке всё равно подписан.
+
+         Строка на 1,57 с рисовалась пустой зелёной коробкой — ни буквы,
+         ни многоточия, — а соседняя на 1,99 с уже говорила «≈ Я …».
+         Что это за строка, понять было нельзя. */
+      report.подписьУзкогоБлока = await win.webContents.executeJavaScript(`__раздел('подписьУзкогоБлока', async () => {
+        const g = document.createElement('canvas').getContext('2d');
+        g.font = '11px sans-serif';
+        const текст = 'На небе звёзды и луна';
+        const ширины = [3, 6, 10, 16, 30, 60, 400];
+        const подписи = ширины.map((w) => clipText(g, текст, w));
+        return {
+          подписи,
+          вНорме: подписи[0] === ''            // совсем некуда — молчим
+            // с десяти точек и шире подпись обязана быть хоть какая-то
+            && подписи.slice(2, -1).every((s) => s.length > 0)
+            && подписи[подписи.length - 1] === текст
+            // и ни одна подпись не шире своего блока
+            && подписи.every((s, i) => g.measureText(s).width <= ширины[i] + 0.01),
+        };
+      })`);
+
+      /* Масштаб держится за то, на что человек смотрит.
+
+         Было: «+» увеличивал от середины окна дорожки. Проверяющий
+         выбрал первую строку — дорожка перемотала на неё, — нажал «+»
+         дважды и получил в окне кусок 0:43–1:43: ни выбранной строки,
+         ни указателя воспроизведения. */
+      report.масштабДержитСтроку = await win.webContents.executeJavaScript(`__раздел('масштабДержитСтроку', async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былаЛупа = editor.pxPerSec;
+        const былСдвиг = editor.scrollT;
+        const былоВремя = audio.position();
+        try {
+          const сек = 180;
+          const c = new OfflineAudioContext(1, сек * 8000, 8000);
+          state.originalBuffer = c.createBuffer(1, сек * 8000, 8000);
+          state.instrumentalBuffer = state.originalBuffer;
+          state.lines = [];
+          for (let i = 0; i < 20; i++) {
+            state.lines.push({
+              text: 'Строка ' + (i + 1), time: 5 + i * 8, end: 9 + i * 8,
+              ручнойКонец: true, ручноеНачало: true, сомнительная: false,
+            });
+          }
+          editor.spansKey = '';
+          goToStep(3);
+          renderEditList();
+          // Указатель у начала песни, а смотрим на восьмую строку
+          audio.offset = 0;
+          selectLine(7, { scrollTimeline: true });
+          drawTimeline();
+          await new Promise((r) => setTimeout(r, 200));
+
+          const начало = spanOfRow(7).start;
+          const вОкне = () => {
+            const { W } = timelineDims();
+            const x = tToX(начало);
+            return x >= 0 && x <= W;
+          };
+          const доЛупы = вОкне();
+          document.getElementById('tl-zoom-in').click();
+          await new Promise((r) => setTimeout(r, 120));
+          const после1 = вОкне();
+          document.getElementById('tl-zoom-in').click();
+          await new Promise((r) => setTimeout(r, 120));
+          const после2 = вОкне();
+          return {
+            доЛупы, после1, после2,
+            лупа: +editor.pxPerSec.toFixed(1), былаЛупа: +былаЛупа.toFixed(1),
+            вНорме: доЛупы && после1 && после2 && editor.pxPerSec > былаЛупа,
+          };
+        } finally {
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          editor.pxPerSec = былаЛупа;
+          editor.scrollT = былСдвиг;
+          audio.offset = былоВремя;
+          editor.sel = -1;
+          editor.spansKey = '';
+          renderEditList();
+          updateSelInfo();
+          drawTimeline();
+        }
+      })`);
 
       /* Цвета дуэта выбирает человек, а не код.
 

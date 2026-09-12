@@ -668,7 +668,6 @@ I18N.EN = {
   /* ---------- Шаг 1: блоки приложения ---------- */
   'ии.заголовок': '🧠 Remove the vocals with a neural network',
   'ии.текст': 'The local UVR-MDX-NET-Inst_HQ_3 model — the same one UVR5 runs. All of it is worked out on your computer',
-  'ии.кнопка': 'Remove vocals',
   'ии.кнопка.подсказка': 'Work out the instrumental with a neural network right on this computer. The song is not sent anywhere',
   'ии.ещё': 'More options',
   'ии.качество': 'Quality',
@@ -1745,6 +1744,14 @@ I18N.СТРОКИ = {
     en: 'neural network (UVR-MDX-NET-Inst_HQ_3, {n} passes)',
   },
   'ии.имя': { ru: 'нейросеть (UVR-MDX-NET-Inst_HQ_3)', en: 'neural network (UVR-MDX-NET-Inst_HQ_3)' },
+  /* Итог стоит в карточке нейросети: по ней и должно быть видно,
+     что вокал уже убран, — иначе расчёт запускают второй раз. */
+  /* Подпись кнопки зовут из кода (updateInstUI меняет её на «ещё раз»),
+     поэтому она живёт здесь, а не в разметочном словаре: оттуда русского
+     текста не достать, и по-русски на кнопке стоял бы сам ключ. */
+  'ии.кнопка': { ru: 'Убрать вокал', en: 'Remove vocals' },
+  'ии.сделано': { ru: 'вокал убран нейросетью', en: 'vocals removed by the network' },
+  'ии.кнопкаСнова': { ru: 'Убрать вокал ещё раз', en: 'Remove vocals again' },
   'ии.готово': {
     ru: 'Готово! Вокал убран нейросетью.\n\n'
       + 'Минусовка уже подставлена — можно идти дальше. '
@@ -1985,6 +1992,20 @@ I18N.СТРОКИ = {
   'asr.меткаБезСомнительных': {
     ru: ' Строк с временем на глазок нет.',
     en: ' No lines with rough timing.',
+  },
+  /* Текста больше, чем спето: последним строкам песни не хватило вовсе.
+     Молчать об этом нельзя — в караоке они не загорятся никогда. */
+  'asr.меткаБезМеста': {
+    ru: ' Строк, которым не хватило песни: {n} — они прижаты к самому концу.',
+    en: ' Lines the song had no room for: {n} — pinned to the very end.',
+  },
+  'asr.итогБезМеста': {
+    ru: '\n\nСтрок, которым не хватило песни: {n}. Текста больше, чем спето: '
+      + 'эти строки прижаты к самому концу и помечены знаком ≈. Посмотри конец '
+      + 'текста — может быть, туда попал куплет, которого в этой записи нет.',
+    en: '\n\nLines the song had no room for: {n}. There is more text than singing: '
+      + 'these lines are pinned to the very end and flagged with ≈. Check the end '
+      + 'of the lyrics — a verse that is not in this recording may have slipped in.',
   },
   'asr.итогРазложено': {
     ru: 'Текст разложен по песне. Строк: {строк}, слов: {слов}.\n\n'

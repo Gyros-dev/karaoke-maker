@@ -185,6 +185,12 @@ const state = {
      (см. «Проект папкой»). В браузере просто лежат без дела. */
   songBytes: null,
   instrumentalBuffer: null, // AudioBuffer с приглушённым вокалом (null для моно)
+  /* Откуда минусовка: 'файл' — человек выбрал свою, 'нейросеть' —
+     посчитана здесь же. Нужно, чтобы итог показывался в СВОЕЙ карточке:
+     раньше галочка «✓ нейросеть (UVR-MDX-NET-Inst_HQ_3)» вылезала
+     в карточке «Своя минусовка», а карточка нейросети не менялась
+     совсем — по ней нельзя было понять, что дело уже сделано. */
+  instИсточник: null,
   lines: [],                // [{ text, time|null, end:number|null }]
   origSpans: [],            // отрезки, где вместо минусовки звучит оригинал
   /* Человек уже делал отрезок оригинала хотя бы раз. По этому признаку
@@ -3335,6 +3341,7 @@ async function handleFile(file) {
     const instrumental = await makeInstrumental(buffer);
     state.customInst = false;
     state.instName = null;
+    state.instИсточник = null;
     $('inst-input').value = '';
     updateInstUI();
 
@@ -3435,10 +3442,23 @@ function обновитьСведенияОТреке() {
    поэтому если он загружен — используем его. */
 function updateInstUI() {
   const custom = state.customInst;
-  $('inst-status').classList.toggle('hidden', !custom);
-  $('inst-status').textContent = custom ? `✓ ${state.instName}` : '';
-  $('btn-inst-remove').classList.toggle('hidden', !custom);
-  $('btn-inst-add').textContent = t(custom ? 'минусовка.заменить' : 'минусовка.выбрать');
+  /* Минусовку посчитала нейросеть — и говорит об этом карточка
+     нейросети, а не «Своя минусовка»: своя — это файл человека. */
+  const отНейросети = !!custom && state.instИсточник === 'нейросеть';
+  const свой = !!custom && !отНейросети;
+  $('inst-status').classList.toggle('hidden', !свой);
+  $('inst-status').textContent = свой ? `✓ ${state.instName}` : '';
+  $('btn-inst-remove').classList.toggle('hidden', !свой);
+  $('btn-inst-add').textContent = t(свой ? 'минусовка.заменить' : 'минусовка.выбрать');
+  /* Карточка нейросети есть только в приложении (её вставляет
+     sync-renderer), поэтому сначала спрашиваем, есть ли она. */
+  const готово = $('ai-done');
+  if (готово) {
+    готово.classList.toggle('hidden', !отНейросети);
+    готово.textContent = отНейросети ? `✓ ${t('ии.сделано')}` : '';
+  }
+  const кнИИ = $('btn-ai-run');
+  if (кнИИ) кнИИ.textContent = t(отНейросети ? 'ии.кнопкаСнова' : 'ии.кнопка');
   /* Своя минусовка короче песни — говорим сразу, а не при «проверке
      звука». Молчать нельзя: ближе к концу песни просто наступит
      тишина, и человек узнает об этом, уже начав петь. Полсекунды
@@ -3502,6 +3522,7 @@ async function handleInstFile(file, подпись) {
     state.instrumentalBuffer = buffer;
     state.customInst = true;
     state.instName = подпись || file.name;
+    state.instИсточник = 'файл';
     /* Своя минусовка приехала в исходной тональности — значит,
        и песня возвращается в исходную: держать две дорожки
        в разных тональностях нельзя. */
@@ -3526,6 +3547,7 @@ $('btn-inst-remove').addEventListener('click', async () => {
   $('inst-input').value = '';
   state.customInst = false;
   state.instName = null;
+  state.instИсточник = null;
   audio.stop();
   /* Возвращаемся к встроенному приглушению вокала. Считаем его
      от НЕТРОНУТОЙ песни: приглуши мы сдвинутую, минусовка вышла бы
@@ -3850,9 +3872,17 @@ function расставитьНовыеСтроки(lines, новые) {
         ? до.end : до.time + шаг;
       слот = шаг;
       начало = конец;
-      // В песню помещаемся: если до её конца ближе, чем нужно, ужимаемся
-      if (предел > начало + MIN_SPAN) {
-        слот = Math.max(Math.min(шаг, (предел - начало) / k), MIN_SPAN);
+      /* В песню помещаемся все до одной. Раньше ужимался только слот,
+         и то лишь когда до конца песни ещё оставалось место: если текста
+         было больше, чем спето, последние строки уходили ЗА конец песни
+         (у проверяющего — 2:24,06 и 2:24,13 при песне 2:24,03). На дорожке
+         таких строк не видно, мышью их не поправить, в караоке они
+         не загораются никогда, а в .lrc уезжают ровно эти времена.
+         Теперь начало прижимается так, чтобы внутрь песни поместилась
+         и последняя строка пачки — но не раньше предыдущей строки. */
+      if (предел > 0) {
+        начало = Math.max(от + MIN_SPAN, Math.min(начало, предел - k * MIN_SPAN));
+        слот = Math.max(MIN_SPAN, Math.min(слот, (предел - начало) / k));
       }
     } else {
       // Соседей с временем нет ни с одной стороны — бывает только там,
@@ -4182,7 +4212,9 @@ function refreshTimes() {
   const synced = syncedLines();
   document.querySelectorAll('#edit-list .ts[data-ts-i]').forEach((el) => {
     const line = state.lines[+el.dataset.tsI];
-    if (line) писать(el, line.time == null ? '–:––' : fmtTimeCs(line.time));
+    if (!line) return;
+    писать(el, line.time == null
+      ? '–:––' : fmtTimeCs(lineStart(synced, synced.indexOf(line))));
   });
   document.querySelectorAll('#edit-list .dur-ts[data-dur-i]').forEach((el) => {
     const line = state.lines[+el.dataset.durI];
@@ -6488,7 +6520,11 @@ function сохранитьLrc() {
   const lrc = [
     `[ti:${name}]`,
     '[by:Karaoke Punch]',
-    ...lines.map((l) => `[${fmtLrcTime(l.time)}]${l.text}`),
+    /* Метка строки — её начало на сцене (lineSpan), а не сырое l.time.
+       Иначе файл расходился и с караоке, и с роликом, и с расширенным
+       .lrc, который начало и так брал отсюда: у строки, подтянутой
+       к голосу, в файле стояло 06.46, а петь она начинала с 06.12. */
+    ...lines.map((l, i) => `[${fmtLrcTime(lineSpan(lines, i).start)}]${l.text}`),
   ].join('\n');
   download(new Blob([lrc], { type: 'text/plain;charset=utf-8' }), `${name}.lrc`);
 }
@@ -7448,7 +7484,12 @@ function renderEditList() {
     const ts = document.createElement('span');
     ts.className = 'ts' + (line.time == null ? ' empty' : '');
     ts.dataset.tsI = i;
-    ts.textContent = line.time == null ? '–:––' : fmtTimeCs(line.time);
+    /* Показываем НАЧАЛО СТРОКИ, а не сырую метку: если время
+       поставлено не рукой, строка подтягивается к вступлению голоса
+       (см. lineStart), и петь она начинает именно оттуда. Пока здесь
+       стояло line.time, список спорил сам с собой: в строке было
+       0:06,46, в «Параметрах» — 0:06,120, а длина у обоих одна. */
+    ts.textContent = line.time == null ? '–:––' : fmtTimeCs(lineStart(synced, j));
 
     // Длительность: по ней сразу видно строку, которой не хватило места
     const dur = document.createElement('span');
@@ -9169,12 +9210,23 @@ function roundRect(g, x, y, w, h, r) {
 }
 
 /* Подпись внутри блока: обрезаем по ширине, чтобы не лезла к соседям */
+/* Подпись, обрезанная под ширину блока.
+
+   Узкий блок раньше оставался ПУСТЫМ: строка на 1,57 с рисовалась
+   зелёной коробкой без единой буквы, а соседняя на 1,99 с уже говорила
+   «≈ Я …» — и понять, что это за строка, было нельзя. Поэтому,
+   когда не помещается даже буква с многоточием, ставим хотя бы букву,
+   а на совсем узком — одно многоточие: «тут есть текст, он не влез». */
 function clipText(g, text, maxW) {
-  if (maxW < 12) return '';
+  if (maxW < 4) return '';
   if (g.measureText(text).width <= maxW) return text;
   let s = text;
   while (s.length > 1 && g.measureText(s + '…').width > maxW) s = s.slice(0, -1);
-  return s.length > 1 ? s + '…' : '';
+  if (s.length > 1) return s + '…';
+  const одна = text.slice(0, 1);
+  if (g.measureText(одна + '…').width <= maxW) return одна + '…';
+  if (g.measureText(одна).width <= maxW) return одна;
+  return g.measureText('…').width <= maxW ? '…' : '';
 }
 
 /* ---------- Полоса отрезков оригинала ----------
@@ -11255,9 +11307,32 @@ function zoomAt(factor, x) {
   drawTimeline();
 }
 
-function zoomTimeline(factor) {
+/* От чего отталкивается масштаб с кнопки.
+
+   Была середина окна дорожки — и «+» уводил с глаз ровно то, ради чего
+   его нажимают: человек выбирал первую строку, дорожка честно
+   перематывалась на неё, два нажатия «+» — и в окне кусок 0:43–1:43,
+   ни строки, ни указателя. Держим то, на что человек смотрит:
+   указатель воспроизведения, если он в окне, иначе начало выбранной
+   строки, иначе — середину, как и было. */
+function якорьМасштаба() {
   const { W } = timelineDims();
-  zoomAt(factor, W / 2);
+  const вОкне = (t) => {
+    const x = tToX(t);
+    return x >= 0 && x <= W ? x : null;
+  };
+  const указатель = вОкне(audio.position());
+  if (указатель != null) return указатель;
+  const sp = spanOfRow(editor.sel);
+  if (sp) {
+    const строка = вОкне(sp.start);
+    if (строка != null) return строка;
+  }
+  return W / 2;
+}
+
+function zoomTimeline(factor) {
+  zoomAt(factor, якорьМасштаба());
 }
 $('tl-zoom-in').addEventListener('click', () => zoomTimeline(1.5));
 $('tl-zoom-out').addEventListener('click', () => zoomTimeline(1 / 1.5));

@@ -3452,17 +3452,33 @@ body.stage-full .site-header { z-index: 1; }
   color: var(--text-dim);
   font-size: 0.9rem;
 }
+/* Подвал лежит ВНЕ .studio, а переменные темы заведены внутри неё —
+   поэтому у его ссылок свой цвет по теме. Пока он был вписан числом,
+   «Что нового в 1.32.0» оставалось фирменно-зелёным и в стальной теме,
+   и в нейтральной: всё вокруг синело или желтело, а ссылка нет. */
+:root {
+  --chrome-accent: #54C492;
+  --chrome-accent-hover: #92C270;
+}
+html[data-theme="neutral"] {
+  --chrome-accent: #f0c419;
+  --chrome-accent-hover: #f7dd6b;
+}
+html[data-theme="steel"] {
+  --chrome-accent: #4d9fff;
+  --chrome-accent-hover: #7cc0ff;
+}
 .footer-link {
   background: none;
   border: none;
   padding: 0;
-  color: #54C492;
+  color: var(--chrome-accent);
   font-family: inherit;
   font-size: inherit;
   text-decoration: underline;
   cursor: pointer;
 }
-.footer-link:hover { color: #92C270; }
+.footer-link:hover { color: var(--chrome-accent-hover); }
 
 /* ============ Что нового ============
    Окно со списком изменений: показывается один раз после обновления

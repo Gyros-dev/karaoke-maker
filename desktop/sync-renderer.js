@@ -53,6 +53,7 @@ const AI_BLOCK = `      <div class="bg-upload key-action hidden" id="ai-block">
         <button class="btn btn-primary btn-small" id="btn-ai-run" data-i18n="ии.кнопка"
           data-i18n-title="ии.кнопка.подсказка"
           title="Посчитать минусовку нейросетью прямо на этом компьютере. Песня никуда не отправляется">Убрать вокал</button>
+        <span class="inst-status hidden" id="ai-done"></span>
         <p class="ai-eta" id="ai-eta"></p>
         <p class="key-step" data-i18n-html="шаг1.порядок"><b>С этого начинают.</b>
           Убрал вокал — и дальше на шаге «Текст» нейросеть расставит времена
