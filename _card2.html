@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>карточка</title>
+<style>
+@font-face { font-family: 'Bungee'; src: url('fonts/bungee.woff2') format('woff2'); font-display: block; }
+@font-face { font-family: 'Bungee Shade'; src: url('fonts/bungee-shade.woff2') format('woff2'); font-display: block; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1200px; height: 630px; overflow: hidden; }
+body {
+  background: radial-gradient(ellipse at 50% 6%, rgba(53, 156, 110, 0.30), transparent 64%), #0a0a0f;
+  color: #f2f2f7;
+  font-family: -apple-system, "Helvetica Neue", sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+}
+.logo {
+  width: 268px;
+  height: 268px;
+  border-radius: 50px;
+  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.mark {
+  font-family: 'Bungee Shade', Impact, sans-serif;
+  font-size: 66px;
+  line-height: 1;
+  color: #54C492;
+  text-align: center;
+}
+.tag { font-size: 30px; font-weight: 700; letter-spacing: -0.01em; }
+.host {
+  font-family: 'Bungee', Impact, sans-serif;
+  font-size: 20px;
+  color: #54C492;
+  letter-spacing: 0.03em;
+}
+</style>
+</head>
+<body>
+  <img class="logo" src="logo.png" alt="">
+  <div class="mark">KARAOKE PUNCH</div>
+  <div class="tag">Караоке из любой песни</div>
+  <div class="host">karaokepunch.ru</div>
+</body>
+</html>

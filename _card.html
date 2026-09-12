@@ -9,57 +9,51 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 1200px; height: 630px; overflow: hidden; }
 body {
-  background: radial-gradient(ellipse at 18% 0%, rgba(53, 156, 110, 0.30), transparent 62%), #0a0a0f;
+  background: radial-gradient(ellipse at 22% 12%, rgba(53, 156, 110, 0.32), transparent 62%), #0a0a0f;
   color: #f2f2f7;
   font-family: -apple-system, "Helvetica Neue", sans-serif;
   display: flex;
   align-items: center;
-  position: relative;
+  gap: 56px;
+  padding: 0 70px;
 }
-.left { width: 560px; padding: 0 0 0 62px; flex: none; }
+.logo {
+  width: 372px;
+  height: 372px;
+  flex: none;
+  border-radius: 68px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
 .mark {
   font-family: 'Bungee Shade', Impact, sans-serif;
-  font-size: 62px;
-  line-height: 1.06;
+  font-size: 68px;
+  line-height: 1.04;
   color: #54C492;
-  letter-spacing: 0.01em;
 }
 .tag {
   margin-top: 26px;
-  font-size: 34px;
-  line-height: 1.25;
+  font-size: 35px;
+  line-height: 1.22;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-.tag i { color: #67CB9E; font-style: normal; }
-.sub { margin-top: 20px; font-size: 21px; line-height: 1.45; color: #9a9ab0; }
+.sub { margin-top: 18px; font-size: 21px; line-height: 1.45; color: #9a9ab0; }
 .host {
-  position: absolute;
-  left: 62px;
-  bottom: 46px;
+  margin-top: 30px;
   font-family: 'Bungee', Impact, sans-serif;
-  font-size: 22px;
+  font-size: 21px;
   color: #54C492;
   letter-spacing: 0.03em;
-}
-.shot {
-  position: absolute;
-  left: 600px;
-  top: 74px;
-  width: 760px;
-  border: 1px solid #2a2a36;
-  border-radius: 14px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65);
 }
 </style>
 </head>
 <body>
-  <div class="left">
+  <img class="logo" src="logo.png" alt="">
+  <div>
     <div class="mark">KARAOKE<br>PUNCH</div>
-    <div class="tag">Караоке из любой песни<br><i>за десять минут</i></div>
-    <div class="sub">Нейросеть убирает вокал и сама<br>расставляет времена по твоему тексту</div>
+    <div class="tag">Караоке из любой песни</div>
+    <div class="sub">Нейросеть убирает вокал и сама расставляет<br>времена по твоему тексту. Mac и Windows</div>
+    <div class="host">karaokepunch.ru</div>
   </div>
-  <img class="shot" src="shots/studio-4-ru.webp" alt="">
-  <div class="host">karaokepunch.ru</div>
 </body>
 </html>
