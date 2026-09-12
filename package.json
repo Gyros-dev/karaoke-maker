@@ -15,6 +15,7 @@
     "app:build:mac": "npm --prefix desktop run dist:mac",
     "app:build:win": "npm --prefix desktop run dist:win",
     "app:build": "npm --prefix desktop run dist",
-    "downloads": "node downloads.js"
+    "downloads": "node downloads.js",
+    "stats": "node stats.js"
   }
 }
