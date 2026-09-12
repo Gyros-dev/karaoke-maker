@@ -2006,13 +2006,46 @@ function fmtДлит(sec, знаков) {
   return Math.max(0, sec).toFixed(знаков).replace('.', десРазделитель());
 }
 
-function download(blob, name) {
+/* ---------- Отдать файл человеку ----------
+
+   В ПРИЛОЖЕНИИ пишем сами: спрашиваем место своим окном и кладём байты
+   на диск. Раньше файл уходил браузерной загрузкой, а она пишет рядом
+   с итоговым файлом временный — «.dev.gyros.benengskaya.XXXXXX», по имени
+   приложения, — и переименовывает его в конце. Стоило этому шагу
+   не случиться, огрызок оставался лежать: проверяющий нашёл в «Загрузках»
+   скрытый файл на 2374 байта, байт в байт равный сохранённому song.lrc.
+   Своя запись такого следа не оставляет, и место человек выбирает сам.
+
+   НА САЙТЕ всё как было: ссылка и загрузка браузера — другого способа
+   там нет. Ссылку отпускаем не сразу: пока открыто окно «Сохранить как»,
+   запись ещё не началась. */
+async function сохранитьФайломПриложения(name, blob) {
+  const данные = new Uint8Array(await blob.arrayBuffer());
+  const итог = await window.desktop.saveFile(name, данные);
+  return итог && итог.ok ? (итог.path || '') : null;
+}
+
+async function download(blob, name) {
+  if (window.desktop && window.desktop.saveFile) {
+    try {
+      // Отказ в окне выбора — тоже ответ: файла нет, и это нормально
+      return await сохранитьФайломПриложения(name, blob);
+    } catch (e) {
+      // Мост не ответил — отдаём браузерным способом, лишь бы файл дошёл
+      try {
+        if (window.desktop.logError) {
+          window.desktop.logError('сохранение файла: ' + ((e && e.message) || e));
+        }
+      } catch (e2) { /* журнал недоступен — не беда, файл важнее */ }
+    }
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = name;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return null;
 }
 
 /* ============================================================
@@ -2535,6 +2568,8 @@ function применитьЧерновик(проект) {
   // Силой: сетка целиком приехала из черновика, поля обязаны показать её
   обновитьСетку(true);
   обновитьПамять();
+  // Текст и разметка приехали разом — вперёд теперь пускают и плашки
+  обновитьПлашкиШагов();
 }
 
 async function открытьЧерновик(file) {
@@ -3172,13 +3207,39 @@ window.addEventListener('keydown', (e) => {
 /* ---------- Навигация по шагам ----------
    Шагов четыре: песня → текст → редактор → караоке. Простукивание
    отдельным шагом больше не живёт, оно стало режимом внутри редактора. */
+/* Докуда пускают плашки шагов.
+
+   Раньше это помнил один только state.maxStep, и рос он, когда человек
+   шёл вперёд нижними кнопками. После перезапуска студии и повторной
+   загрузки той же песни плашки «2 Текст», «3 Редактор» и «4 Караоке»
+   на щелчок не отвечали — хотя и текст, и разметка были на руках:
+   пройти вперёд можно было только нижней кнопкой, а по виду плашки
+   ничем не отличались от обычных неактивных.
+
+   Теперь доступность считается по тому, что есть на самом деле: песня
+   открыта — открыт «Текст»; есть строки — открыт «Редактор»; у строк
+   есть времена — открыто «Караоке». */
+function шагПоРаботе() {
+  if (!state.originalBuffer) return 1;
+  const поле = $('lyrics-input');
+  const естьТекст = state.lines.length > 0 || !!(поле && поле.value.trim());
+  if (!естьТекст) return 2;
+  return state.lines.some((l) => l.time != null) ? 4 : 3;
+}
+
+function обновитьПлашкиШагов() {
+  state.maxStep = Math.max(state.maxStep || 1, шагПоРаботе());
+  document.querySelectorAll('.step-tab').forEach((tab) => {
+    tab.disabled = +tab.dataset.step > state.maxStep;
+  });
+}
+
 function goToStep(n) {
   // Караоке готово — редактор тоже становится доступен
   state.maxStep = Math.max(state.maxStep, n === 3 ? 4 : n);
+  обновитьПлашкиШагов();
   document.querySelectorAll('.step-tab').forEach((tab) => {
-    const step = +tab.dataset.step;
-    tab.classList.toggle('active', step === n);
-    tab.disabled = step > state.maxStep;
+    tab.classList.toggle('active', +tab.dataset.step === n);
   });
   document.querySelectorAll('.step-panel').forEach((p) => p.classList.remove('active'));
   $(`step-${n}`).classList.add('active');
@@ -3255,6 +3316,51 @@ function scrollStudioIntoView() {
    ============================================================ */
 const dropzone = $('dropzone');
 const fileInput = $('file-input');
+
+/* ---------- Брошенный файл ----------
+
+   Бросить мышью можно было одну только песню — в большую рамку.
+   Картинку на карточку «Фон для караоке» и на сцену караоке бросали,
+   и не происходило ровно ничего: ни фона, ни подсказки, что так нельзя.
+   Отдельная беда в том, что песня-то бросается, и человек справедливо
+   ждёт того же от остального.
+
+   Подсвечиваем только под тот файл, который годится: тип видно уже
+   при переносе (dataTransfer.items), а вот имя файла — нет. Если
+   всё-таки бросили не то, отвечаем словами, а не молчанием. */
+function файлыВПереносе(e) {
+  const d = e.dataTransfer;
+  return !!d && Array.from(d.types || []).includes('Files');
+}
+
+function годныйТип(e, начало) {
+  const d = e.dataTransfer;
+  const вещи = d && d.items ? Array.from(d.items) : [];
+  const файлы = вещи.filter((и) => и.kind === 'file');
+  // Тип при переносе браузер иногда не называет — тогда не спорим
+  if (!файлы.length) return true;
+  return файлы.some((и) => !и.type || и.type.startsWith(начало));
+}
+
+function приниматьФайл(узел, начало, принять, беда) {
+  if (!узел) return;
+  узел.addEventListener('dragover', (e) => {
+    if (!файлыВПереносе(e)) return;
+    e.preventDefault();
+    узел.classList.toggle('dragover', годныйТип(e, начало));
+  });
+  узел.addEventListener('dragleave', () => узел.classList.remove('dragover'));
+  узел.addEventListener('drop', (e) => {
+    if (!файлыВПереносе(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    узел.classList.remove('dragover');
+    const файл = e.dataTransfer.files[0];
+    if (!файл) return;
+    if (файл.type && !файл.type.startsWith(начало)) { alert(t(беда)); return; }
+    принять(файл);
+  });
+}
 
 dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('keydown', (e) => { if (e.key === 'Enter') fileInput.click(); });
@@ -3403,6 +3509,11 @@ async function handleFile(file) {
        огибающей строки на просмотре сменяются раньше, чем поются. */
     if (!voiceReady() && voice.ждёт) restoreVoiceTrack(voice.ждёт, buffer.duration);
     voice.ждёт = null;
+    /* Песня открыта, а с ней, может быть, вернулись текст и разметка —
+       плашки шагов обязаны это показать. Иначе после перезапуска студии
+       «2 Текст» и «3 Редактор» молчали на щелчок, хотя работа была
+       на руках, и пройти вперёд можно было только нижней кнопкой. */
+    обновитьПлашкиШагов();
   } catch (err) {
     $('processing').classList.add('hidden');
     /* Файл не открылся — на экран возвращаем то, что было. Прежняя
@@ -3616,6 +3727,22 @@ function setBgImage(dataUrl) {
   }
   saveProject();
 }
+
+/* Картинку фона принимаем там, где её и пытаются положить: на карточку
+   фона и на сами сцены — в редакторе и в караоке. */
+[$('bg-upload-card'), $('lyrics-stage'), $('edit-stage')].forEach((узел) => {
+  приниматьФайл(узел, 'image/', async (файл) => {
+    try {
+      setBgImage(await shrinkImage(файл));
+    } catch (e) {
+      alert(t('фон.неОткрылась'));
+    }
+  }, 'перенос.неКартинка');
+});
+
+// Готовую минусовку — на её карточку, тем же движением
+приниматьФайл($('inst-upload-card'), 'audio/', (файл) => handleInstFile(файл),
+  'перенос.неЗвук');
 
 $('btn-bg-add').addEventListener('click', () => $('bg-input').click());
 $('btn-bg-remove').addEventListener('click', () => { $('bg-input').value = ''; setBgImage(null); });
@@ -13462,7 +13589,11 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ---------- Автосохранение текста ---------- */
-$('lyrics-input').addEventListener('input', () => saveProject());
+$('lyrics-input').addEventListener('input', () => {
+  saveProject();
+  // Появился текст — «Редактор» открылся, и плашка это показывает
+  обновитьПлашкиШагов();
+});
 
 /* ---------- Логотип ----------
    Если файлы иконок ещё не сделаны (node make-icons.js),

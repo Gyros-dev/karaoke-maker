@@ -3480,6 +3480,15 @@ html[data-theme="steel"] {
 }
 .footer-link:hover { color: var(--chrome-accent-hover); }
 
+/* Под брошенный файл карточка и сцена подсвечиваются так же, как
+   большая рамка песни: человек должен видеть, что сюда можно бросить. */
+.bg-upload.dragover,
+.lyrics-stage.dragover,
+.edit-stage.dragover {
+  outline: 2px dashed var(--accent-solid, #54C492);
+  outline-offset: -4px;
+}
+
 /* ============ Что нового ============
    Окно со списком изменений: показывается один раз после обновления
    и по ссылке в подвале. Часть пунктов относится только к приложению —

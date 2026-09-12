@@ -10812,6 +10812,186 @@ function createWindow() {
         }
       })`);
 
+      /* Картинку фона можно бросить мышью.
+
+         Песня бросается в рамку — и человек справедливо ждёт того же
+         от картинки. А она не бросалась никуда: ни на карточку «Фон
+         для караоке», ни на сцену караоке, и никакой подсказки при этом
+         не показывалось. Проверяем ровно человеческое движение: бросок
+         файла на карточку и на сцену, и отказ, когда бросили не то. */
+      report.картинкуМожноБросить = await win.webContents.executeJavaScript(`__раздел('картинкуМожноБросить', async () => {
+        const былФон = state.bgImage;
+        const былAlert = window.alert;
+        let сказано = '';
+        window.alert = (s) => { сказано = String(s); };
+        try {
+          const краска = async (цвет) => {
+            const холст = document.createElement('canvas');
+            холст.width = 8; холст.height = 8;
+            const g = холст.getContext('2d');
+            g.fillStyle = цвет;
+            g.fillRect(0, 0, 8, 8);
+            const кусок = await new Promise((r) => холст.toBlob(r, 'image/png'));
+            return new File([кусок], 'фон.png', { type: 'image/png' });
+          };
+          const бросить = async (узел, файл) => {
+            const пер = new DataTransfer();
+            пер.items.add(файл);
+            узел.dispatchEvent(new DragEvent('drop',
+              { dataTransfer: пер, bubbles: true, cancelable: true }));
+            await new Promise((r) => setTimeout(r, 350));
+          };
+
+          setBgImage(null);
+          await бросить(document.getElementById('bg-upload-card'), await краска('#ff0000'));
+          const наКарточку = !!state.bgImage;
+
+          setBgImage(null);
+          await бросить(document.getElementById('lyrics-stage'), await краска('#00ff00'));
+          const наСцену = !!state.bgImage;
+
+          // А теперь бросаем не то — и получаем ответ словами
+          setBgImage(null);
+          сказано = '';
+          const неКартинка = new File([new Uint8Array([1, 2, 3])], 'песня.mp3', { type: 'audio/mpeg' });
+          await бросить(document.getElementById('bg-upload-card'), неКартинка);
+          const отказ = { фон: !!state.bgImage, сказано };
+
+          // И подсветка под годный файл: так видно, что бросать сюда можно
+          const карточка = document.getElementById('bg-upload-card');
+          const пер = new DataTransfer();
+          пер.items.add(await краска('#0000ff'));
+          карточка.dispatchEvent(new DragEvent('dragover',
+            { dataTransfer: пер, bubbles: true, cancelable: true }));
+          const подсветка = карточка.classList.contains('dragover');
+          карточка.dispatchEvent(new DragEvent('dragleave', { bubbles: true }));
+
+          return {
+            наКарточку, наСцену, отказ, подсветка,
+            вНорме: наКарточку && наСцену && подсветка
+              && !отказ.фон && отказ.сказано.includes('не картинка'),
+          };
+        } finally {
+          window.alert = былAlert;
+          setBgImage(былФон || null);
+        }
+      })`);
+
+      /* Файлы приложение пишет само, а не браузерной загрузкой.
+
+         Браузерная загрузка кладёт рядом с итоговым файлом временный —
+         «.dev.gyros.benengskaya.XXXXXX», по имени приложения, — и в конце
+         переименовывает его. Проверяющий нашёл такой огрызок в «Загрузках»:
+         скрытый файл на 2374 байта, байт в байт равный сохранённому
+         song.lrc. Теперь в приложении файл пишется своим путём: место
+         спрашивается своим окном, временных файлов не остаётся.
+
+         Настоящее окно выбора места остановило бы проверку насмерть,
+         поэтому подменяем ровно ту ступеньку, где оно открывается. */
+      report.файлПишемСами = await win.webContents.executeJavaScript(`__раздел('файлПишемСами', async () => {
+        const былаЗапись = window.сохранитьФайломПриложения;
+        const былаСсылка = URL.createObjectURL;
+        const былиСтроки = state.lines;
+        const былоИмя = state.fileName;
+        let ссылок = 0;
+        URL.createObjectURL = function (...д) { ссылок++; return былаСсылка.apply(URL, д); };
+        let поймано = null;
+        window.сохранитьФайломПриложения = async (имя, кусок) => {
+          поймано = { имя, тип: кусок.type, текст: await кусок.text() };
+          return '/куда-то/' + имя;
+        };
+        try {
+          state.fileName = 'song.mp3';
+          state.lines = [
+            { text: 'Первая строка', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+            { text: 'Вторая строка', time: 12, end: 16, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+          ];
+          editor.spansKey = '';
+          await сохранитьLrc();
+          await new Promise((r) => setTimeout(r, 150));
+          return {
+            имя: поймано && поймано.имя,
+            началоФайла: поймано ? поймано.текст.slice(0, 40) : '',
+            ссылок,
+            вНорме: !!поймано && поймано.имя === 'song.lrc'
+              // и браузерная загрузка при этом не заводилась вовсе
+              && ссылок === 0
+              && поймано.текст.includes('Первая строка'),
+          };
+        } finally {
+          window.сохранитьФайломПриложения = былаЗапись;
+          URL.createObjectURL = былаСсылка;
+          state.lines = былиСтроки;
+          state.fileName = былоИмя;
+          editor.spansKey = '';
+        }
+      })`);
+
+      /* Плашки шагов пускают вперёд по работе, а не по памяти о щелчках.
+
+         Проверяющий перезапустил студию, снова открыл ту же песню —
+         и плашки «2 Текст», «3 Редактор», «4 Караоке» молчали на щелчок,
+         хотя текст и разметка были на руках: пройти вперёд можно было
+         только нижней кнопкой «К тексту →», а по виду «непройденные»
+         плашки не отличались от обычных неактивных. */
+      report.плашкиПускаютВперёд = await win.webContents.executeJavaScript(`__раздел('плашкиПускаютВперёд', async () => {
+        const былиСтроки = state.lines;
+        const былБуфер = state.originalBuffer;
+        const былМинус = state.instrumentalBuffer;
+        const былТекст = document.getElementById('lyrics-input').value;
+        const былШаг = state.maxStep;
+        try {
+          const заперты = () => [...document.querySelectorAll('.step-tab')]
+            .filter((к) => к.disabled).map((к) => к.dataset.step).join(',');
+
+          // Песни нет вовсе — дальше первого шага не пускают
+          state.originalBuffer = null;
+          state.instrumentalBuffer = null;
+          state.lines = [];
+          document.getElementById('lyrics-input').value = '';
+          state.maxStep = 1;
+          обновитьПлашкиШагов();
+          const безПесни = заперты();
+
+          // Песня открыта, текста ещё нет
+          const c = new OfflineAudioContext(1, 30 * 8000, 8000);
+          state.originalBuffer = c.createBuffer(1, 30 * 8000, 8000);
+          state.instrumentalBuffer = state.originalBuffer;
+          state.maxStep = 1;
+          обновитьПлашкиШагов();
+          const сПесней = заперты();
+
+          // Текст вставлен — открылся и редактор
+          document.getElementById('lyrics-input').value = 'Первая строка\\nВторая строка';
+          state.maxStep = 1;
+          обновитьПлашкиШагов();
+          const сТекстом = заперты();
+
+          // Разметка есть — открылось и караоке (так бывает после
+          // перезапуска студии и повторной загрузки той же песни)
+          state.lines = [
+            { text: 'Первая строка', time: 5, end: 9, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+            { text: 'Вторая строка', time: 12, end: 16, ручнойКонец: true, ручноеНачало: true, сомнительная: false },
+          ];
+          state.maxStep = 1;
+          обновитьПлашкиШагов();
+          const сРазметкой = заперты();
+
+          return {
+            безПесни, сПесней, сТекстом, сРазметкой,
+            вНорме: безПесни === '2,3,4' && сПесней === '3,4'
+              && сТекстом === '4' && сРазметкой === '',
+          };
+        } finally {
+          state.lines = былиСтроки;
+          state.originalBuffer = былБуфер;
+          state.instrumentalBuffer = былМинус;
+          document.getElementById('lyrics-input').value = былТекст;
+          state.maxStep = былШаг;
+          обновитьПлашкиШагов();
+        }
+      })`);
+
       /* Цвета дуэта выбирает человек, а не код.
 
          Цвета партий стояли числами в двух местах разом — в app.js

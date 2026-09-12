@@ -1347,6 +1347,16 @@ I18N.СТРОКИ = {
   },
 
   /* ---------- Картинка-фон ---------- */
+  /* Бросили не то, что карточка принимает: молчать нельзя — человек
+     решит, что перетаскивание просто не работает (а песня бросается). */
+  'перенос.неКартинка': {
+    ru: 'Это не картинка. Фоном годится изображение: PNG, JPG или WebP.',
+    en: 'That is not a picture. The background takes an image: PNG, JPG or WebP.',
+  },
+  'перенос.неЗвук': {
+    ru: 'Это не звук. Минусовкой годится аудиофайл: MP3, WAV, OGG или M4A.',
+    en: 'That is not audio. The instrumental takes an audio file: MP3, WAV, OGG or M4A.',
+  },
   'фон.неОткрылась': {
     ru: 'Не удалось открыть эту картинку. Попробуй JPG или PNG.',
     en: 'Couldn’t open this image. Try JPG or PNG.',

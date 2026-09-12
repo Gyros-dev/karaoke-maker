@@ -180,7 +180,7 @@ function patchHtml(src) {
      у кого минусовка уже есть, и только потом картинка фона. Раньше
      блок нейросети вставлялся третьим, и главное действие оказывалось
      в самом низу карточки — его пролистывали. */
-  const anchor = '      <div class="bg-upload">\n'
+  const anchor = '      <div class="bg-upload" id="inst-upload-card">\n'
     + '        <div class="bg-upload-text">\n'
     + '          <b data-i18n="шаг1.минусовка.заголовок">Своя минусовка</b>\n';
   if (!s.includes(anchor)) throw new Error('не нашёл блок «Своя минусовка»');
