@@ -11403,6 +11403,14 @@ function createWindow() {
          голосов, налезающих по времени. */
       if (process.env.KARAOKE_SHOT) {
         try {
+          /* Размер окна под снимок: KARAOKE_SHOT_SIZE=1280x820. Витрине
+             для сайта нужен один и тот же кадр на всех снимках, иначе
+             картинки на странице будут разной высоты. */
+          const размер = String(process.env.KARAOKE_SHOT_SIZE || '').match(/^(\d+)x(\d+)$/);
+          if (размер) {
+            win.setSize(Number(размер[1]), Number(размер[2]));
+            await new Promise((r) => setTimeout(r, 400));
+          }
           const итогСцены = await win.webContents.executeJavaScript(`(async () => {
             try {
             const c = new OfflineAudioContext(1, 60 * 8000, 8000);
@@ -11595,6 +11603,158 @@ function createWindow() {
               обновитьПамять();
               показатьСписок(document.getElementById('proj-switch'), true);
               await new Promise((r) => setTimeout(r, 400));
+              return 'ок';
+            }
+            /* ВИТРИНА ДЛЯ САЙТА.
+
+               Человек скачивает приложение вслепую: на сайте написано,
+               что оно умеет, но не показано, как оно выглядит. Отсюда
+               снимки настоящего окна — их и кладём на страницу.
+
+               Снимаем не пустую студию, а работу: песня открыта, текст
+               разложен по времени, слова размечены, голос найден. Текст
+               и имя песни выдуманы нарочно — чужие строки на витрине
+               нам не нужны. Что снимать, говорят KARAOKE_SHOT_STEP
+               (1, 3 или 4) и KARAOKE_SHOT_LANG (ru или en). */
+            if (сцена === 'витрина') {
+              const язык = ${JSON.stringify(process.env.KARAOKE_SHOT_LANG || 'ru')};
+              const шаг = ${Number(process.env.KARAOKE_SHOT_STEP) || 3};
+              if (язык === 'en') I18N.установить('en');
+              await new Promise((r) => setTimeout(r, 200));
+
+              /* Волна должна читаться песней, а не шумом: доли в темпе
+                 96 ударов в минуту, куплеты громче проигрышей. */
+              const СЕК = 168;
+              const ЧАСТ = 8000;
+              const кон = new OfflineAudioContext(1, СЕК * ЧАСТ, ЧАСТ);
+              const буфер = кон.createBuffer(1, СЕК * ЧАСТ, ЧАСТ);
+              const д = буфер.getChannelData(0);
+              const доля = 60 / 96;
+              /* Сила каждой доли своя: ровные одинаковые удары рисуются
+                 гребёнкой и сразу выдают поддельную волну. */
+              const силаДоли = [];
+              for (let b = 0; b < Math.ceil(СЕК / доля); b++) {
+                силаДоли.push(b % 4 === 0 ? 1 : 0.55 + Math.random() * 0.35);
+              }
+              for (let i = 0; i < д.length; i++) {
+                const t = i / ЧАСТ;
+                const номер = Math.floor(t / доля);
+                const отДоли = (t % доля) / доля;
+                const удар = Math.exp(-отДоли * 6.5) * силаДоли[номер] + 0.22;
+                const куплет = (t > 12 && t < 52) || (t > 64 && t < 104) || (t > 116 && t < 156);
+                // Медленное дыхание громкости — как у живой записи
+                const дыхание = 0.82 + 0.18 * Math.sin(t / 6.7) + 0.06 * Math.sin(t / 1.9);
+                const сила = (куплет ? 0.9 : 0.42) * удар * дыхание;
+                д[i] = (Math.random() * 2 - 1) * сила;
+              }
+              state.originalBuffer = буфер;
+              state.instrumentalBuffer = буфер;
+              state.fileName = язык === 'en' ? 'City Lights.mp3' : 'Городские фонари.mp3';
+              state.customInst = true;
+              state.instИсточник = 'нейросеть';
+              state.instName = t('ии.имя');
+
+              const строкиRu = ['Городские фонари', 'светят прямо в облака',
+                'я иду по мостовой', 'и со мною ты пока',
+                'Ветер гонит по асфальту', 'жёлтый лист и дым костра',
+                'город спит, а мы не спим', 'нам с тобою до утра',
+                'Загорается окно', 'и в нём тоже кто-то ждёт',
+                'этот город никогда', 'до конца не заснёт'];
+              const строкиEn = ['City lights are burning low', 'shining up into the clouds',
+                'I am walking down the street', 'and you are walking here with me',
+                'Wind is chasing down the road', 'yellow leaves and bonfire smoke',
+                'all the city fell asleep', 'but the two of us will not',
+                'One more window lights up now', 'someone else is waiting there',
+                'and this city never falls', 'all the way into a dream'];
+              const тексты = язык === 'en' ? строкиEn : строкиRu;
+              document.getElementById('lyrics-input').value = тексты.join('\\n');
+              state.lines = тексты.map((text, i) => {
+                const начало = 13 + i * 6.4;
+                const конец = начало + 5.1;
+                const строка = {
+                  text, time: начало, end: конец,
+                  ручнойКонец: true, ручноеНачало: true, сомнительная: false,
+                };
+                // Слова размечены не у всех: так на дорожке видно и «♪», и его отсутствие
+                if (i % 3 !== 2) {
+                  const куски = text.split(/\\s+/);
+                  const шаг = (конец - начало) / куски.length;
+                  строка.words = куски.map((w, k) => ({
+                    text: w, time: начало + k * шаг, end: начало + (k + 1) * шаг - 0.05,
+                    ручнойКонец: true,
+                  }));
+                }
+                return строка;
+              });
+
+              /* Голос: синяя полоса на дорожке. Считаем её так же, как
+                 считает настоящая — из огибающей громкости. */
+              const уровень = new Uint8Array(СЕК * VOICE_RATE);
+              for (let i = 0; i < уровень.length; i++) {
+                const t = i / VOICE_RATE;
+                const поют = state.lines.some((l) => t >= l.time - 0.1 && t <= l.end + 0.1);
+                /* Внутри пения громкость тоже гуляет: слова, вдохи,
+                   концы фраз — иначе синяя полоса выйдет ровной плашкой. */
+                const гул = 150 + 70 * Math.abs(Math.sin(t * 2.3)) + Math.random() * 25;
+                уровень[i] = поют ? Math.min(255, Math.round(гул)) : 12;
+              }
+              voice.level = уровень;
+              voice.runs = buildVoiceRuns(уровень);
+
+              // Фон сцены: мягкий градиент, какой человек и кладёт под текст
+              const холст = document.createElement('canvas');
+              холст.width = 1280;
+              холст.height = 720;
+              const г = холст.getContext('2d');
+              const грд = г.createLinearGradient(0, 0, 1280, 720);
+              грд.addColorStop(0, '#10202a');
+              грд.addColorStop(0.55, '#1b3a3a');
+              грд.addColorStop(1, '#2a1c33');
+              г.fillStyle = грд;
+              г.fillRect(0, 0, 1280, 720);
+              for (let i = 0; i < 70; i++) {
+                г.fillStyle = 'rgba(255, 240, 200, ' + (0.05 + Math.random() * 0.25).toFixed(2) + ')';
+                г.beginPath();
+                г.arc(Math.random() * 1280, Math.random() * 500, 1 + Math.random() * 2, 0, 7);
+                г.fill();
+              }
+              setBgImage(холст.toDataURL('image/jpeg', 0.85));
+
+              editor.peaks = null;
+              editor.spansKey = '';
+              editor.stageKey = '';
+              editor.stageDrawn = null;
+              document.getElementById('dropzone').classList.add('hidden');
+              document.getElementById('track-info').classList.remove('hidden');
+              document.getElementById('track-name').textContent =
+                state.fileName.replace(/\\.[^.]+$/, '');
+              обновитьСведенияОТреке();
+              updateInstUI();
+              обновитьПлашкиШагов();
+
+              if (шаг === 1) {
+                goToStep(1);
+              } else if (шаг === 3) {
+                goToStep(3);
+                await new Promise((r) => setTimeout(r, 250));
+                /* Список строк должен быть УЖЕ нарисован: selectLine
+                   подводит к выбранной строке и читает её ряд, а без
+                   рядов спотыкается о undefined. */
+                renderEditList();
+                audio.offset = 32.4;
+                editor.pxPerSec = 44;
+                selectLine(3, { scrollTimeline: true });
+                refreshTimes();
+                renderEditStage();
+                drawTimeline();
+                updateSelInfo();
+              } else {
+                goToStep(4);
+                audio.offset = 33.6;   // середина четвёртой строки: заливка на половине
+                player.stageKey = null;
+                renderStage();
+              }
+              await new Promise((r) => setTimeout(r, 700));
               return 'ок';
             }
             /* Настройки караоке: снимок нужен, чтобы глазом увидеть,
