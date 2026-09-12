@@ -16,7 +16,7 @@
   <link rel="icon" href="icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="theme-color" content="#0a0a0f">
-  <link rel="stylesheet" href="style.css?v=1.33.0">
+  <link rel="stylesheet" href="style.css?v=1.33.1">
 </head>
 <body>
 
@@ -1558,6 +1558,52 @@
   <p class="desktop-lead" data-i18n="настольная.локально">
     Всё считает твой компьютер, ничего не уходит в интернет.
   </p>
+  <!-- ЧТО ЖДЁТ ПОСЛЕ СКАЧИВАНИЯ.
+
+       Человек решал вслепую: на странице написано, что приложение
+       умеет, но не показано, как оно выглядит. Это снимки настоящего
+       окна — песня открыта, текст разложен по времени, караоке идёт.
+       Делает их сцена «витрина» (см. README, «Снимки для витрины
+       сайта»): поменялся интерфейс — снимки надо переснять, иначе
+       витрина начнёт врать.
+
+       У каждого языка свой файл: в кадре надписи. Подменой занимается
+       тот же перевод, что и всё остальное (data-i18n-src).
+
+       В приложении этой секции нет вовсе — desktop.js убирает #desktop
+       целиком, — поэтому снимки в сборку не попадают и веса ей не добавляют. -->
+  <div class="shots">
+    <figure class="shot">
+      <img src="shots/studio-1-ru.webp" data-i18n-src="снимок.песня.файл"
+        width="1800" height="1108" loading="lazy" decoding="async"
+        alt="Первый шаг студии: песня открыта, рядом карточка «Убрать вокал нейросетью»"
+        data-i18n-alt="снимок.песня.alt">
+      <figcaption data-i18n-html="снимок.песня">
+        <b>1. Открываешь песню</b> и нажимаешь «Убрать вокал». Модель считает прямо
+        на твоём компьютере — минута-две на песню.
+      </figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="shots/studio-3-ru.webp" data-i18n-src="снимок.редактор.файл"
+        width="1800" height="1108" loading="lazy" decoding="async"
+        alt="Редактор: список строк, дорожка с волной, блоки строк и слов, панель параметров"
+        data-i18n-alt="снимок.редактор.alt">
+      <figcaption data-i18n-html="снимок.редактор">
+        <b>2. Текст ложится на песню сам.</b> В редакторе видно, где поётся каждая
+        строка и каждое слово, — поправить можно мышью, прямо на дорожке.
+      </figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="shots/studio-4-ru.webp" data-i18n-src="снимок.караоке.файл"
+        width="1800" height="1108" loading="lazy" decoding="async"
+        alt="Караоке: строка подсвечивается по мере пения поверх своего фона"
+        data-i18n-alt="снимок.караоке.alt">
+      <figcaption data-i18n-html="снимок.караоке">
+        <b>3. Поёшь — и сохраняешь видео.</b> Свой фон, свои цвета, тональность под
+        твой голос. Готовый ролик открывается везде, включая телефон.
+      </figcaption>
+    </figure>
+  </div>
   <p class="desktop-note" data-i18n-html="настольная.заметка">
     Бесплатно и с открытым кодом. Каждая модель скачивается один раз при первом
     использовании — дальше интернет не нужен: удаление вокала весит 64 МБ, разметка
@@ -2817,22 +2863,22 @@
   <button class="footer-link" id="btn-whatsnew" data-i18n="подвал.новости">Что нового в {версия}</button>
 </footer>
 
-<script src="i18n.js?v=1.33.0"></script>
+<script src="i18n.js?v=1.33.1"></script>
 <!-- БПФ и счётчик темпа: общие с рабочими потоками (pitch-worker.js
      считает по fft.js тональность, tempo.js умеет работать и сам
      потоком). Здесь они нужны окну: самопроверке и запасному пути,
      если поток не завёлся. Обязательно ДО app.js. -->
-<script src="fft.js?v=1.33.0"></script>
-<script src="tempo.js?v=1.33.0"></script>
+<script src="fft.js?v=1.33.1"></script>
+<script src="tempo.js?v=1.33.1"></script>
 <!-- Чистая арифметика разметки: строки, слова, распев. Обязательно
      ДО app.js — он зовёт её функции и берёт из неё MIN_SPAN. -->
 <!-- Сборщики контейнеров. Нужны только при сохранении видео: студия
      сама сжимает кадры и звук и сама складывает из них файл, не полагаясь
      на запись в реальном времени (см. «Ролик собирается, а не пишется»
      в README). Оба лежат у нас, оба MIT. -->
-<script src="mp4-muxer.js?v=1.33.0"></script>
-<script src="webm-muxer.js?v=1.33.0"></script>
-<script src="timing.js?v=1.33.0"></script>
-<script src="app.js?v=1.33.0"></script>
+<script src="mp4-muxer.js?v=1.33.1"></script>
+<script src="webm-muxer.js?v=1.33.1"></script>
+<script src="timing.js?v=1.33.1"></script>
+<script src="app.js?v=1.33.1"></script>
 </body>
 </html>

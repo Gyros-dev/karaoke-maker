@@ -137,6 +137,9 @@ const I18N = (function () {
     ['i18nPlaceholder', 'placeholder'],
     ['i18nAria', 'aria-label'],
     ['i18nAlt', 'alt'],
+    /* Снимки студии на витрине подписаны по-русски и по-английски —
+       у каждого языка свой файл (см. .shots в index.html). */
+    ['i18nSrc', 'src'],
     ['i18nContent', 'content'],   // описание страницы в <meta>
     // Подсказка с модификатором: %s подставляет app.js (Cmd или Ctrl)
     ['i18nModTitle', 'data-mod-title'],
@@ -592,6 +595,16 @@ I18N.EN = {
   'настольная.локально': 'Your computer does all the work; nothing goes to the internet.',
   'настольная.мак': '🍎 Download for macOS',
   'настольная.виндоус': '🪟 Download for Windows',
+  /* Витрина: у каждого языка свой снимок — в кадре надписи студии */
+  'снимок.песня.файл': 'shots/studio-1-en.webp',
+  'снимок.песня.alt': 'Step one: the song is open, next to it the “Remove vocals with the network” card',
+  'снимок.песня': '<b>1. You open a song</b> and press “Remove vocals”. The model runs on your own computer — a minute or two per song.',
+  'снимок.редактор.файл': 'shots/studio-3-en.webp',
+  'снимок.редактор.alt': 'The editor: the list of lines, the waveform, blocks for lines and words, the parameters panel',
+  'снимок.редактор': '<b>2. The lyrics land on the song by themselves.</b> The editor shows where every line and every word is sung — fix anything with the mouse, right on the timeline.',
+  'снимок.караоке.файл': 'shots/studio-4-en.webp',
+  'снимок.караоке.alt': 'Karaoke: the line lights up as it is sung, over your own background',
+  'снимок.караоке': '<b>3. You sing — and save the video.</b> Your background, your colours, the key set to your voice. The finished clip opens everywhere, phones included.',
   'настольная.заметка': 'Free and open source. Each model downloads once, on first use — after that you don’t need the internet: vocal removal is 64 MB, lyric timing 242 MB. A 3-minute song is cleaned in about a minute on a graphics card, and three and a half without one.<br>macOS — Apple Silicon; Windows — x64 and ARM. <a href="https://github.com/Gyros-dev/karaoke-maker/releases/latest">All releases and release notes</a>',
   'настольная.первыйЗапуск': 'First launch: your system will ask for confirmation',
   'настольная.подпись': 'The app is self-signed but not notarised by Apple: a developer certificate costs money. So the system refuses the first launch — you allow it by hand, once.',

@@ -11694,9 +11694,12 @@ function createWindow() {
                  96 ударов в минуту, куплеты громче проигрышей. */
               const СЕК = 168;
               const ЧАСТ = 8000;
-              const кон = new OfflineAudioContext(1, СЕК * ЧАСТ, ЧАСТ);
-              const буфер = кон.createBuffer(1, СЕК * ЧАСТ, ЧАСТ);
+              // Две дорожки: песня у человека стерео, и строка под именем
+              // песни это честно показывает
+              const кон = new OfflineAudioContext(2, СЕК * ЧАСТ, ЧАСТ);
+              const буфер = кон.createBuffer(2, СЕК * ЧАСТ, ЧАСТ);
               const д = буфер.getChannelData(0);
+              const д2 = буфер.getChannelData(1);
               const доля = 60 / 96;
               /* Сила каждой доли своя: ровные одинаковые удары рисуются
                  гребёнкой и сразу выдают поддельную волну. */
@@ -11714,13 +11717,21 @@ function createWindow() {
                 const дыхание = 0.82 + 0.18 * Math.sin(t / 6.7) + 0.06 * Math.sin(t / 1.9);
                 const сила = (куплет ? 0.9 : 0.42) * удар * дыхание;
                 д[i] = (Math.random() * 2 - 1) * сила;
+                д2[i] = (Math.random() * 2 - 1) * сила;
               }
               state.originalBuffer = буфер;
               state.instrumentalBuffer = буфер;
               state.fileName = язык === 'en' ? 'City Lights.mp3' : 'Городские фонари.mp3';
-              state.customInst = true;
-              state.instИсточник = 'нейросеть';
-              state.instName = t('ии.имя');
+              /* На первом шаге снимаем НЕТРОНУТУЮ карточку нейросети:
+                 человек только что открыл песню, и снимок должен звать
+                 нажать «Убрать вокал», а не показывать уже сделанное.
+                 На других шагах вокал уже убран — иначе неоткуда взяться
+                 ни синей полосе голоса, ни разметке. */
+              if (${Number(process.env.KARAOKE_SHOT_STEP) || 3} !== 1) {
+                state.customInst = true;
+                state.instИсточник = 'нейросеть';
+                state.instName = t('ии.имя');
+              }
 
               const строкиRu = ['Городские фонари', 'светят прямо в облака',
                 'я иду по мостовой', 'и со мною ты пока',
@@ -11766,8 +11777,15 @@ function createWindow() {
                 const гул = 150 + 70 * Math.abs(Math.sin(t * 2.3)) + Math.random() * 25;
                 уровень[i] = поют ? Math.min(255, Math.round(гул)) : 12;
               }
-              voice.level = уровень;
-              voice.runs = buildVoiceRuns(уровень);
+              /* Огибающая голоса — только там, где её видно (дорожка).
+                 На первом шаге вокал ещё не убран, и огибающая при
+                 неубранном вокале поднимает жёлтое предупреждение
+                 «минусовка нейросети не сохраняется между запусками» —
+                 на витрине оно ни к чему и вдобавок неправда. */
+              if (${Number(process.env.KARAOKE_SHOT_STEP) || 3} !== 1) {
+                voice.level = уровень;
+                voice.runs = buildVoiceRuns(уровень);
+              }
 
               // Фон сцены: мягкий градиент, какой человек и кладёт под текст
               const холст = document.createElement('canvas');
@@ -11775,9 +11793,9 @@ function createWindow() {
               холст.height = 720;
               const г = холст.getContext('2d');
               const грд = г.createLinearGradient(0, 0, 1280, 720);
-              грд.addColorStop(0, '#10202a');
-              грд.addColorStop(0.55, '#1b3a3a');
-              грд.addColorStop(1, '#2a1c33');
+              грд.addColorStop(0, '#16303f');
+              грд.addColorStop(0.55, '#245050');
+              грд.addColorStop(1, '#3a2747');
               г.fillStyle = грд;
               г.fillRect(0, 0, 1280, 720);
               for (let i = 0; i < 70; i++) {

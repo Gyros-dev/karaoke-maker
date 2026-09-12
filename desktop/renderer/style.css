@@ -3489,6 +3489,36 @@ html[data-theme="steel"] {
   outline-offset: -4px;
 }
 
+/* Витрина: снимки настоящего окна студии. Столбиком и во всю ширину
+   блока — в три колонки от них осталась бы каша: в кадре мелкий текст,
+   список строк и дорожка. Высота у картинки задана атрибутами width
+   и height, поэтому страница не дёргается, пока они грузятся. */
+.shots {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8rem;
+  margin: 2rem auto 0;
+  max-width: 1000px;
+  text-align: left;
+}
+.shot { margin: 0; }
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--r-box);
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
+}
+.shot figcaption {
+  margin-top: 0.7rem;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.shot figcaption b { color: var(--text); }
+
 /* ============ Что нового ============
    Окно со списком изменений: показывается один раз после обновления
    и по ссылке в подвале. Часть пунктов относится только к приложению —
