@@ -21,8 +21,12 @@ body {
 .logo {
   width: 268px;
   height: 268px;
-  border-radius: 50px;
-  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  /* Скругление у знака своё, нарисованное. Мы его НЕ режем своим
+     border-radius: углы в logo.png белые (прозрачности в файле нет),
+     и любое несовпадение радиусов вылезало белыми полосками по низу.
+     Берём logo-card.png — тот же знак, но с вырезанными углами, —
+     и тень кладём по силуэту (drop-shadow), а не по прямоугольнику. */
+  filter: drop-shadow(0 24px 46px rgba(0, 0, 0, 0.62));
 }
 .mark {
   font-family: 'Bungee Shade', Impact, sans-serif;
@@ -41,7 +45,7 @@ body {
 </style>
 </head>
 <body>
-  <img class="logo" src="logo.png" alt="">
+  <img class="logo" src="shots/logo-card.png" alt="">
   <div class="mark">KARAOKE PUNCH</div>
   <div class="tag">Караоке из любой песни</div>
   <div class="host">karaokepunch.ru</div>

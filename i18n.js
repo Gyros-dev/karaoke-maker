@@ -406,6 +406,8 @@ I18N.EN = {
   'новости.главное.сохранить': '<b>💾 Everything under one button.</b> Video, instrumental, lyrics — one menu, with the quality and the format right there. The video is MP4 now: it opens everywhere, phones included.',
   'новости.главное.lrc': '<b>📄 A ready .lrc opens.</b> The words and the timings arrive together — there is nothing left to time.',
   'новости.главное.цвет': '<b>🎨 Our own colour picker.</b> Ready colours, sliders and the colour as a number — one little window for every swatch, the same on Windows and macOS. Esc cancels.',
+  /* Выпуск 1.33.1 */
+  'новости.меткаРазметки': '<b>The “Timings are in place” note no longer lies.</b> It used to survive the work it described: clear the project, open another song, remove the vocals — and before you had pasted any lyrics it still said “Lines: 28, words: 125”. The note now remembers which song it is about and leaves as soon as the work changes.',
   /* Выпуск 1.33.0 — по отчёту живой проверки 1.32.0 */
   'новости.выборЦвета': '<b>Colour is picked in our own window.</b> Twelve ready colours, hue, saturation and lightness on sliders, and the colour as a number. The system “Colors” panel is gone: it opened behind the studio and after a couple of uses stopped responding at all. The eyedroppers went with it.',
   'новости.правкаТекста': '<b>Editing a line’s text can be undone.</b> It is its own undo step now and no longer takes the previous one with it, and <b>Esc</b> puts the line back the way it was — word marks included.',

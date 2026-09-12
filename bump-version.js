@@ -110,10 +110,17 @@ if (!what) {
   if (c.сайт !== c.сайтPackage) {
     console.log('\n⚠️  корневой package.json отстал от сайта — почини: node bump-version.js site ' + c.сайт);
   }
-  console.log('\nКак менять:');
-  console.log('  node bump-version.js site 1.3.0');
-  console.log('  node bump-version.js app 1.2.0');
-  console.log('  node bump-version.js both 1.3.0 1.2.0');
+  /* Номер один на двоих. Раньше сайт и приложение жили каждый со своим,
+     и приходилось держать в голове, какой из них где: человек попросил
+     свести их вместе. Расхождение теперь видно сразу. */
+  if (c.сайт !== c.приложение) {
+    console.log('\n⚠️  сайт и приложение разошлись — номер у них один: node bump-version.js both '
+      + c.приложение + ' ' + c.приложение);
+  }
+  console.log('\nКак менять (номер у сайта и приложения один):');
+  console.log('  node bump-version.js both 1.34.0 1.34.0');
+  console.log('  node bump-version.js site 1.34.0   — только сайт, если выпуска не было');
+  console.log('  node bump-version.js app 1.34.0');
   process.exit(0);
 }
 

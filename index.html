@@ -5,7 +5,7 @@
      и отсюда же — app.js, чтобы решить, показывать ли окно. В словаре
      перевода номера нет: там он однажды отстал, и при переключении
      на английский окно объявляло прошлую версию. -->
-<html lang="ru" data-news-version="1.33.0">
+<html lang="ru" data-news-version="1.34.0">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -33,7 +33,7 @@
   <meta property="og:url" content="https://karaokepunch.ru/">
   <meta property="og:title" data-i18n-content="мета.заголовок" content="Karaoke Punch — создай караоке из любой песни">
   <meta property="og:description" data-i18n-content="мета.описание" content="Караоке-студия для Mac и Windows: нейросеть убирает вокал и сама расставляет времена по твоему тексту. Пой с пословной подсветкой и сохраняй готовое видео. Бесплатно, без серверов и регистрации.">
-  <meta property="og:image" content="https://karaokepunch.ru/shots/card.jpg?v=1.33.4">
+  <meta property="og:image" content="https://karaokepunch.ru/shots/card.jpg?v=1.34.0">
   <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -43,7 +43,7 @@
   <link rel="icon" href="icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="theme-color" content="#0a0a0f">
-  <link rel="stylesheet" href="style.css?v=1.33.4">
+  <link rel="stylesheet" href="style.css?v=1.34.0">
 </head>
 <body>
 
@@ -294,6 +294,15 @@
     <!-- Полная история — по выпускам. Свежий выпуск идёт первым. -->
     <details class="whatsnew-old">
       <summary data-i18n="новости.раньше">Все изменения — по выпускам</summary>
+      <h4 class="whatsnew-ver"><span data-i18n="новости.версияСлово">Версия</span> 1.34.0</h4>
+      <ul class="whatsnew-list">
+        <li class="only-desktop" data-i18n-html="новости.меткаРазметки">
+          <b>Плашка «Времена проставлены» больше не врёт.</b> Она оставалась от прежней
+          работы: очистил проект, открыл другую песню, убрал вокал — и ещё до того, как
+          вставил текст, читал «Строк: 28, слов: 125». Теперь плашка помнит, о какой
+          песне она, и уходит, как только работа сменилась.
+        </li>
+      </ul>
       <h4 class="whatsnew-ver"><span data-i18n="новости.версияСлово">Версия</span> 1.33.0</h4>
       <ul class="whatsnew-list">
         <li data-i18n-html="новости.выборЦвета">
@@ -1545,9 +1554,9 @@
     <div class="hero-get only-web">
       <span class="hero-get-buttons">
         <a class="btn btn-primary btn-big" id="dl-mac-hero" data-i18n="герой.мак"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.33.0/Karaoke-Punch-1.33.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.34.0/Karaoke-Punch-1.34.0-macOS-arm64.dmg">🍎 Скачать для macOS</a>
         <a class="btn btn-primary btn-big" id="dl-win-hero" data-i18n="герой.виндоус"
-           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.33.0/Karaoke-Punch-1.33.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
+           href="https://github.com/Gyros-dev/karaoke-maker/releases/download/v1.34.0/Karaoke-Punch-1.34.0-Windows-Setup.exe">🪟 Скачать для Windows</a>
       </span>
       <!-- Разметка, а не текст: внутри ссылка. С data-i18n смена языка
            переписала бы содержимое целиком и ссылку бы стёрло. -->
@@ -2890,22 +2899,22 @@
   <button class="footer-link" id="btn-whatsnew" data-i18n="подвал.новости">Что нового в {версия}</button>
 </footer>
 
-<script src="i18n.js?v=1.33.4"></script>
+<script src="i18n.js?v=1.34.0"></script>
 <!-- БПФ и счётчик темпа: общие с рабочими потоками (pitch-worker.js
      считает по fft.js тональность, tempo.js умеет работать и сам
      потоком). Здесь они нужны окну: самопроверке и запасному пути,
      если поток не завёлся. Обязательно ДО app.js. -->
-<script src="fft.js?v=1.33.4"></script>
-<script src="tempo.js?v=1.33.4"></script>
+<script src="fft.js?v=1.34.0"></script>
+<script src="tempo.js?v=1.34.0"></script>
 <!-- Чистая арифметика разметки: строки, слова, распев. Обязательно
      ДО app.js — он зовёт её функции и берёт из неё MIN_SPAN. -->
 <!-- Сборщики контейнеров. Нужны только при сохранении видео: студия
      сама сжимает кадры и звук и сама складывает из них файл, не полагаясь
      на запись в реальном времени (см. «Ролик собирается, а не пишется»
      в README). Оба лежат у нас, оба MIT. -->
-<script src="mp4-muxer.js?v=1.33.4"></script>
-<script src="webm-muxer.js?v=1.33.4"></script>
-<script src="timing.js?v=1.33.4"></script>
-<script src="app.js?v=1.33.4"></script>
+<script src="mp4-muxer.js?v=1.34.0"></script>
+<script src="webm-muxer.js?v=1.34.0"></script>
+<script src="timing.js?v=1.34.0"></script>
+<script src="app.js?v=1.34.0"></script>
 </body>
 </html>
