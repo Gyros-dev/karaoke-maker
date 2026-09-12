@@ -12,6 +12,33 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title data-i18n="мета.заголовок">Karaoke Punch — создай караоке из любой песни</title>
   <meta name="description" data-i18n-content="мета.описание" content="Караоке-студия для Mac и Windows: нейросеть убирает вокал и сама расставляет времена по твоему тексту. Пой с пословной подсветкой и сохраняй готовое видео. Бесплатно, без серверов и регистрации.">
+  <!-- КАРТОЧКА ССЫЛКИ. Мессенджеры и соцсети разворачивают ссылку
+       карточкой: заголовок, подпись, картинка. Пока тегов не было,
+       они брали заголовок с описанием, а вместо картинки рисовали
+       свою заглушку.
+
+       Картинку собирает _card.html в корне: наши шрифты, наши цвета
+       и снимок студии — как её пересобрать, написано в README
+       («Карточка ссылки»). Адрес у картинки обязан быть полным:
+       разворачивает ссылку чужой сервер, и относительный путь ему
+       не от чего считать. Номер версии в конце сбивает кэш карточки
+       у мессенджеров, когда картинку меняют (его двигает
+       bump-version.js вместе с остальными).
+
+       Заголовок и подпись переводятся тем же способом, что и вся
+       страница, — но обходчики скриптов не исполняют и видят русский
+       текст из разметки. Так и задумано: домен .ru. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Karaoke Punch">
+  <meta property="og:url" content="https://karaokepunch.ru/">
+  <meta property="og:title" data-i18n-content="мета.заголовок" content="Karaoke Punch — создай караоке из любой песни">
+  <meta property="og:description" data-i18n-content="мета.описание" content="Караоке-студия для Mac и Windows: нейросеть убирает вокал и сама расставляет времена по твоему тексту. Пой с пословной подсветкой и сохраняй готовое видео. Бесплатно, без серверов и регистрации.">
+  <meta property="og:image" content="https://karaokepunch.ru/shots/card.jpg?v=1.33.3">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" data-i18n-content="карточка.alt" content="Окно студии: строка караоке загорается по мере пения, рядом название Karaoke Punch">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="is-desktop">
@@ -2935,9 +2962,9 @@
      сама сжимает кадры и звук и сама складывает из них файл, не полагаясь
      на запись в реальном времени (см. «Ролик собирается, а не пишется»
      в README). Оба лежат у нас, оба MIT. -->
-<script src="mp4-muxer.js?v=1.33.2"></script>
-<script src="webm-muxer.js?v=1.33.2"></script>
-<script src="timing.js?v=1.33.2"></script>
+<script src="mp4-muxer.js?v=1.33.3"></script>
+<script src="webm-muxer.js?v=1.33.3"></script>
+<script src="timing.js?v=1.33.3"></script>
 <div class="export-overlay hidden" id="ai-overlay">
   <div class="export-box">
     <p id="ai-status" data-i18n="ии.готовим">Готовим модель…</p>

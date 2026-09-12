@@ -388,6 +388,7 @@ window.t = I18N.t;
 I18N.EN = {
   /* ---------- Голова страницы ---------- */
   'мета.заголовок': 'Karaoke Punch — turn any song into karaoke',
+  'карточка.alt': 'The studio window: a karaoke line lighting up as it is sung, next to the name Karaoke Punch',
   'мета.описание': 'A karaoke studio for Mac and Windows: the neural network removes the vocals and times your own lyrics for you. Sing along with word-level highlighting and save the finished video. Free, no servers, no sign-up.',
 
   /* ---------- Полоса обновления ---------- */

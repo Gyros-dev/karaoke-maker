@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>карточка</title>
+<style>
+@font-face { font-family: 'Bungee'; src: url('fonts/bungee.woff2') format('woff2'); font-display: block; }
+@font-face { font-family: 'Bungee Shade'; src: url('fonts/bungee-shade.woff2') format('woff2'); font-display: block; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1200px; height: 630px; overflow: hidden; }
+body {
+  background: radial-gradient(ellipse at 18% 0%, rgba(53, 156, 110, 0.30), transparent 62%), #0a0a0f;
+  color: #f2f2f7;
+  font-family: -apple-system, "Helvetica Neue", sans-serif;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.left { width: 560px; padding: 0 0 0 62px; flex: none; }
+.mark {
+  font-family: 'Bungee Shade', Impact, sans-serif;
+  font-size: 62px;
+  line-height: 1.06;
+  color: #54C492;
+  letter-spacing: 0.01em;
+}
+.tag {
+  margin-top: 26px;
+  font-size: 34px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.tag i { color: #67CB9E; font-style: normal; }
+.sub { margin-top: 20px; font-size: 21px; line-height: 1.45; color: #9a9ab0; }
+.host {
+  position: absolute;
+  left: 62px;
+  bottom: 46px;
+  font-family: 'Bungee', Impact, sans-serif;
+  font-size: 22px;
+  color: #54C492;
+  letter-spacing: 0.03em;
+}
+.shot {
+  position: absolute;
+  left: 600px;
+  top: 74px;
+  width: 760px;
+  border: 1px solid #2a2a36;
+  border-radius: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65);
+}
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="mark">KARAOKE<br>PUNCH</div>
+    <div class="tag">Караоке из любой песни<br><i>за десять минут</i></div>
+    <div class="sub">Нейросеть убирает вокал и сама<br>расставляет времена по твоему тексту</div>
+  </div>
+  <img class="shot" src="shots/studio-4-ru.webp" alt="">
+  <div class="host">karaokepunch.ru</div>
+</body>
+</html>
