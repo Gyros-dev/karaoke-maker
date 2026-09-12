@@ -71,7 +71,7 @@ async function спросить(адрес, путь, токен) {
     if (r.status === 401 || r.status === 403) {
       return { беда: 'ключ не подошёл (нужен token с правом «Read statistics»)' };
     }
-    if (!r.ok) return { беда: 'счётчик ответил ' + r.status };
+    if (!r.ok) return { беда: 'счётчик ответил ' + r.status + ' на ' + путь };
     return await r.json();
   } catch (e) {
     const текст = (e && e.message) || String(e);
