@@ -6,10 +6,9 @@
 # Названия для глаз — русские, они произвольные.
 #
 # Секреты кладутся в Settings → Secrets and variables → Actions:
-#   DISCORD_WEBHOOK   — адрес вебхука канала (ключ на запись в канал)
-#   GOATCOUNTER_TOKEN — ключ счётчика с правом Read statistics
-# Ни того, ни другого в репозитории нет и быть не должно. Если секрета
-# нет вовсе, работа не падает: discord.js печатает то, что отправил бы.
+#   DISCORD_WEBHOOK — адрес вебхука канала (ключ на запись в канал)
+# В репозитории его нет и быть не должно. Если секрета нет вовсе,
+# работа не падает: discord.js печатает то, что отправил бы.
 name: Сводка в Discord
 
 on:
@@ -53,7 +52,6 @@ jobs:
       - name: Собрать и отправить
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
         run: node discord.js сводка
 
