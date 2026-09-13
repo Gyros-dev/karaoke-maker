@@ -16,6 +16,7 @@
     "app:build:win": "npm --prefix desktop run dist:win",
     "app:build": "npm --prefix desktop run dist",
     "downloads": "node downloads.js",
-    "stats": "node stats.js"
+    "stats": "node stats.js",
+    "discord": "node discord.js сводка"
   }
 }

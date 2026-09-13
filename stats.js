@@ -15,8 +15,9 @@
    в двух местах. Число честнее посещений: человек не просто зашёл,
    а забрал программу. Оговорки — в шапке downloads.js.
 
-   Адрес счётчика берётся из index.html: там он прописан один раз,
-   и раздваивать его здесь незачем.
+   Разговор со счётчиком живёт в goatcounter.js, счёт скачиваний —
+   в releases.js: те же числа берёт сводка в Discord (discord.js),
+   и считаться они должны одинаково.
 
    Запуск:  npm run stats
             node stats.js 30        — глубина в днях (по умолчанию 30)
@@ -28,70 +29,12 @@
    покажет скачивания.
    ============================================================ */
 
-const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const счётчик = require('./goatcounter.js');
 
 const ГЛУБИНА = Math.min(Math.max(Number(process.argv[2]) || 30, 1), 365);
 const КОРЕНЬ = __dirname;
-
-/* ---------- Откуда считать ---------- */
-
-/* Адрес счётчика — из разметки сайта. Если счётчик оттуда убрали,
-   значит и считать нечего: так и скажем, а не станем стучаться
-   в заведомо мёртвый адрес. */
-function адресСчётчика() {
-  const html = fs.readFileSync(path.join(КОРЕНЬ, 'index.html'), 'utf8');
-  const м = /data-goatcounter="(https:\/\/[^/"]+)\/count"/.exec(html);
-  return м ? м[1] : null;
-}
-
-function ключ() {
-  if (process.env.GOATCOUNTER_TOKEN) return process.env.GOATCOUNTER_TOKEN.trim();
-  const файл = path.join(os.homedir(), '.config', 'karaoke-punch', 'goatcounter');
-  try {
-    return fs.readFileSync(файл, 'utf8').trim() || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-/* ---------- Разговор со счётчиком ---------- */
-
-/* Любая беда возвращается ответом, а не падением: команда справочная,
-   и получить трассировку вместо чисел — худшее, что она может сделать.
-   Ключ с кириллицей, например, роняет сам fetch: в заголовок нельзя
-   положить букву старше 255. */
-async function спросить(адрес, путь, токен) {
-  try {
-    const r = await fetch(адрес + '/api/v0' + путь, {
-      headers: { Authorization: 'Bearer ' + токен, 'Content-Type': 'application/json' },
-    });
-    if (r.status === 401 || r.status === 403) {
-      return { беда: 'ключ не подошёл (нужен token с правом «Read statistics»)' };
-    }
-    if (!r.ok) return { беда: 'счётчик ответил ' + r.status + ' на ' + путь };
-    return await r.json();
-  } catch (e) {
-    const текст = (e && e.message) || String(e);
-    if (/ByteString|character at index/.test(текст)) {
-      return { беда: 'ключ никуда не годится: в нём есть буквы вне латиницы' };
-    }
-    return { беда: 'до счётчика не достучаться (' + текст + ')' };
-  }
-}
-
-/* Границы отрезка. Счётчик просит время, округлённое до часа,
-   и понимает только UTC. */
-function отрезок(днейНазад) {
-  const конец = new Date();
-  конец.setUTCMinutes(0, 0, 0);
-  const начало = new Date(конец);
-  начало.setUTCDate(начало.getUTCDate() - днейНазад);
-  начало.setUTCHours(0, 0, 0, 0);
-  return `start=${начало.toISOString()}&end=${конец.toISOString()}`;
-}
 
 /* Полоска из палочек: по ней видно форму недели, а точные числа
    стоят рядом. Восемь ступеней — больше в терминале не различить. */
@@ -103,13 +46,12 @@ function полоска(значение, макс) {
 }
 
 async function посещения() {
-  const адрес = адресСчётчика();
+  const адрес = счётчик.адрес();
   if (!адрес) {
     console.log('Счётчика в index.html нет — посещения считать нечем.\n');
     return;
   }
-  const токен = ключ();
-  if (!токен) {
+  if (!счётчик.ключ()) {
     console.log('ПОСЕЩЕНИЯ САЙТА');
     console.log('  Ключа нет, поэтому числа не спрошены.');
     console.log('  Завести: ' + адрес + ' → «API» в верхнем меню → создать');
@@ -118,19 +60,14 @@ async function посещения() {
     return;
   }
 
-  const за = async (дней) => {
-    const о = await спросить(адрес, '/stats/total?' + отрезок(дней), токен);
-    return о && !о.беда ? о : { беда: (о && о.беда) || 'пусто' };
-  };
-
-  const месяц = await за(ГЛУБИНА);
+  const месяц = await счётчик.посещенияЗа(ГЛУБИНА);
   if (месяц.беда) {
     console.log('ПОСЕЩЕНИЯ САЙТА');
     console.log('  Не вышло спросить: ' + месяц.беда + '\n');
     return;
   }
-  const неделя = await за(7);
-  const сутки = await за(1);
+  const неделя = await счётчик.посещенияЗа(7);
+  const сутки = await счётчик.посещенияЗа(1);
 
   console.log('ПОСЕЩЕНИЯ САЙТА  (' + адрес.replace('https://', '') + ')');
   console.log('  за сутки:     ' + (сутки.беда ? '—' : сутки.total));
@@ -158,11 +95,10 @@ async function посещения() {
   /* Страницы. У сайта она одна, но счётчик видит и якоря, и чужие
      адреса, которыми к нам приходят, — если вдруг завелась вторая,
      это надо заметить. */
-  const страницы = await спросить(адрес,
-    '/stats/hits?' + отрезок(ГЛУБИНА) + '&limit=10', токен);
-  if (страницы && !страницы.беда && Array.isArray(страницы.hits) && страницы.hits.length) {
+  const стр = await счётчик.страницы(ГЛУБИНА, 10);
+  if (стр && !стр.беда && Array.isArray(стр.hits) && стр.hits.length) {
     console.log('  страницы:');
-    for (const h of страницы.hits.slice(0, 5)) {
+    for (const h of стр.hits.slice(0, 5)) {
       console.log('    ' + (h.path || '/') + '  ' + (h.count || 0));
     }
   }

@@ -1,0 +1,73 @@
+# Сводка в Discord: раз в сутки — числа, по выпуску — объявление.
+#
+# Ключи работ (digest, release-note) ЛАТИНИЦЕЙ: GitHub кириллицу
+# в опознавателях не принимает и отказывает всему файлу целиком
+# (см. быструю проверку «ключи работ в GitHub Actions — латиницей»).
+# Названия для глаз — русские, они произвольные.
+#
+# Секреты кладутся в Settings → Secrets and variables → Actions:
+#   DISCORD_WEBHOOK   — адрес вебхука канала (ключ на запись в канал)
+#   GOATCOUNTER_TOKEN — ключ счётчика с правом Read statistics
+# Ни того, ни другого в репозитории нет и быть не должно. Если секрета
+# нет вовсе, работа не падает: discord.js печатает то, что отправил бы.
+name: Сводка в Discord
+
+on:
+  schedule:
+    # 03:00 UTC — это 10:00 по Красноярску (+07), время хозяина.
+    # Задачи по расписанию идут только на главной ветке; GitHub
+    # отключает их, если в репозитории два месяца ничего не менялось,
+    # и присылает об этом письмо.
+    - cron: '0 3 * * *'
+  release:
+    types: [published]
+  # Кнопка «запустить руками» — ею и проверяют, что всё сложилось
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    name: Сводка за сутки
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Вчерашнее число скачиваний — чтобы показать разницу за сутки.
+      # GitHub отдаёт только общую сумму, поэтому прошлую мы помним
+      # сами. Ключ у записи свой на каждый запуск, а достаём по началу
+      # имени — так берётся самая свежая. Не нашлось — просто не будет
+      # разницы, это не беда.
+      - name: Вспомнить вчерашние числа
+        uses: actions/cache@v4
+        with:
+          path: .digest-state.json
+          key: digest-${{ github.run_id }}
+          restore-keys: digest-
+
+      - name: Собрать и отправить
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node discord.js сводка
+
+  release-note:
+    name: Объявить выпуск
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Рассказать про выпуск
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node discord.js выпуск "${{ github.event.release.tag_name }}"
